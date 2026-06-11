@@ -1,116 +1,154 @@
 # ElixirSense Types Audit Tasks
 
-Second review date: 2026-06-11.
+Third review date: 2026-06-11.
 
 Worktree: `/Users/lukaszsamson/elixir_sense/.claude/worktrees/trusting-wu-d1f603`.
 
-References reviewed:
-- Current branch code and tests.
-- `ELIXIR_SENSE_TYPES_FABLE.md`.
+Inputs consolidated:
+- `ELIXIR_SENSE_TYPES_GPT.md` second review.
+- `ELIXIR_SENSE_TYPES_FABLE.md` third consolidated backlog.
+- `/Users/lukaszsamson/elixir_sense/ELIXIR_SENSE_TYPES_GEMINI.md`.
 - Elixir private typesystem under `/Users/lukaszsamson/elixir/lib/elixir/lib/module`.
 
 Goal: use binding shapes as a starting point, progressively enrich them with Elixir inferred types, and display types in the same representation used by Elixir type warnings while keeping private `Module.Types` details behind a replaceable abstraction.
 
 ## Status
 
-The first review's largest P0s are no longer open in their original form:
+No confirmed P0 correctness bug remains from the previous GPT/Gemini pass in the current worktree.
 
-- Done: ExCk version pinning, BEAM chunk padding, ETS owner hardening, stale checker-cache validation, optional map field preservation, open tuple conversion, unconvertible union/intersection degradation, dynamic wrapping for shape seeds, synthetic version ranges, guarded/imprecise subtraction fixes, conservative intersection fallback, `++` correction, literal widening for inlay hints, `descr_to_string/2` compiler-style rendering, and Fable/GPT regression suites.
-- Done with caveat: `ElixirTypes.apply_signature/2` centralizes signature application and mirrors `apply_infer`/`apply_strong`, but it is still a hand mirror of private Elixir rules.
-- Done with caveat: spec-derived signatures are downgraded to `:infer` and provenance fields exist, but provenance is not yet used enough to drive merge/trust decisions.
-- Still architectural: binding algebra remains shape-first and approximate; the adapter boundary is still broad; local inference is still a best-effort reproduction of `Module.Types.local_handler`.
+Done in the latest code:
+- `ElixirSense.Core.TypeHints` facade exists: `request_context/1`, `type_hint_for_var/4`, and `effective_params/4`.
+- `Binding.from_env/4` accepts precomputed `local_sigs`, enabling request-scoped caching.
+- `apply_signature/2` has parity tests against compiler-observed ExCk behavior and now handles strong-signature return wrapping like `Apply.return/3`: strong returns wrap in `dynamic()` only when an argument is gradual; infer returns still wrap unconditionally.
+- Signature provenance precedence is explicit: `:exck` > `:inferred` > `:spec`.
+- Spec-derived signatures no longer masquerade as compiler-strong facts.
+- Optional fields, open tuples, literal widening for inlay hints, compiler-style descriptor rendering, ExCk version/padding/ETS hardening, synthetic-version filtering, and pattern precision fixes are already covered by tests.
 
-## P0 - Correctness Before Trusting Hints
+Gemini findings incorporated:
+- Confirmed and fixed: strong return wrapping, local-sigs hot-path caching via the facade.
+- Refuted by current behavior/Fable verification: non-recursive nested unions causing incorrect normalization.
+- Still relevant: shape algebra drift from `Descr`, private API drift risk, complex spec fallback coverage.
 
-- [ ] Fix strong-signature return wrapping in `ElixirTypes.apply_signature/2`.
-  - Current `apply_strong_mirror/2` wraps every matched return in `dynamic(...)`.
-  - Elixir's `Module.Types.Apply.return/3` only wraps in non-static modes when at least one actual argument is gradual; with fully static known args, strong arrows return the static OUT.
-  - Track whether coerced call arguments are gradual, and mirror `return(type, args_types, stack)` instead of always calling `wrap_dynamic/1`.
-  - Add tests for a strong signature with static arg selection versus unknown/dynamic args.
+## Fix-wave status (2026-06-11 evening, Fable)
 
-- [ ] Treat `apply_signature/2` as a drift-prone mirror until it is backed by compiler-comparison tests.
-  - The centralization is good, but it still reimplements private `Apply` logic: disjointness, compatibility, only-gradual behavior, max-clause fallback, and return wrapping.
-  - Add parity tests against real `Module.Types.Apply` behavior where possible, or compile tiny modules and compare ExCk/application outcomes.
-  - Include `:infer` and `:strong`, zero matches, too many clauses, gradual args, static args, unions, optional map keys, and functions.
+Addressed this wave:
+- P0 "fail closed on private API drift" — full audit table produced (every apply/3 /
+  Module.Types call site: guard + failure behavior verified); one gap fixed
+  (to_shape_eager non-map guard); 19 drift-canary tests added incl. a pinned
+  capabilities() key set that fails loudly on upstream drift.
+- P0 "parity harness across versions" — native tests version-guard reviewed: the
+  cross-clause subtraction test now gates on available?(:previous) (1.20-only
+  machinery), capability checks cover all 6 keys; the CI matrix runs the suite per
+  Elixir version.
+- P1 "richer trust levels" — TypeHints now classifies
+  :native_exck > :native_inferred > :spec > :shape with trust_rank/1; elixir-ls
+  minimumTrust maps compiler/native/bestEffort onto the ranks. Documented gap: the
+  native engine collapses many resolvable remote-call thunks to descrs (those report
+  :native_inferred), though e.g. Enum.map attributes :native_exck in practice.
+- P1 "descr-backed algebra" — combine_intersection delegates to Descr.intersection
+  behind an exact-shape whitelist (atoms/booleans/numerics/tuples/lists/unions; maps
+  and scalar literals excluded by design); verified dynamic(a) ∩ dynamic(b) =
+  dynamic(a ∩ b) makes the wrapped path exact. difference NOT delegated — the
+  property does not hold for subtraction (documented).
+- P1 "local inference best-effort tests" — 19 tests: recursion (sig deliberately
+  absent via maybe_disable_local_handler — locked in), mutual recursion, default
+  heads (only full arity recorded in mods_funs_to_positions), super/overridable,
+  private reachability, disjoint guard domains, macro-generated heads, remote
+  default-arg fixtures, guard-refined/with/struct/capture pipeline hints.
 
-- [ ] Keep remote calls to external modules as the highest-confidence path.
-  - The stated LSP goal starts with accurate remote call types. Make ExCk/native remote exports the preferred source and make lossy legacy/spec fallback visibly lower trust.
-  - Add coverage for stdlib and dependency calls whose return varies by argument type, not just simple single-clause returns.
+Still open: P1 open/closed map metadata, spec fallback expansion; P2 improper lists,
+resolution consolidation, descriptor-aware fields_for_receiver, more compiler
+fixtures, true multi-version behavior runs; P3 benchmarks, internal caller review.
 
-- [ ] Use provenance in merge and presentation decisions.
-  - `elixir_types_sig_source` exists (`:spec`, `:inferred`, `:exck` reserved), and `render_hint/3` exposes only `:native | :shape`.
-  - Add a trust model that distinguishes compiler-native descriptors, ExCk, local best-effort inference, lossy spec conversion, and shape-only data.
-  - Do not let lossy spec/local inference override more reliable structural flow facts or present as equally authoritative.
+## P0 - Merge Gates
 
-- [ ] Rework local function inference or label it explicitly best-effort everywhere.
-  - `infer_local_signature/5` still approximates `Module.Types.local_handler`: previous-clause state, domain computation, default/super clauses, recursion, private reachability, mapping, and warning-mode behavior are incomplete.
-  - Either move closer to the real compiler flow or prevent local inferred sigs from being consumed as if they were compiler `{:infer, domain, clauses}`.
+- [ ] Keep the apply parity harness in CI across supported Elixir versions.
+  - Current parity coverage is good for the local runtime, but the implementation is still a mirror of private `Module.Types.Apply` rules.
+  - Run the parity suite on every supported Elixir minor version where native typing is enabled.
+  - Include `:infer`, `:strong`, zero matches, >16 matched clauses, static args, gradual args, unions, optional maps, lists, functions, and ill-typed calls.
 
-## P1 - Architecture And Abstraction
+- [ ] Fail closed on private API drift.
+  - Audit every private `Module.Types` call reached through `apply/3`.
+  - If an arity, return shape, or descriptor contract changes, disable only that capability and return structural best effort.
+  - Never produce native-looking output from unverified descriptors or signatures.
 
-- [ ] Introduce a narrow ElixirSense types facade for consumers.
-  - Current consumers still know too much: `VarInfo.elixir_types_descr`, native sig tuples, ExCk-backed fields, `Binding.from_env`, and `TypePresentation.render_hint`.
-  - Add stable APIs such as `type_hint_for_var(metadata, position, var, opts)`, `type_remote_call`, `type_local_call`, `render_compiler_type`, and `fields_for_receiver`.
-  - Keep private API probing, ExCk decoding, descriptor conversion, and fallback policy behind that facade so it can be removed when Elixir exposes a public API.
+- [ ] Preserve the TypeHints facade as the only LSP-facing entry point.
+  - ElixirLS has moved to the facade; keep that boundary stable.
+  - New editor-facing features should go through `TypeHints` rather than exposing `Binding`, `TypePresentation`, ExCk chunks, or native signature tuples.
 
-- [ ] Split internal algebra from display.
-  - `to_shape/1` is lossy and should be used for binding provenance/algebra only.
-  - Display should prefer `Descr.to_quoted_string/2` whenever a native descriptor exists.
-  - Ensure every caller that displays text goes through the presentation API rather than `Binding.expand -> render` directly.
+## P1 - Highest-Value Next Work
 
-- [ ] Make shape algebra descriptor-backed where descriptors are available.
-  - `Binding.normalize_union`, `combine_intersection`, `difference`, `covers?`, case feasibility, list/map/tuple merging, and optional handling are still custom approximations.
-  - Use `Descr.union/intersection/difference/disjoint?/compatible?` for descriptor-backed values and fall back to shapes only when no descriptor exists.
+- [ ] Surface richer trust/source levels from type hints.
+  - Today `TypeHints.type_hint_for_var/4` returns `source: :native | :shape`.
+  - ElixirSense already records more provenance for signatures: `:exck`, `:inferred`, and `:spec`.
+  - Expose useful trust levels such as `:native_exck`, `:native_inferred`, `:spec`, and `:shape` so ElixirLS can implement precise `minimumTrust` behavior.
 
-- [ ] Represent top/unknown/dynamic/bottom/absent explicitly in shape data.
-  - `nil`, `:none`, `:not_set`, `:empty`, `:empty_list`, `{:dynamic, _}`, and `term()` text are still overloaded across expansion, rendering, and hint suppression.
-  - Preserve Elixir distinctions between `term()`, `dynamic()`, `none()`, and `not_set()` where they affect refinement and map optionality.
+- [ ] Make descriptor-backed algebra the default when descriptors are available.
+  - Shape algebra remains approximate in `combine_intersection`, `difference`, `covers?`, union normalization, case feasibility, and map/list/tuple merging.
+  - Start with high-traffic operations where both sides have descriptors and delegate to `Descr.union`, `Descr.intersection`, `Descr.disjoint?`, `Descr.compatible?`, and related primitives.
+  - Keep shape fallback for values without descriptors.
 
-- [ ] Record open/closed/partial map and struct semantics.
-  - Current coercion defaults to open maps and loaded-struct closed maps, which is safer than false absence but loses required-key facts.
-  - Add metadata on shapes for known-open, known-closed, and partial maps; coerce each differently.
+- [ ] Treat local function inference as best-effort unless it can delegate to compiler flow.
+  - `infer_local_signature/5` is much better covered now, but it is still not the real `Module.Types.local_handler` pipeline.
+  - Keep its provenance lower than ExCk/compiler-native facts.
+  - Add tests for recursion, default/super clauses, private reachability, multi-clause domains, and generated heads.
+
+- [ ] Record open/closed/partial map and struct semantics in shapes.
+  - Current coercion defaults many maps to open and loaded structs to closed maps with full fields.
+  - This avoids false absence but loses required-key facts.
+  - Add explicit shape metadata for known-open, known-closed, and partial maps/structs, then coerce accordingly.
+
+- [ ] Improve complex specs fallback or retire it behind compiler data.
+  - `spec_ast_to_shape` remains a lossy fallback.
+  - Add common stdlib/user remote type patterns only where they are safe.
+  - Keep spec-derived results marked lower trust than ExCk or native inferred signatures.
 
 ## P2 - Fidelity And Coverage
 
-- [ ] Add version-matrix behavior tests, not only capability probes.
-  - The adapter supports/probes Elixir 1.18/1.19/1.20-era private APIs, but local behavior testing is mostly on the current runtime.
-  - Test `Expr.of_expr`, `Pattern.of_match`, `Pattern.of_head`, `Pattern.of_domain`, `Descr.to_quoted_string`, ExCk decoding, and signature application across supported versions.
-
-- [ ] Expand compiler-comparison fixtures.
-  - Include remote calls, local calls, pattern matches, guards, case/with, structs, optional maps, lists including improper lists, binaries, captures, and default arguments.
-  - Compare returned hint text to `Descr.to_quoted_string/2` or compiler warnings when possible.
-
 - [ ] Model improper lists or explicitly degrade them.
-  - The compiler distinguishes `list(t)`, `non_empty_list(t)`, and improper `non_empty_list(head, tail)`.
-  - Shapes still mostly collapse improper lists to unknown/proper-list approximations. This affects `++`, cons patterns, remote arg selection, and display.
+  - Elixir distinguishes `list(t)`, `non_empty_list(t)`, and improper `non_empty_list(head, tail)`.
+  - Shapes still mostly degrade improper list tails.
+  - This affects `++`, cons patterns, remote argument selection, and display.
 
 - [ ] Consolidate module/function resolution.
-  - `ElixirTypes.module_from_ast/2`, binding call expansion, completion, hover, and LSP parameter hints use overlapping resolution logic.
-  - Route alias/module/function resolution through one metadata-aware path to avoid inconsistent remote-call typing.
-
-- [ ] Add default-argument signature tests.
-  - Native signatures are arity-keyed while Elixir source has default-generated heads.
-  - Cover local and remote `def f(a, b \\ ..., c)` calls and multiple spec heads.
+  - `ElixirTypes.module_from_ast/2`, binding call expansion, completion, hover, and LSP parameter hints still contain overlapping resolution logic.
+  - Route alias/module/function resolution through one metadata-aware path.
 
 - [ ] Make `fields_for_receiver/2` descriptor-aware.
-  - Field completion currently uses expanded shapes.
+  - Completion currently relies on expanded shapes.
   - Native descriptors can retain optional keys, required keys, domain keys, and struct fields that shapes may lose.
 
-- [ ] Fail closed on private API drift.
-  - If an internal arity or return contract changes, disable only the affected capability and return structural best effort.
-  - Never produce native-looking types from a descriptor/signature whose version or contract is unverified.
+- [ ] Add default-argument signature fixtures.
+  - Native signatures are arity-keyed while source definitions can generate multiple default heads.
+  - Cover local and remote `def f(a, b \\ ..., c)` cases and multiple spec heads.
+
+- [ ] Expand compiler-comparison fixtures.
+  - Add more examples for guards, case/with, structs, optional maps, binaries, captures, functions, and remote dependency calls.
+  - Compare text to `Descr.to_quoted_string/2` or compiler warning output when possible.
+
+- [ ] Add multi-version behavior tests for private API adapters.
+  - Capability probes are not enough.
+  - Test behavior for `Expr.of_expr`, `Pattern.of_match`, `Pattern.of_head`, `Pattern.of_domain`, `Descr.to_quoted_string`, ExCk decoding, and signature application across supported Elixir versions.
 
 ## P3 - Performance And Cleanup
 
-- [ ] Memoize local signature maps and avoid repeated clause inference per request.
-  - `Binding.from_env/3` may build local sig maps repeatedly for hover, completion, and inlay hints.
-  - Cache per metadata/module where safe and invalidate with metadata changes.
-
 - [ ] Benchmark native typing on large files.
-  - With native typing enabled, parse/metadata paths can pay extra cost outside inlay hints.
-  - Measure large modules, many local functions, large case/with constructs, and many remote calls.
+  - Native typing affects parse/metadata paths beyond inlay hints.
+  - Measure modules with many functions, many variables, large case/with expressions, and many remote calls.
 
-- [ ] Update documentation/comments to match current policy.
-  - Specs are fallback/provenance-tagged, not compiler-strong.
-  - `render_hint/3` widens literals for hints only.
-  - `apply_signature/2` is centralized but still a compatibility mirror, not a public Elixir API.
+- [ ] Continue reducing repeated local inference work.
+  - The TypeHints request context handles LSP request caching.
+  - Review hover/completion/other internal callers for repeated `Binding.from_env` or local sig map work.
+
+- [ ] Document current policy.
+  - `apply_signature/2` is a private-API mirror guarded by parity tests, not a public Elixir API.
+  - Spec-derived signatures are lower-trust fallbacks.
+  - Inlay hints widen literal integer/float/binary leaves, while hover/completion may keep structural literal precision.
+
+## Closed Or Refuted
+
+- [x] Strong-signature return wrapping bug: fixed.
+- [x] Per-hint `build_local_sigs_map` hot path: fixed for LSP through `TypeHints.request_context/1`.
+- [x] Nested union flattening Gemini P0: refuted for current expansion path.
+- [x] Pattern AST refinement overriding native results: fixed; native results are authoritative and AST refinement fills gaps only.
+- [x] Tooltip/source rendering and literal widening for hints: fixed.

@@ -25,6 +25,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
   describe "capabilities" do
     @capability_keys [
       :expr,
+      :expr_basic,
       :pattern_match,
       :head,
       :local_signature,
@@ -761,6 +762,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "task #21: bitstring() converts to :bitstring shape" do
       # bitstring() is the 1.20 spelling; older Descr may not expose bitstring/0.
       if function_exported?(Descr, :bitstring, 0) do
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
         assert ElixirTypes.to_shape(apply(Descr, :bitstring, [])) == :bitstring
       end
     end

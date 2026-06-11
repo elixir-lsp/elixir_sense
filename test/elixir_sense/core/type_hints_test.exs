@@ -2,11 +2,14 @@ defmodule ElixirSense.Core.TypeHintsTest do
   use ExUnit.Case, async: false
 
   alias ElixirSense.Core.Binding
+  alias ElixirSense.Core.ElixirTypes
+  alias ElixirSense.Core.ExCkReader
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.TypeHints
   alias ElixirSense.Core.TypePresentation, as: TP
+  alias Module.Types.Descr
 
   setup do
     original = Application.get_env(:elixir_sense, :use_elixir_types, false)
@@ -100,6 +103,180 @@ defmodule ElixirSense.Core.TypeHintsTest do
       # A second call returns a consistent result (served from cache).
       r2 = TypeHints.type_hint_for_var(ctx, pos, var, [])
       assert r1 == r2
+    end
+  end
+
+  describe "source provenance classification" do
+    defp hint_source(code, pos, name) do
+      md = metadata(code, pos)
+      var = find_var(md, pos, name)
+      assert %VarInfo{} = var
+      ctx = TypeHints.request_context(md)
+      {ctx, var, TypeHints.type_hint_for_var(ctx, pos, var, [])}
+    end
+
+    test "remote call to an ExCk-backed stdlib function → :native_exck" do
+      # Sanity: File.read/1 must actually have an ExCk :sig in this build.
+      assert match?(
+               {:ok, _},
+               ExCkReader.lookup_signature(File, :read, 1)
+             )
+
+      # NOTE on the fixture layout: the native engine collapses many resolvable
+      # remote calls to a plain descr at the usage site, discarding the call
+      # thunk we attribute from (see the "gaps" note in the report). A remote
+      # call whose return the native engine leaves as a `{:call, ...}` thunk AND
+      # that Binding can still render is required to exercise this path; `File.read/1`
+      # in this two-assign-then-tuple layout is such a case.
+      code = """
+      defmodule M do
+        def f do
+          x = File.read("path")
+          z = File.read("path")
+          {x, z}
+        end
+      end
+      """
+
+      {_ctx, _var, result} = hint_source(code, {5, 5}, :x)
+      assert {:ok, %{source: :native_exck}} = result
+    end
+
+    test "local call to a function with only a @spec (no native sig) → :spec" do
+      # `defdelegate` produces no natively-inferred sig (sig_source nil), but the
+      # @spec is reachable via spec_signature_from_metadata. Local-call thunks are
+      # preserved at the usage site, so the local classification path fires.
+      code = """
+      defmodule M do
+        @spec b() :: atom
+        defdelegate b(), to: SomeMod
+        def f do
+          y = b()
+          z = b()
+          {y, z}
+        end
+      end
+      """
+
+      {_ctx, _var, result} = hint_source(code, {7, 5}, :y)
+      assert {:ok, %{source: :spec}} = result
+    end
+
+    test "local call with a native-inferred sig → :native_inferred" do
+      code = """
+      defmodule M do
+        def h(n), do: n + 1
+        def f do
+          z = h(1)
+          w = h(2)
+          {z, w}
+        end
+      end
+      """
+
+      {_ctx, _var, result} = hint_source(code, {6, 5}, :z)
+      assert {:ok, %{source: :native_inferred}} = result
+    end
+
+    test "native-descr var (render said :native) → :native_inferred" do
+      # A var whose displayed text comes from the native descriptor path (render
+      # reports :native) is classified :native_inferred. Build such a var with a
+      # real Module.Types descriptor and no structural type, mirroring the
+      # TypePresentation native golden.
+      if ElixirTypes.available?() do
+        descr =
+          Descr.union(Descr.binary(), Descr.atom([nil]))
+
+        code = """
+        defmodule M do
+          def f do
+            x = "literal"
+            x
+          end
+        end
+        """
+
+        pos = {4, 5}
+        md = metadata(code, pos)
+
+        var = %VarInfo{version: 1, name: :x, type: nil, elixir_types_descr: descr}
+        ctx = TypeHints.request_context(md)
+
+        assert {:ok, %{source: :native_inferred, full: full}} =
+                 TypeHints.type_hint_for_var(ctx, pos, var, [])
+
+        assert full =~ "binary()"
+      end
+    end
+
+    test "plain literal-derived var (container/literal) → :shape" do
+      code = """
+      defmodule M do
+        def f do
+          w = [1, 2, 3]
+          w
+        end
+      end
+      """
+
+      {_ctx, _var, result} = hint_source(code, {4, 5}, :w)
+      assert {:ok, %{source: :shape}} = result
+    end
+
+    test "trust_rank/1 imposes the documented ordering" do
+      assert TypeHints.trust_rank(:native_exck) == 0
+      assert TypeHints.trust_rank(:native_inferred) == 1
+      assert TypeHints.trust_rank(:spec) == 2
+      assert TypeHints.trust_rank(:shape) == 3
+
+      assert TypeHints.trust_rank(:native_exck) < TypeHints.trust_rank(:native_inferred)
+      assert TypeHints.trust_rank(:native_inferred) < TypeHints.trust_rank(:spec)
+      assert TypeHints.trust_rank(:spec) < TypeHints.trust_rank(:shape)
+    end
+
+    test "classification failure (nonexistent remote module) falls back to :shape, no crash" do
+      code = """
+      defmodule M do
+        def f do
+          x = NoSuchModule.nope("a")
+          x
+        end
+      end
+      """
+
+      md = metadata(code, {4, 5})
+      var = find_var(md, {4, 5}, :x)
+      assert %VarInfo{} = var
+      ctx = TypeHints.request_context(md)
+
+      # Must not raise; if a hint is produced its source is the safe :shape.
+      case TypeHints.type_hint_for_var(ctx, {4, 5}, var, []) do
+        {:ok, %{source: source}} -> assert source == :shape
+        :skip -> :ok
+      end
+    end
+
+    test "attribution is cached per {ref, mfa} in the process dictionary" do
+      code = """
+      defmodule M do
+        def f do
+          x = File.read("path")
+          z = File.read("path")
+          {x, z}
+        end
+      end
+      """
+
+      pos = {5, 5}
+      md = metadata(code, pos)
+      var = find_var(md, pos, :x)
+      ctx = TypeHints.request_context(md)
+
+      cache_key = {TypeHints, ctx.ref, :source, {File, :read, 1}}
+      assert Process.get(cache_key) == nil
+
+      TypeHints.type_hint_for_var(ctx, pos, var, [])
+      assert Process.get(cache_key) == :native_exck
     end
   end
 

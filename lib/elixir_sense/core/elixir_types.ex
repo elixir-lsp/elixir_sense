@@ -1572,10 +1572,14 @@ defmodule ElixirSense.Core.ElixirTypes do
   # Uses Descr.to_quoted/1 to get stable AST representation, then translates
   # that AST to ElixirSense shapes — avoiding internal BDD pattern matching.
   defp to_shape_eager(descr) do
-    if available?() do
+    if available?() and is_map(descr) do
+      # Descr.to_quoted/1 (and the :optional path) require a map. Non-map inputs
+      # (nil, atoms, integers, etc.) are not valid descriptors; return nil silently
+      # rather than logging a debug warning on every call with garbage input.
       try do
-        # not_set() has an :optional key that to_quoted doesn't handle
-        if is_map(descr) and is_map_key(descr, :optional) do
+        # not_set() has an :optional key that to_quoted doesn't handle.
+        # is_map(descr) is guaranteed by the outer `and is_map(descr)` guard.
+        if is_map_key(descr, :optional) do
           optional_descr = Map.delete(descr, :optional)
 
           if map_size(optional_descr) > 0 do

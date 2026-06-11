@@ -19,7 +19,48 @@ defmodule ElixirSense.Core.TypeHints do
 
   All rendering policy (suppression of uninformative types, literal widening,
   length truncation) lives in `ElixirSense.Core.TypePresentation`. This module
-  does **not** reimplement any of it — `type_hint_for_var/4` is pure delegation.
+  does **not** reimplement any of it — the *text* of `type_hint_for_var/4` is
+  pure delegation. This module DOES, however, refine the hint's `source:`
+  provenance beyond the low-level `:native | :shape` value that
+  `TypePresentation.render_hint/3` reports (see "Hint provenance" below).
+
+  ## Hint provenance (`source:`)
+
+  `type_hint_for_var/4` returns a `source:` describing the **strongest backing**
+  of the displayed type, so an LSP can apply a `minimumTrust` filter without
+  knowing any internals. The value is one of, strongest first:
+
+    * `:native_exck` — compiler-verified. The displayed type is backed by a
+      signature read from a compiled `.beam` ExCk chunk (ground truth), either
+      because the native engine inferred the var directly, or because the var is
+      bound to a remote call `Mod.fun(args)` whose `{fun, arity}` has an ExCk
+      `:sig`.
+    * `:native_inferred` — the native `Module.Types` engine inferred the type,
+      either as the var's own descriptor (`of_match`/`of_expr` on the current
+      file) or as the natively-inferred signature of a local call the var is
+      bound to.
+    * `:spec` — the type is derived from a `@spec` (for a local call, the only
+      backing was a spec; for a remote call, no ExCk `:sig` was found but the
+      module publishes a typespec for that `{fun, arity}`).
+    * `:shape` — purely structural: a literal/container shape, or a call whose
+      backing could not be attributed any better.
+
+  Use `trust_rank/1` to compare without hard-coding the ordering.
+
+  ### Classification scope
+
+  When the var's structural type is a *container* of call thunks
+  (`{x, Mod.f(), ...}`, `%{k: g()}`, a union, …), only the **top-level** thunk
+  is attributed. Containers and literals are `:shape`; the provenance of nested
+  calls is intentionally not aggregated (it would require a recursive,
+  potentially expensive walk, and the displayed text is a structural shape
+  regardless). A var whose `type` is `nil` but that still rendered (via the
+  native descriptor) is classified by the render path alone (`:native_inferred`).
+
+  All provenance lookups are wrapped defensively: any error in attribution falls
+  back to `:shape`. Misclassification must never break a hint. Per-request
+  lookups are cached in the process dictionary keyed by `{ref, mfa}`, reusing the
+  same caching discipline as the rest of the module.
 
   ## Request lifecycle and caching
 
@@ -34,8 +75,10 @@ defmodule ElixirSense.Core.TypeHints do
 
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.ElixirTypes
+  alias ElixirSense.Core.ExCkReader
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.State.ModFunInfo
   alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.TypePresentation
@@ -52,7 +95,8 @@ defmodule ElixirSense.Core.TypeHints do
   end
 
   @type param :: %{name: String.t() | nil, has_default: boolean()}
-  @type hint :: %{label: String.t(), full: String.t(), source: :native | :shape}
+  @type source :: :native_exck | :native_inferred | :spec | :shape
+  @type hint :: %{label: String.t(), full: String.t(), source: source}
 
   @doc """
   Build a per-request `Context` wrapping `metadata` with a fresh unique ref.
@@ -69,9 +113,11 @@ defmodule ElixirSense.Core.TypeHints do
   Render a type hint for `var_info` at `position`, or `:skip`.
 
   Returns `:skip` when there is no env at the position or the rendered type is
-  uninformative; otherwise `{:ok, %{label, full, source}}` as produced by
-  `ElixirSense.Core.TypePresentation.render_hint/3`. `opts` are passed straight
-  through (`:max_length`, `:max_full_length`, `:widen_literals`).
+  uninformative; otherwise `{:ok, %{label, full, source}}`. The `label`/`full`
+  text is produced verbatim by `ElixirSense.Core.TypePresentation.render_hint/3`;
+  the `source` is refined here into the richer provenance value documented in the
+  moduledoc ("Hint provenance"). `opts` are passed straight through
+  (`:max_length`, `:max_full_length`, `:widen_literals`).
 
   ## Caching
 
@@ -92,9 +138,31 @@ defmodule ElixirSense.Core.TypeHints do
       env ->
         local_sigs = local_sigs_for(ctx, env.module)
         binding = Binding.from_env(env, ctx.metadata, position, local_sigs: local_sigs)
-        TypePresentation.render_hint(binding, var_info, opts)
+
+        case TypePresentation.render_hint(binding, var_info, opts) do
+          {:ok, hint} ->
+            source = classify_source(ctx, env.module, hint.source, var_info.type)
+            {:ok, %{hint | source: source}}
+
+          :skip ->
+            :skip
+        end
     end
   end
+
+  @doc """
+  Total ordering over `t:source/0`, strongest first.
+
+  Returns `0..3` so consumers can apply a `minimumTrust` filter without
+  hard-coding the symbol order: `:native_exck` (0, strongest) > `:native_inferred`
+  (1) > `:spec` (2) > `:shape` (3). A larger rank means *weaker* provenance, so a
+  consumer keeps a hint when `trust_rank(hint.source) <= trust_rank(minimum)`.
+  """
+  @spec trust_rank(source) :: 0..3
+  def trust_rank(:native_exck), do: 0
+  def trust_rank(:native_inferred), do: 1
+  def trust_rank(:spec), do: 2
+  def trust_rank(:shape), do: 3
 
   @doc """
   Return the structured parameter list for `module.fun/arity` at the requested
@@ -183,6 +251,110 @@ defmodule ElixirSense.Core.TypeHints do
       cached ->
         cached
     end
+  end
+
+  # ── source provenance classification ─────────────────────────────────────────
+  #
+  # `TypePresentation.render_hint/3` reports only `:native | :shape`. We refine
+  # that into `:native_exck | :native_inferred | :spec | :shape` by attributing
+  # the strongest backing of the displayed type. See the moduledoc "Hint
+  # provenance" for the contract and scoping rules.
+
+  # `:native` always means the native engine produced the text from the var's own
+  # descriptor (`of_match`/`of_expr` on the current file).
+  defp classify_source(_ctx, _module, :native, _type), do: :native_inferred
+
+  # `:shape` means the structural engine produced the text. Attribute it from the
+  # TOP-LEVEL thunk of the var's structural type. Containers/literals → `:shape`.
+  defp classify_source(ctx, module, :shape, type) do
+    attribute_thunk(ctx, module, type)
+  rescue
+    # Misclassification must never break a hint.
+    _ -> :shape
+  end
+
+  # Remote call `Mod.fun(args)`: ExCk `:sig` wins; else a published typespec for
+  # the MFA counts as `:spec`; else `:shape`.
+  defp attribute_thunk(ctx, _module, {:call, {:atom, mod}, fun, args})
+       when is_atom(mod) and is_atom(fun) and is_list(args) do
+    arity = length(args)
+
+    cached_attr(ctx, {mod, fun, arity}, fn ->
+      cond do
+        exck_sig?(mod, fun, arity) -> :native_exck
+        remote_spec?(mod, fun, arity) -> :spec
+        true -> :shape
+      end
+    end)
+  end
+
+  # Local/imported call: the provenance is NOT carried in the local-sigs map
+  # values (they are `{kind, sig}`), so consult `ModFunInfo.elixir_types_sig_source`
+  # for the MFA directly, then fall back to a spec in metadata. The local-call
+  # thunk does not carry the module, so resolve it against the current `module`.
+  defp attribute_thunk(ctx, module, {:local_call, fun, _position, args})
+       when is_atom(fun) and is_list(args) and is_atom(module) do
+    arity = length(args)
+
+    cached_attr(ctx, {module, fun, arity}, fn ->
+      case local_sig_source(ctx.metadata, module, fun, arity) do
+        :exck -> :native_exck
+        :inferred -> :native_inferred
+        _ -> if local_spec?(ctx.metadata, module, fun, arity), do: :spec, else: :shape
+      end
+    end)
+  end
+
+  # Containers, literals, unions, nil types, or any other top-level shape are not
+  # attributed to a single backing → `:shape` (see "Classification scope").
+  defp attribute_thunk(_ctx, _module, _type), do: :shape
+
+  # Per-request memoised attribution keyed by {ref, mfa}, reusing the pdict
+  # caching discipline used elsewhere in this module.
+  defp cached_attr(%Context{} = ctx, mfa, fun) do
+    cache_key = {__MODULE__, ctx.ref, :source, mfa}
+
+    case Process.get(cache_key, :__miss__) do
+      :__miss__ ->
+        result = fun.()
+        Process.put(cache_key, result)
+        result
+
+      cached ->
+        cached
+    end
+  end
+
+  defp exck_sig?(mod, fun, arity) do
+    match?({:ok, _}, ExCkReader.lookup_signature(mod, fun, arity))
+  rescue
+    _ -> false
+  end
+
+  defp remote_spec?(mod, fun, arity) do
+    Enum.any?(Typespec.get_specs(mod), fn
+      {{^fun, ^arity}, _} -> true
+      _ -> false
+    end)
+  rescue
+    _ -> false
+  end
+
+  defp local_sig_source(metadata, module, fun, arity) do
+    metadata.mods_funs_to_positions
+    |> Map.get({module, fun, arity})
+    |> case do
+      %ModFunInfo{elixir_types_sig_source: source} -> source
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp local_spec?(metadata, module, fun, arity) do
+    match?({:ok, _}, ElixirTypes.spec_signature_from_metadata(metadata, module, fun, arity))
+  rescue
+    _ -> false
   end
 
   # ── effective_params computation ─────────────────────────────────────────────

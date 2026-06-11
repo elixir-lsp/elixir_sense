@@ -2524,9 +2524,95 @@ defmodule ElixirSense.Core.Binding do
   defp combine_intersection(type, nil), do: type
   defp combine_intersection(type, type), do: type
 
+  # Descr-backed intersection (consolidated backlog P2 2.2 / GPT P1).
+  #
+  # When the native typesystem is enabled AND both operands are "exact" shape
+  # kinds (`descr_exact?/1` — kinds whose static coercion to a `Descr.t()` loses
+  # no information), the real `Descr.intersection/2` is strictly more faithful
+  # than the hand-written structural approximation below. We coerce both via the
+  # public `ElixirTypes.coerce_var_type_public/1` path (which dynamic-wraps every
+  # shape) and intersect.
+  #
+  # WHY DYNAMIC-WRAPPING IS SAFE HERE: the public coercion produces
+  # `dynamic(static(shape))`. For intersection the identity
+  # `dynamic(a) ∩ dynamic(b) = dynamic(a ∩ b)` holds, and `ElixirTypes.to_shape/1`
+  # unwraps the outer `dynamic`, so the resulting shape is exactly what a static
+  # intersection would yield. (Verified empirically; this is NOT true for
+  # difference — see `difference/2` — which is why difference keeps the custom
+  # path.) Empty intersection → `:none`. If `to_shape/1` cannot represent the
+  # result (`nil`), we fall through to the custom clauses rather than lose the
+  # precision they may have. The whole attempt is wrapped in try/rescue so any
+  # API drift in the native backend silently falls back to the custom algebra.
+  defp combine_intersection(a, b) do
+    case descr_backed_intersection(a, b) do
+      :__fallthrough__ -> combine_intersection_custom(a, b)
+      result -> result
+    end
+  end
+
+  defp descr_backed_intersection(a, b) do
+    if ElixirTypes.enabled?() and descr_exact?(a) and descr_exact?(b) do
+      try do
+        descr_a = ElixirTypes.coerce_var_type_public(a)
+        descr_b = ElixirTypes.coerce_var_type_public(b)
+        result = Module.Types.Descr.intersection(descr_a, descr_b)
+
+        if Module.Types.Descr.empty?(result) do
+          :none
+        else
+          case ElixirTypes.to_shape(result) do
+            # Unconvertible result — don't lose the custom path's precision.
+            nil -> :__fallthrough__
+            shape -> shape
+          end
+        end
+      rescue
+        _ -> :__fallthrough__
+      catch
+        _, _ -> :__fallthrough__
+      end
+    else
+      :__fallthrough__
+    end
+  end
+
+  # Conservative syntactic whitelist of shape kinds whose *static* coercion to a
+  # `Descr.t()` is exact (round-trips without widening), so the descr-backed
+  # intersection above is faithful. Deliberately EXCLUDED:
+  #   * maps / structs — coercion makes maps OPEN, which is not exact for the
+  #     algebra used here;
+  #   * literal scalars (`{:integer, _}`, `{:float, _}`, `{:binary, _}`) — they
+  #     widen to their base type on coercion;
+  #   * `:bitstring`, `:non_struct_map`, generic `:list`, generic `:tuple`,
+  #     `:fun`/`{:fun, _}`, `:dynamic`, `:term`, `:number`-of-non-exact, etc.
+  # `:number` is exact (the `integer() | float()` union coerces exactly).
+  defp descr_exact?(:atom), do: true
+  defp descr_exact?({:atom, atom}) when is_atom(atom), do: true
+  defp descr_exact?(:boolean), do: true
+  defp descr_exact?(:integer), do: true
+  defp descr_exact?(:float), do: true
+  defp descr_exact?(:number), do: true
+  defp descr_exact?(:binary), do: true
+  defp descr_exact?(:pid), do: true
+  defp descr_exact?(:port), do: true
+  defp descr_exact?(:reference), do: true
+  defp descr_exact?(:empty_list), do: true
+  defp descr_exact?({:list, :empty}), do: true
+  defp descr_exact?(:empty_map), do: true
+  defp descr_exact?({:list, elem}), do: descr_exact?(elem)
+  defp descr_exact?({:nonempty_list, elem}), do: descr_exact?(elem)
+
+  defp descr_exact?({:tuple, _arity, elems}) when is_list(elems),
+    do: Enum.all?(elems, &descr_exact?/1)
+
+  defp descr_exact?({:union, members}) when is_list(members),
+    do: Enum.all?(members, &descr_exact?/1)
+
+  defp descr_exact?(_other), do: false
+
   # NOTE intersection is not strict and does an union on map keys
 
-  defp combine_intersection({:struct, fields_1, nil, nil}, {:struct, fields_2, nil, nil}) do
+  defp combine_intersection_custom({:struct, fields_1, nil, nil}, {:struct, fields_2, nil, nil}) do
     keys = (safe_keys(fields_1) ++ safe_keys(fields_2)) |> Enum.uniq()
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
 
@@ -2537,7 +2623,10 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp combine_intersection({:struct, fields_1, type, nil}, {:struct, fields_2, type_2, nil})
+  defp combine_intersection_custom(
+         {:struct, fields_1, type, nil},
+         {:struct, fields_2, type_2, nil}
+       )
        when type_2 == type or is_nil(type_2) do
     keys = safe_keys(fields_1)
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
@@ -2550,21 +2639,21 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # Two structs of *different* concrete modules are disjoint.
-  defp combine_intersection(
+  defp combine_intersection_custom(
          {:struct, _fields_1, {:atom, mod_1}, nil},
          {:struct, _fields_2, {:atom, mod_2}, nil}
        )
        when mod_1 != mod_2,
        do: :none
 
-  defp combine_intersection(
+  defp combine_intersection_custom(
          {:struct, _fields_1, nil, nil} = s1,
          {:struct, _fields_2, _type, nil} = s2
        ) do
     combine_intersection(s2, s1)
   end
 
-  defp combine_intersection({:map, fields_1, nil}, {:map, fields_2, nil}) do
+  defp combine_intersection_custom({:map, fields_1, nil}, {:map, fields_2, nil}) do
     keys = (safe_keys(fields_1) ++ safe_keys(fields_2)) |> Enum.uniq()
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
 
@@ -2575,7 +2664,7 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp combine_intersection({:struct, fields_1, type, nil}, {:map, fields_2, nil}) do
+  defp combine_intersection_custom({:struct, fields_1, type, nil}, {:map, fields_2, nil}) do
     keys =
       if type != nil,
         do: safe_keys(fields_1),
@@ -2590,11 +2679,14 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp combine_intersection({:map, _fields_1, nil} = map, {:struct, _fields_2, _type, nil} = str) do
+  defp combine_intersection_custom(
+         {:map, _fields_1, nil} = map,
+         {:struct, _fields_2, _type, nil} = str
+       ) do
     combine_intersection(str, map)
   end
 
-  defp combine_intersection({:tuple, n, fields_1}, {:tuple, n, fields_2}) do
+  defp combine_intersection_custom({:tuple, n, fields_1}, {:tuple, n, fields_2}) do
     combined_fields =
       Enum.zip(fields_1, fields_2) |> Enum.map(fn {f1, f2} -> combine_intersection(f1, f2) end)
 
@@ -2606,11 +2698,11 @@ defmodule ElixirSense.Core.Binding do
   end
 
   # Fixed-arity tuples of different sizes are disjoint.
-  defp combine_intersection({:tuple, n1, _}, {:tuple, n2, _}) when n1 != n2, do: :none
+  defp combine_intersection_custom({:tuple, n1, _}, {:tuple, n2, _}) when n1 != n2, do: :none
 
   # Union on the left is handled here; this clause must come *before* the flip
   # clause below, otherwise `union ∩ union` flips left/right forever.
-  defp combine_intersection({:union, variants}, other) do
+  defp combine_intersection_custom({:union, variants}, other) do
     # Collect *every* non-empty overlap, not just the first — `(:a | :b | :c) ∩
     # (:b | :c)` is `:b | :c`, not `:b`. Empty overlap is `:none` (bottom), never
     # nil.
@@ -2623,7 +2715,7 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp combine_intersection(other, {:union, variants}),
+  defp combine_intersection_custom(other, {:union, variants}),
     do: combine_intersection({:union, variants}, other)
 
   # List ∩ list: intersect element types. Both `{:list, _}` shapes include `[]`,
@@ -2631,32 +2723,32 @@ defmodule ElixirSense.Core.Binding do
   # even when the element intersection bottoms out (e.g. `list(:a) ∩ list(:b)`
   # is `[]`, represented as `{:list, :empty}`). A nonempty side forces the result
   # nonempty.
-  defp combine_intersection({:list, e1}, {:list, e2}) do
+  defp combine_intersection_custom({:list, e1}, {:list, e2}) do
     {:list, intersect_list_elem(e1, e2)}
   end
 
-  defp combine_intersection({:nonempty_list, e1}, {:nonempty_list, e2}) do
+  defp combine_intersection_custom({:nonempty_list, e1}, {:nonempty_list, e2}) do
     case intersect_list_elem(e1, e2) do
       :empty -> :none
       elem -> {:nonempty_list, elem}
     end
   end
 
-  defp combine_intersection({:nonempty_list, e1}, {:list, e2}) do
+  defp combine_intersection_custom({:nonempty_list, e1}, {:list, e2}) do
     case intersect_list_elem(e1, e2) do
       :empty -> :none
       elem -> {:nonempty_list, elem}
     end
   end
 
-  defp combine_intersection({:list, _} = l, {:nonempty_list, _} = nl) do
+  defp combine_intersection_custom({:list, _} = l, {:nonempty_list, _} = nl) do
     combine_intersection(nl, l)
   end
 
   # The generic `:list` atom intersected with a concrete list shape is that
   # concrete shape.
-  defp combine_intersection(:list, {tag, _} = l) when tag in [:list, :nonempty_list], do: l
-  defp combine_intersection({tag, _} = l, :list) when tag in [:list, :nonempty_list], do: l
+  defp combine_intersection_custom(:list, {tag, _} = l) when tag in [:list, :nonempty_list], do: l
+  defp combine_intersection_custom({tag, _} = l, :list) when tag in [:list, :nonempty_list], do: l
 
   # Scalar specificity: if one side subsumes the other the intersection is the
   # narrower of the two (e.g. `integer() and 5` is `5`, `atom() and :ok` is
@@ -2665,7 +2757,7 @@ defmodule ElixirSense.Core.Binding do
   # shape kinds are provably disjoint (atom vs tuple vs map vs list vs number vs
   # binary vs ...). Same-kind or unknown/new-kind pairs intersect to `nil`
   # (unknown) rather than `:none` to avoid over-claiming disjointness.
-  defp combine_intersection(a, b) do
+  defp combine_intersection_custom(a, b) do
     cond do
       covers?(a, b) -> b
       covers?(b, a) -> a

@@ -57,7 +57,11 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
   end
 
   test "native scrutinee type + cross-clause subtraction narrows the catch-all" do
-    if ElixirTypes.available?() do
+    # Cross-clause type subtraction is driven by the reverse-arrow / `previous`
+    # machinery introduced in Elixir 1.20. On 1.18/1.19 the catch-all clause
+    # retains the full scrutinee type (binary() | nil), so the precise binary()
+    # assertion only holds on 1.20+.
+    if ElixirTypes.available?(:previous) do
       code = """
       defmodule M do
         def f do
@@ -70,7 +74,8 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
       """
 
       # System.get_env/1 is typed binary() | nil by the native engine; the `nil`
-      # clause is subtracted, leaving binary() in the `value` clause.
+      # clause is subtracted by the 1.20 reverse-arrow mechanism, leaving
+      # binary() in the `value` clause.
       assert hint(code, :value, {5, 22}) == {:ok, "binary()"}
     end
   end

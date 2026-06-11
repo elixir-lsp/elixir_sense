@@ -1,6 +1,7 @@
 defmodule ElixirSense.Core.BindingTest do
   use ExUnit.Case, async: false
   alias ElixirSense.Core.Binding
+  alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.State.AttributeInfo
   alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.State.ModFunInfo
@@ -3280,6 +3281,130 @@ defmodule ElixirSense.Core.BindingTest do
                     {:struct, [not_existing: nil, abc: {:atom, X}], {:atom, Other}, nil},
                     {:struct, [formatted: {:variable, :formatted, 1}], {:atom, State}, nil}
                   ]}
+               )
+    end
+  end
+
+  describe "descr-backed intersection (native on, exact shapes)" do
+    # Consolidated backlog P2 2.2 / GPT P1: when native typing is enabled AND both
+    # operands are `descr_exact?` shape kinds, intersection delegates to the real
+    # `Module.Types.Descr.intersection/2`, which is strictly more faithful than the
+    # hand-written structural approximation. These assertions encode the
+    # Descr-faithful results.
+    setup do
+      prev = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+
+      on_exit(fn ->
+        Application.put_env(:elixir_sense, :use_elixir_types, prev)
+      end)
+
+      # The gate only fires when the native backend is available; assert it is so
+      # these descr-faithful expectations are actually exercised.
+      assert ElixirTypes.enabled?()
+
+      :ok
+    end
+
+    test "boolean ∩ {:atom, true} narrows to true" do
+      assert {:atom, true} ==
+               Binding.expand(@env, {:intersection, [:boolean, {:atom, true}]})
+
+      assert {:atom, true} ==
+               Binding.expand(@env, {:intersection, [{:atom, true}, :boolean]})
+    end
+
+    test "overlapping atom unions intersect to the shared member" do
+      assert {:atom, :b} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:union, [atom: :a, atom: :b]}, {:union, [atom: :b, atom: :c]}]}
+               )
+    end
+
+    test "disjoint exact atoms intersect to :none" do
+      assert :none == Binding.expand(@env, {:intersection, [{:atom, :a}, {:atom, :b}]})
+    end
+
+    test "integer ∩ number narrows to integer" do
+      # `to_shape` renders the `integer()` descr as the abstract literal shape
+      # `{:integer, nil}` (nil payload = any integer).
+      assert {:integer, nil} == Binding.expand(@env, {:intersection, [:integer, :number]})
+    end
+
+    test "tuple intersects elementwise via Descr" do
+      assert {:tuple, 2, [{:integer, nil}, {:atom, true}]} ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [{:tuple, 2, [:integer, :boolean]}, {:tuple, 2, [:integer, {:atom, true}]}]}
+               )
+    end
+
+    test "list element intersection narrows the element type" do
+      assert {:list, {:atom, true}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:list, :boolean}, {:list, {:atom, true}}]}
+               )
+    end
+
+    test "nonempty_list element intersection narrows; disjoint elements -> :none" do
+      assert {:nonempty_list, {:atom, true}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:nonempty_list, :boolean}, {:nonempty_list, {:atom, true}}]}
+               )
+
+      assert :none ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:nonempty_list, {:atom, :a}}, {:nonempty_list, {:atom, :b}}]}
+               )
+    end
+
+    test "non-exact kinds (maps) still take the custom path" do
+      # Maps are excluded from descr_exact? (coercion makes them open), so this
+      # must produce the SAME result as the native-off custom path: a key union.
+      assert {:map, [{:a, nil}, {:b, {:atom, B}}, {:c, {:atom, C}}], nil} ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [
+                    {:map, [a: nil, b: {:atom, B}], nil},
+                    {:map, [c: {:atom, C}], nil}
+                  ]}
+               )
+    end
+
+    test "literal scalars (excluded from whitelist) keep custom disjointness" do
+      # {:integer, _} widens on coercion, so it is excluded — custom path applies.
+      assert :none == Binding.expand(@env, {:intersection, [{:integer, 1}, {:integer, 2}]})
+    end
+  end
+
+  describe "descr-backed intersection (native off, custom path preserved)" do
+    setup do
+      prev = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, false)
+      on_exit(fn -> Application.put_env(:elixir_sense, :use_elixir_types, prev) end)
+      :ok
+    end
+
+    test "boolean ∩ {:atom, true} via custom subsumption still narrows to true" do
+      assert {:atom, true} ==
+               Binding.expand(@env, {:intersection, [:boolean, {:atom, true}]})
+    end
+
+    test "disjoint atoms intersect to :none on the custom path" do
+      assert :none == Binding.expand(@env, {:intersection, [{:atom, A}, {:atom, B}]})
+    end
+
+    test "tuple elementwise intersection unchanged on the custom path" do
+      assert {:tuple, 2, [{:atom, B}, {:atom, A}]} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:tuple, 2, [nil, {:atom, A}]}, {:tuple, 2, [{:atom, B}, nil]}]}
                )
     end
   end
