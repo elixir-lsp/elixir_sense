@@ -55,7 +55,7 @@ defmodule ElixirSense.Core.TypeInference.Guard do
     right = type_information_from_guards(guard_r)
 
     Map.merge(left, right, fn _k, v1, v2 ->
-      TypeInference.intersect(v1, v2)
+      v1 |> TypeInference.intersect(v2) |> sort_intersection()
     end)
   end
 
@@ -383,6 +383,10 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   defp guard_predicate_type(:is_pid, [first | _]), do: {:pid, first}
   defp guard_predicate_type(:is_port, [first | _]), do: {:port, first}
   defp guard_predicate_type(:is_reference, [first | _]), do: {:reference, first}
+  # is_function(x, arity) with a literal arity narrows to {:fun, arity}
+  defp guard_predicate_type(:is_function, [first, arity]) when is_integer(arity),
+    do: {{:fun, arity}, first}
+
   defp guard_predicate_type(:is_function, [first | _]), do: {:fun, first}
 
   defp guard_predicate_type(_, _), do: nil
@@ -396,6 +400,24 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   end
 
   defp apply_secondary_constraints(_fun, _params, acc), do: acc
+
+  # Reorder intersection members so that the most display-informative shape comes
+  # first. TypePresentation.segment/1 picks the first struct-or-map? member when
+  # rendering an intersection; by placing `{:struct, …, {:atom, Mod}, …}` before
+  # plain map constraints we ensure `%RuntimeError{}` wins over `%{__exception__:
+  # term()}` when both are in the same intersection (e.g. is_exception(x, Mod)).
+  # An intersection is semantically commutative, so reordering is always sound.
+  defp sort_intersection({:intersection, members}) do
+    {concrete_structs, rest} =
+      Enum.split_with(members, fn
+        {:struct, _, {:atom, _}, _} -> true
+        _ -> false
+      end)
+
+    {:intersection, concrete_structs ++ rest}
+  end
+
+  defp sort_intersection(other), do: other
 
   defp type_of(expression) do
     TypeInference.type_of(expression, :guard)

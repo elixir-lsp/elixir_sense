@@ -82,9 +82,13 @@ defmodule ElixirSense.Core.ElixirTypes do
   alias ElixirSense.Core.State.AttributeInfo
   alias ElixirSense.Core.State.SpecInfo
 
+  # Persistent-term key for the memoized capabilities map.
+  @capabilities_pt_key {__MODULE__, :capabilities}
+
   def available? do
-    Code.ensure_loaded?(Module.Types.Expr) and expr_api() != :none and
-      loaded_exported?(Module.Types, :stack, 7)
+    caps = cached_capabilities()
+    # available?/0 requires both expr_basic AND local_signature (stack/7).
+    Map.get(caps, :expr_basic, false) and Map.get(caps, :local_signature, false)
   end
 
   @doc """
@@ -155,16 +159,7 @@ defmodule ElixirSense.Core.ElixirTypes do
     * `:previous` — cross-clause `Pattern.init_previous/0`, 1.20+
   """
   def capabilities do
-    %{
-      expr: expr_api() == :expected,
-      expr_basic: expr_api() != :none,
-      pattern_match: pattern_api() != :none,
-      head:
-        loaded_exported?(Module.Types.Pattern, :of_head, 8) or
-          loaded_exported?(Module.Types.Pattern, :of_head, 7),
-      local_signature: loaded_exported?(Module.Types, :stack, 7),
-      previous: loaded_exported?(Module.Types.Pattern, :init_previous, 0)
-    }
+    cached_capabilities()
   end
 
   # Expression-typer shape: 1.19+ has the expected-type `Expr.of_expr/5`; 1.18
@@ -194,11 +189,38 @@ defmodule ElixirSense.Core.ElixirTypes do
   """
   @spec available?(capability()) :: boolean()
   def available?(capability) when is_atom(capability) do
-    Map.get(capabilities(), capability, false)
+    Map.get(cached_capabilities(), capability, false)
   end
 
   defp loaded_exported?(module, fun, arity) do
     Code.ensure_loaded?(module) and function_exported?(module, fun, arity)
+  end
+
+  # Read the capabilities map from :persistent_term, computing and storing it on
+  # the first call. Capabilities probe module exports that cannot change within a
+  # running VM (modules do not gain or lose exports without a hot-code reload),
+  # so this is safe to cache for the lifetime of the node.
+  #
+  # DO NOT memoize `enabled?/0` here — its Application.get_env read is toggled
+  # by tests at runtime.
+  defp cached_capabilities do
+    :persistent_term.get(@capabilities_pt_key, nil) || compute_and_cache_capabilities()
+  end
+
+  defp compute_and_cache_capabilities do
+    caps = %{
+      expr: expr_api() == :expected,
+      expr_basic: expr_api() != :none,
+      pattern_match: pattern_api() != :none,
+      head:
+        loaded_exported?(Module.Types.Pattern, :of_head, 8) or
+          loaded_exported?(Module.Types.Pattern, :of_head, 7),
+      local_signature: loaded_exported?(Module.Types, :stack, 7),
+      previous: loaded_exported?(Module.Types.Pattern, :init_previous, 0)
+    }
+
+    :persistent_term.put(@capabilities_pt_key, caps)
+    caps
   end
 
   # --- Version-dispatched Module.Types.Pattern calls --------------------------

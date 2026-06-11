@@ -4743,13 +4743,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  }
                } = var_with_guards("is_exception(x)")
 
+        # sort_intersection/1 in guard.ex promotes the concrete struct-with-module
+        # to the front of the intersection so TypePresentation picks %ArgumentError{}
+        # instead of the weaker %{__exception__: term()} when rendering.
         assert %VarInfo{
                  name: :x,
                  type: {
                    :intersection,
                    [
-                     {:map, [{:__exception__, nil}], nil},
                      {:struct, [], {:atom, ArgumentError}, nil},
+                     {:map, [{:__exception__, nil}], nil},
                      {:map, [], nil},
                      {:struct, [], nil, nil}
                    ]
@@ -4770,14 +4773,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  }
                } = var_with_guards("is_exception(x)")
 
+        # sort_intersection/1 in guard.ex promotes the concrete struct-with-module
+        # to the front of the intersection so TypePresentation picks %ArgumentError{}
+        # instead of the weaker %{__exception__: ...} when rendering.
         assert %VarInfo{
                  name: :x,
                  type: {
                    :intersection,
                    [
+                     {:struct, [], {:atom, ArgumentError}, nil},
                      {:map, [{:__exception__, {:atom, true}}], nil},
                      {:map, [{:__exception__, nil}], nil},
-                     {:struct, [], {:atom, ArgumentError}, nil},
                      {:map, [], nil},
                      {:struct, [], nil, nil}
                    ]

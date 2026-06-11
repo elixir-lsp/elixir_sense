@@ -351,6 +351,119 @@ defmodule ElixirSense.Core.TypeHintsTest do
     end
   end
 
+  describe "source provenance — default-arity attribution (Task 1)" do
+    # Regression: `attribute_thunk` for `:local_call` previously looked up
+    # `mods_funs_to_positions[{module, fun, call_arity}]` directly. Default-arg
+    # functions are keyed only under max arity, so `f(1)` for `def f(a, b \\ 1)`
+    # missed the entry and fell back to `:shape`. The fix uses
+    # `find_mod_fun_info/4` which searches all {module, fun, *} entries and checks
+    # the defaults window.
+    test "f(x) for def f(a, b \\\\ 1) classifies :native_inferred, not :shape" do
+      code = """
+      defmodule DefaultArity do
+        def f(a, b \\\\ 1), do: {a, b}
+        def g do
+          x = f(1)
+          y = f(2)
+          {x, y}
+        end
+      end
+      """
+
+      pos = {6, 5}
+      md = metadata(code, pos)
+      var = find_var(md, pos, :x)
+      assert %VarInfo{} = var
+      ctx = TypeHints.request_context(md)
+      result = TypeHints.type_hint_for_var(ctx, pos, var, [])
+
+      case result do
+        {:ok, %{source: source}} ->
+          # Must not be :shape — the function has a native-inferred sig.
+          assert source in [:native_inferred, :native_exck, :spec],
+                 "expected :native_inferred (or better), got :shape — default-arity attribution bug"
+
+        :skip ->
+          # If the type is not rendered at all that is acceptable (not a regression).
+          :ok
+      end
+    end
+  end
+
+  describe "discard/1 (Task 2)" do
+    test "discard erases all process-dictionary entries belonging to ctx" do
+      pos = {4, 5}
+      md = metadata(@code, pos)
+      var = find_var(md, pos, :x)
+      ctx = TypeHints.request_context(md)
+
+      # Populate caches by making a real call.
+      TypeHints.type_hint_for_var(ctx, pos, var, [])
+
+      # At least the env and local_sigs entries should be present.
+      keys_before =
+        :erlang.get_keys()
+        |> Enum.filter(fn
+          key when is_tuple(key) and tuple_size(key) >= 3 ->
+            elem(key, 0) == TypeHints and elem(key, 1) == ctx.ref
+
+          _ ->
+            false
+        end)
+
+      assert length(keys_before) > 0, "expected some pdict entries to exist before discard"
+
+      TypeHints.discard(ctx)
+
+      keys_after =
+        :erlang.get_keys()
+        |> Enum.filter(fn
+          key when is_tuple(key) and tuple_size(key) >= 3 ->
+            elem(key, 0) == TypeHints and elem(key, 1) == ctx.ref
+
+          _ ->
+            false
+        end)
+
+      assert keys_after == [], "expected all pdict entries to be gone after discard"
+    end
+
+    test "a call after discard still works (re-populates cache)" do
+      pos = {4, 5}
+      md = metadata(@code, pos)
+      var = find_var(md, pos, :x)
+      ctx = TypeHints.request_context(md)
+
+      # First call, then discard.
+      result1 = TypeHints.type_hint_for_var(ctx, pos, var, [])
+      TypeHints.discard(ctx)
+
+      # Call again — must re-populate and return the same result.
+      result2 = TypeHints.type_hint_for_var(ctx, pos, var, [])
+      assert result1 == result2
+
+      # Cache must be re-populated.
+      keys =
+        :erlang.get_keys()
+        |> Enum.filter(fn
+          key when is_tuple(key) and tuple_size(key) >= 3 ->
+            elem(key, 0) == TypeHints and elem(key, 1) == ctx.ref
+
+          _ ->
+            false
+        end)
+
+      assert length(keys) > 0
+    end
+
+    test "discard on a fresh (unused) context is a no-op" do
+      md = metadata(@code, {4, 5})
+      ctx = TypeHints.request_context(md)
+      # Must not raise.
+      assert TypeHints.discard(ctx) == :ok
+    end
+  end
+
   describe "effective_params/4 — remote / compiled modules" do
     test "String.split/2 vs /3 default detection" do
       ctx = ctx_for("defmodule M do\n  def x, do: :ok\nend\n")

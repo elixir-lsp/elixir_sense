@@ -45,6 +45,13 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert TP.render({:map, [], nil}) == {:ok, "map()"}
     end
 
+    test "open map renders the `...` marker (additional unknown keys)" do
+      # render/1 does not widen literals, so `1` stays `1`.
+      assert TP.render({:map, [a: {:integer, 1}], :open}) == {:ok, "%{..., a: 1}"}
+      # An empty open map is the map top.
+      assert TP.render({:map, [], :open}) == {:ok, "map()"}
+    end
+
     test "top-level atom shortcuts render correctly" do
       assert TP.render(:empty_list) == {:ok, "empty_list()"}
       assert TP.render(:empty_map) == {:ok, "empty_map()"}
@@ -352,6 +359,13 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert {:ok, %{full: "integer() or :ok"}} = TP.render_hint(@env, union, [])
     end
 
+    test "open map in a hint: `...` marker plus widened field (P1 repro)" do
+      # `def f(m), do: %{m | a: 1}` — TypeInference yields an open map; the hint
+      # widens the `1` literal to `integer()` and keeps the `...` openness marker.
+      var = %VarInfo{version: 1, name: :x, type: {:map, [a: {:integer, 1}], :open}}
+      assert {:ok, %{full: "%{..., a: integer()}"}} = TP.render_hint(@env, var, [])
+    end
+
     test "widens inside optional (if_set) map fields" do
       var =
         %VarInfo{version: 1, name: :x, type: {:map, [a: {:optional, {:integer, 7}}], nil}}
@@ -426,6 +440,11 @@ defmodule ElixirSense.Core.TypePresentationTest do
   describe "fields_for_receiver/2" do
     test "maps a map's fields to rendered types" do
       shape = {:map, [a: {:integer, 1}, b: {:binary, nil}], nil}
+      assert TP.fields_for_receiver(@env, shape) == %{a: "1", b: "binary()"}
+    end
+
+    test "lists known fields of an OPEN map (completion still works)" do
+      shape = {:map, [a: {:integer, 1}, b: {:binary, nil}], :open}
       assert TP.fields_for_receiver(@env, shape) == %{a: "1", b: "binary()"}
     end
 

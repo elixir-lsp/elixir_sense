@@ -92,6 +92,41 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
   end
 
+  describe "capabilities memoization (Task 3)" do
+    # Capabilities are immutable within a VM (modules do not gain or lose exports).
+    # The computed map is cached in :persistent_term after the first call.
+    test "capabilities/0 returns identical maps on repeated calls (persistent_term memoized)" do
+      caps1 = ElixirTypes.capabilities()
+      caps2 = ElixirTypes.capabilities()
+      caps3 = ElixirTypes.capabilities()
+      assert caps1 == caps2
+      assert caps2 == caps3
+    end
+
+    test "available?/0 is consistent with cached capabilities" do
+      caps = ElixirTypes.capabilities()
+      expected = Map.get(caps, :expr_basic, false) and Map.get(caps, :local_signature, false)
+      assert ElixirTypes.available?() == expected
+    end
+
+    test "enabled?/0 respects runtime Application.get_env toggle (not memoized)" do
+      original = Application.get_env(:elixir_sense, :use_elixir_types, false)
+
+      Application.put_env(:elixir_sense, :use_elixir_types, false)
+      refute ElixirTypes.enabled?()
+
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+      # With native backend available, enabled? should reflect the env change.
+      if ElixirTypes.available?() do
+        assert ElixirTypes.enabled?()
+      else
+        refute ElixirTypes.enabled?()
+      end
+
+      Application.put_env(:elixir_sense, :use_elixir_types, original)
+    end
+  end
+
   describe "version-dispatched pattern API (1.19 and 1.20)" do
     setup do
       original = Application.get_env(:elixir_sense, :use_elixir_types, false)

@@ -212,16 +212,39 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  # Map literal — third slot `nil` means "no update base", so this is a closed
+  # map. (Distinct from a map *update* whose base fails to resolve, below.)
+  def do_expand(_env, {:map, fields, nil}, _stack) do
+    {:map, fields, nil}
+  end
+
+  # Already-open map literal/shape — preserve openness.
+  def do_expand(_env, {:map, fields, :open}, _stack) do
+    {:map, fields, :open}
+  end
+
+  # Map update `%{base | fields}` — `updated_map` is the base shape to merge.
   def do_expand(env, {:map, fields, updated_map}, stack) do
     case expand(env, updated_map, stack) do
       {:map, expanded_fields, nil} ->
         {:map, put_fields(expanded_fields, fields), nil}
 
+      # Known base that was itself open (other unknown keys exist): the result
+      # also has unknown keys beyond the ones we can see.
+      {:map, expanded_fields, :open} ->
+        {:map, put_fields(expanded_fields, fields), :open}
+
       {:struct, expanded_fields, type, nil} ->
         {:struct, put_fields(expanded_fields, fields), type, nil}
 
+      # Base does not resolve to a concrete map/struct (unknown base, e.g.
+      # `def f(m), do: %{m | a: 1}`). Map update preserves the FULL base type
+      # with the listed keys refined (see Module.Types.Expr), so the result is
+      # an OPEN map: the listed fields are known, but additional unknown keys
+      # exist. Marking the tail `:open` keeps this distinct from a closed map
+      # literal `{:map, fields, nil}`.
       nil ->
-        {:map, fields, nil}
+        {:map, fields, :open}
 
       _ ->
         :none
@@ -271,7 +294,7 @@ defmodule ElixirSense.Core.Binding do
       {list, type} when list in [:list, :nonempty_list] and type not in [:empty, :none] ->
         type
 
-      {:map, fields, nil} ->
+      {:map, fields, tail} when tail in [nil, :open] ->
         case fields do
           [{_key, value} | _] ->
             {:tuple, 2, [nil, value]}
@@ -792,9 +815,10 @@ defmodule ElixirSense.Core.Binding do
   defp covers?({:nonempty_list, sub_elem}, {:nonempty_list, mem_elem}),
     do: list_elem_covers?(sub_elem, mem_elem)
 
-  # Map top (`%{}` / `map()`) subsumes any concrete map or struct.
-  defp covers?({:map, [], nil}, {:map, _, _}), do: true
-  defp covers?({:map, [], nil}, {:struct, _, _, _}), do: true
+  # Map top (`%{}` / `map()`) subsumes any concrete map or struct. An open empty
+  # map (`%{...}`) is likewise the map top.
+  defp covers?({:map, [], tail}, {:map, _, _}) when tail in [nil, :open], do: true
+  defp covers?({:map, [], tail}, {:struct, _, _, _}) when tail in [nil, :open], do: true
 
   defp covers?({:tuple, n, sub_elems}, {:tuple, n, mem_elems}) do
     sub_elems
@@ -1620,7 +1644,7 @@ defmodule ElixirSense.Core.Binding do
         {map, key, value}
       end
 
-    fields = expand_map_fields(env, map, stack)
+    {fields, tail} = expand_map_base(env, map, stack)
 
     if :none in fields do
       :none
@@ -1628,20 +1652,20 @@ defmodule ElixirSense.Core.Binding do
       case expand(env, key, stack) do
         {:atom, atom} ->
           value = expand(env, value, stack)
-          {:map, fields |> Keyword.put(atom, value), nil}
+          {:map, fields |> Keyword.put(atom, value), tail}
 
         :none ->
           :none
 
         _ ->
-          {:map, fields, nil}
+          {:map, fields, tail}
       end
     end
   end
 
   defp expand_call(env, {:atom, Map}, fun, [map, key, value], _include_private, _, stack)
        when fun in [:put_new, :put_new_lazy] do
-    fields = expand_map_fields(env, map, stack)
+    {fields, tail} = expand_map_base(env, map, stack)
 
     if :none in fields do
       :none
@@ -1649,13 +1673,13 @@ defmodule ElixirSense.Core.Binding do
       case expand(env, key, stack) do
         {:atom, atom} ->
           value = if fun == :put_new, do: expand(env, value, stack)
-          {:map, fields |> Keyword.put_new(atom, value), nil}
+          {:map, fields |> Keyword.put_new(atom, value), tail}
 
         :none ->
           :none
 
         _ ->
-          {:map, fields, nil}
+          {:map, fields, tail}
       end
     end
   end
@@ -1670,20 +1694,20 @@ defmodule ElixirSense.Core.Binding do
         {map, key}
       end
 
-    fields = expand_map_fields(env, map, stack)
+    {fields, tail} = expand_map_base(env, map, stack)
 
     if :none in fields do
       :none
     else
       case expand(env, key, stack) do
         {:atom, atom} ->
-          {:map, fields |> Keyword.delete(atom), nil}
+          {:map, fields |> Keyword.delete(atom), tail}
 
         :none ->
           :none
 
         _ ->
-          {:map, fields, nil}
+          {:map, fields, tail}
       end
     end
   end
@@ -1691,26 +1715,19 @@ defmodule ElixirSense.Core.Binding do
   # Map.merge/2 is inlined
   defp expand_call(env, {:atom, module}, :merge, [map, other_map], _include_private, _, stack)
        when module in [Map, :maps] do
-    fields = expand_map_fields(env, map, stack)
-
-    other_fields =
-      case expand(env, other_map, stack) do
-        {:map, fields, nil} -> fields
-        nil -> []
-        _ -> [:none]
-      end
+    {fields, tail_a} = expand_map_base(env, map, stack)
+    {other_fields, tail_b} = expand_map_base(env, other_map, stack)
 
     if :none in (fields ++ other_fields) do
       :none
     else
-      {:map, put_fields(fields, other_fields), nil}
+      {:map, put_fields(fields, other_fields), merge_tails(tail_a, tail_b)}
     end
   end
 
   defp expand_call(env, {:atom, Map}, :merge, [map, other_map, _fun], _include_private, _, stack) do
-    fields = expand_map_fields(env, map, stack)
-
-    other_fields = expand_map_fields(env, other_map, stack)
+    {fields, tail_a} = expand_map_base(env, map, stack)
+    {other_fields, tail_b} = expand_map_base(env, other_map, stack)
 
     if :none in (fields ++ other_fields) do
       :none
@@ -1723,7 +1740,7 @@ defmodule ElixirSense.Core.Binding do
 
       merged = fields |> put_fields(other_fields) |> put_fields(conflicts)
 
-      {:map, merged, nil}
+      {:map, merged, merge_tails(tail_a, tail_b)}
     end
   end
 
@@ -1736,68 +1753,71 @@ defmodule ElixirSense.Core.Binding do
          _,
          stack
        ) do
-    fields = expand_map_fields(env, map, stack)
+    {fields, tail} = expand_map_base(env, map, stack)
 
     if :none in fields do
       :none
     else
       case expand(env, key, stack) do
         {:atom, atom} ->
-          {:map, fields |> Keyword.put(atom, nil), nil}
+          {:map, fields |> Keyword.put(atom, nil), tail}
 
         :none ->
           :none
 
         _ ->
-          {:map, fields, nil}
+          {:map, fields, tail}
       end
     end
   end
 
   defp expand_call(env, {:atom, Map}, :update!, [map, key, _fun], _include_private, _, stack) do
-    fields = expand_map_fields(env, map, stack)
+    {fields, tail} = expand_map_base(env, map, stack)
 
     if :none in fields do
       :none
     else
       case expand(env, key, stack) do
         {:atom, atom} ->
-          {:map, fields |> Keyword.put(atom, nil), nil}
+          {:map, fields |> Keyword.put(atom, nil), tail}
 
         :none ->
           :none
 
         _ ->
-          {:map, fields, nil}
+          {:map, fields, tail}
       end
     end
   end
 
   defp expand_call(env, {:atom, Map}, :from_struct, [struct], _include_private, _, stack) do
-    fields =
+    # `nil` tail = all fields known (resolved struct); `:open` = unknown base,
+    # so the resulting map may carry fields we never saw.
+    {fields, tail} =
       case expand(env, struct, stack) do
         {:struct, fields, _, nil} ->
-          fields
+          {fields, nil}
 
         {:atom, atom} ->
           case expand(env, {:struct, [], {:atom, atom}, nil}, stack) do
-            {:struct, fields, _, nil} -> fields
-            nil -> []
-            _ -> [:none]
+            {:struct, fields, _, nil} -> {fields, nil}
+            nil -> {[], :open}
+            _ -> {[:none], nil}
           end
 
         nil ->
-          []
+          {[], :open}
 
         _ ->
-          [:none]
+          {[:none], nil}
       end
-      |> Keyword.delete(:__struct__)
+
+    fields = Keyword.delete(fields, :__struct__)
 
     if :none in fields do
       :none
     else
-      {:map, fields, nil}
+      {:map, fields, tail}
     end
   end
 
@@ -2837,13 +2857,32 @@ defmodule ElixirSense.Core.Binding do
   defp shape_kind(_other), do: nil
 
   defp expand_map_fields(env, map_or_struct, stack) do
+    {fields, _tail} = expand_map_base(env, map_or_struct, stack)
+    fields
+  end
+
+  # Expand a map/struct base used as an operand of `Map.put`/`merge`/etc.
+  # Returns `{fields, tail}` where `tail` is:
+  #   * `nil`   — the base is a closed map/struct (all keys known), or empty;
+  #   * `:open` — the base is an open map (additional unknown keys exist), e.g.
+  #               an untyped parameter (`expand/3` → nil) or another open map;
+  #   * `[:none]` (as fields) — the base is provably not a map (bottom).
+  # Synthesising results from an OPEN base must keep the result open, otherwise
+  # we wrongly assert the absence of keys we never saw (P1 unsoundness).
+  defp expand_map_base(env, map_or_struct, stack) do
     case expand(env, map_or_struct, stack) do
-      {:map, fields, nil} -> fields
-      {:struct, fields, _, nil} -> fields
-      nil -> []
-      _ -> [:none]
+      {:map, fields, tail} when tail in [nil, :open] -> {fields, tail}
+      {:struct, fields, _, nil} -> {fields, nil}
+      # Unknown base: we know nothing about it, so it may carry any keys.
+      nil -> {[], :open}
+      _ -> {[:none], nil}
     end
   end
+
+  # Combining two map tails: the result is open if either operand is open.
+  defp merge_tails(:open, _), do: :open
+  defp merge_tails(_, :open), do: :open
+  defp merge_tails(_, _), do: nil
 
   def from_var(value) when is_atom(value) do
     {:atom, value}

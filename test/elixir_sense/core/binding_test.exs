@@ -126,6 +126,30 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    test "map update with an UNKNOWN base yields an OPEN map (P1 soundness)" do
+      # `def f(m), do: %{m | a: 1}` — base does not resolve. Map update preserves
+      # the full base type, so the result has the updated key PLUS unknown keys.
+      # It must be marked `:open`, never a closed `{:map, fields, nil}` literal.
+      assert {:map, [a: {:integer, 1}], :open} ==
+               Binding.expand(
+                 @env,
+                 {:map, [a: {:integer, 1}], {:variable, :m, 1}}
+               )
+    end
+
+    test "map update with a KNOWN base stays closed (no regression)" do
+      assert {:map, [a: {:integer, 9}, b: {:integer, 2}], nil} ==
+               Binding.expand(
+                 @env,
+                 {:map, [a: {:integer, 9}], {:map, [a: {:integer, 1}, b: {:integer, 2}], nil}}
+               )
+    end
+
+    test "map literal (no update base) stays closed" do
+      assert {:map, [a: {:integer, 1}], nil} ==
+               Binding.expand(@env, {:map, [a: {:integer, 1}], nil})
+    end
+
     test "map update with a non-atom (domain) key does not crash" do
       assert {:map, fields, nil} =
                Binding.expand(
@@ -164,6 +188,20 @@ defmodule ElixirSense.Core.BindingTest do
 
       assert Binding.expand(@env, {:union, [{:map, [], nil}, {:map, [a: {:integer, 1}], nil}]}) ==
                {:map, [], nil}
+
+      # Map top (`%{}`) also subsumes an OPEN map.
+      assert Binding.expand(@env, {:union, [{:map, [], nil}, {:map, [a: {:integer, 1}], :open}]}) ==
+               {:map, [], nil}
+    end
+
+    test "open vs closed map: union keeps both (conservative covers?)" do
+      # A closed map is NOT subsumed by a non-empty open map and vice versa, so
+      # neither member is dropped from the union. (covers?/2 stays conservative.)
+      open = {:map, [a: {:integer, 1}], :open}
+      closed = {:map, [a: {:integer, 1}], nil}
+
+      result = Binding.expand(@env, {:union, [open, closed]})
+      assert match?({:union, members} when length(members) == 2, result)
     end
 
     test "difference output is normalized" do
@@ -2725,16 +2763,18 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "put not a map" do
-      assert {:map, [cde: {:atom, :b}], nil} =
+    test "put on an unknown base yields an open map" do
+      # Unknown base (`nil`): the result must stay OPEN — `Map.put` only adds
+      # the one key we can see; other keys may already exist on the base.
+      assert {:map, [cde: {:atom, :b}], :open} =
                Binding.expand(
                  @env,
                  {:call, {:atom, Map}, :put, [nil, {:atom, :cde}, {:atom, :b}]}
                )
     end
 
-    test "put not an atom key" do
-      assert {:map, [], nil} =
+    test "put with an unknown key on an unknown base yields an open map" do
+      assert {:map, [], :open} =
                Binding.expand(@env, {:call, {:atom, Map}, :put, [nil, nil, {:atom, :b}]})
     end
 

@@ -442,6 +442,11 @@ defmodule ElixirSense.Core.TypePresentation do
   # Optional map field (task #8) — must NOT be dropped by uninformative_field?
   defp segment({:optional, inner}), do: "if_set(" <> segment(inner) <> ")"
 
+  # Open map (`:open` tail): additional unknown keys exist beyond `fields`.
+  # Render with the compiler's open-map marker `...` first (matching descr.ex).
+  defp segment({:map, [], :open}), do: "map()"
+  defp segment({:map, fields, :open}) when is_list(fields), do: "%{..., " <> fields(fields) <> "}"
+
   defp segment({:map, [], _updated}), do: "map()"
   defp segment({:map, fields, _updated}) when is_list(fields), do: "%{" <> fields(fields) <> "}"
 

@@ -68,9 +68,19 @@ defmodule ElixirSense.Core.TypeHints do
   `request_context/1`. The context carries the metadata plus a unique `ref`.
   Caches (the per-module local-sigs map, the per-position env, and per-MFA
   effective params) are stored in the **process dictionary** keyed by that ref.
-  Because the request process dies when the request finishes, these entries are
-  request-scoped and require no explicit cleanup. Do not share a `Context`
-  across processes.
+
+  ### Lifecycle contract
+
+  The context **MUST** be either:
+
+    1. **Request-process-scoped** — created and used in a process that terminates
+       when the request finishes (the normal LSP case). The process dictionary is
+       cleaned up automatically when the process dies.
+    2. **Explicitly discarded** — long-lived processes (pools, GenServers, tests)
+       that create a context MUST call `discard/1` when they are done with it, to
+       avoid unbounded process-dictionary growth.
+
+  Do not share a `Context` across processes.
   """
 
   alias ElixirSense.Core.Binding
@@ -107,6 +117,35 @@ defmodule ElixirSense.Core.TypeHints do
   @spec request_context(Metadata.t()) :: Context.t()
   def request_context(%Metadata{} = metadata) do
     %Context{metadata: metadata, ref: make_ref()}
+  end
+
+  @doc """
+  Discard all process-dictionary entries belonging to `ctx`.
+
+  Erases every entry whose key matches the `{TypeHints, ref, _, ...}` prefix for
+  `ctx.ref`. After this call the context is effectively dead — subsequent calls
+  that reference it will re-populate the cache from scratch (safe, but wasteful).
+
+  Long-lived processes (GenServers, pools, test processes) MUST call `discard/1`
+  when finished with a context. Request-process-scoped contexts do not need
+  explicit cleanup (the process-dictionary is freed when the process terminates),
+  but calling `discard/1` on them is harmless.
+  """
+  @spec discard(Context.t()) :: :ok
+  def discard(%Context{ref: ref}) do
+    mod = __MODULE__
+
+    :erlang.get_keys()
+    |> Enum.filter(fn
+      key when is_tuple(key) and tuple_size(key) >= 3 ->
+        elem(key, 0) == mod and elem(key, 1) == ref
+
+      _ ->
+        false
+    end)
+    |> Enum.each(&Process.delete/1)
+
+    :ok
   end
 
   @doc """
@@ -340,9 +379,12 @@ defmodule ElixirSense.Core.TypeHints do
     _ -> false
   end
 
-  defp local_sig_source(metadata, module, fun, arity) do
-    metadata.mods_funs_to_positions
-    |> Map.get({module, fun, arity})
+  defp local_sig_source(metadata, module, fun, call_arity) do
+    # Default-arg functions are keyed ONLY under max arity in mods_funs_to_positions.
+    # A call `f(x)` for `def f(a, b \\ 1)` has call_arity=1 but the entry is keyed
+    # under arity 2. We therefore scan all {module, fun, *} entries and pick the
+    # first whose defaults window admits the call arity.
+    find_mod_fun_info(metadata, module, fun, call_arity)
     |> case do
       %ModFunInfo{elixir_types_sig_source: source} -> source
       _ -> nil
@@ -355,6 +397,40 @@ defmodule ElixirSense.Core.TypeHints do
     match?({:ok, _}, ElixirTypes.spec_signature_from_metadata(metadata, module, fun, arity))
   rescue
     _ -> false
+  end
+
+  # Shared helper: find the ModFunInfo entry for {module, fun} whose defaults
+  # window admits `call_arity`. The metadata key is the *max* arity (all params,
+  # defaults included). A call at a lower arity is valid when
+  #   max_arity - default_count <= call_arity <= max_arity.
+  # This mirrors the scan already used by `metadata_params/4`.
+  defp find_mod_fun_info(%Metadata{} = metadata, module, fun, call_arity) do
+    metadata.mods_funs_to_positions
+    |> Enum.find_value(fn
+      {{^module, ^fun, key_arity}, %ModFunInfo{} = info}
+      when not is_nil(key_arity) ->
+        params = info.params |> List.first() || []
+
+        defaults =
+          params
+          |> Enum.count(fn
+            {:\\, _, _} -> true
+            _ -> false
+          end)
+
+        mandatory = key_arity - defaults
+
+        if call_arity >= mandatory and call_arity <= key_arity do
+          info
+        else
+          nil
+        end
+
+      _ ->
+        nil
+    end)
+  rescue
+    _ -> nil
   end
 
   # ── effective_params computation ─────────────────────────────────────────────

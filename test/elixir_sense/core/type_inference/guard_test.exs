@@ -426,4 +426,78 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       assert result == %{{:x, 0} => {:map, [{:foo, {:integer, 1}}], []}}
     end
   end
+
+  # Round-4 precision improvements
+
+  describe "is_function/2 arity narrowing (task 1)" do
+    test "is_function(x, 2) narrows to {:fun, 2}" do
+      guard_expr = quote(do: is_function(x, 2)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:fun, 2}}
+    end
+
+    test "is_function(x, 0) narrows to {:fun, 0}" do
+      guard_expr = quote(do: is_function(x, 0)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:fun, 0}}
+    end
+
+    test "is_function(x, 5) narrows to {:fun, 5}" do
+      guard_expr = quote(do: is_function(x, 5)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:fun, 5}}
+    end
+
+    test "is_function(x) without arity stays :fun" do
+      guard_expr = quote(do: is_function(x)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => :fun}
+    end
+  end
+
+  describe "is_exception narrowing (task 2)" do
+    test "is_exception(x) narrows to intersection with struct and __exception__ key" do
+      guard_expr = quote(do: is_exception(x)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      # The intersection contains a struct shape and a map with __exception__ key
+      {:intersection, members} = result[{:x, 0}]
+      assert {:struct, [], nil, nil} in members
+      assert {:map, [], nil} in members
+    end
+
+    test "is_exception(x, RuntimeError) puts struct-with-module first in intersection" do
+      guard_expr = quote(do: is_exception(x, RuntimeError)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      {:intersection, [first | _]} = result[{:x, 0}]
+      # The concrete struct must come first for correct TypePresentation rendering
+      assert {:struct, [], {:atom, RuntimeError}, nil} = first
+    end
+
+    test "is_exception(x, ArgumentError) intersection includes struct-with-module" do
+      guard_expr = quote(do: is_exception(x, ArgumentError)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      {:intersection, members} = result[{:x, 0}]
+      assert {:struct, [], {:atom, ArgumentError}, nil} in members
+    end
+  end
+
+  describe "tuple_size narrowing (task 4 verification)" do
+    test "tuple_size(x) == 2 narrows to 2-tuple with nil element types" do
+      guard_expr = quote(do: tuple_size(x) == 2) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:tuple, 2, [nil, nil]}}
+    end
+
+    test "tuple_size(x) == 0 narrows to 0-tuple" do
+      guard_expr = quote(do: tuple_size(x) == 0) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:tuple, 0, []}}
+    end
+
+    test "tuple_size(x) >= 1 falls back to plain :tuple (non-equality)" do
+      guard_expr = quote(do: tuple_size(x) >= 1) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => :tuple}
+    end
+  end
 end

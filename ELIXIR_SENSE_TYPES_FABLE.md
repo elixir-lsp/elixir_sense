@@ -1,5 +1,67 @@
 # ElixirSense types integration — consolidated backlog (Fable)
 
+## Round-4 fix wave — DONE (commit follows)
+
+All round-4 findings fixed, gates green (1866 tests, +24):
+- **P1 map-update closed-collapse** — `:open` map-tail sentinel: unknown-base updates
+  and all `Map.*` synthesizers on unknown bases now produce open maps rendered
+  `%{..., a: integer()}`; full consumer audit (covers?/intersection conservative,
+  completion lists fields, coercion boundary safe); known-base merging unchanged.
+- **P1 provenance arity gap** — default-aware ModFunInfo lookup shared between
+  classification and effective_params; `f(1)` for `def f(a, b \\ 1)` now attributes
+  `:native_inferred`.
+- **P2 cache lifecycle** — `TypeHints.discard/1` + explicit must-die-or-discard
+  contract in the moduledoc.
+- **P2 probe hot path** — capabilities memoized in :persistent_term (~0.3µs/call);
+  `enabled?` still reads the env (tests toggle it).
+- **P2 guard/rescue precision** — `is_function(x, n)` → `{:fun, n}`;
+  `is_exception(x, Mod)` renders `%Mod{}` (intersection reordering, semantically
+  commutative); blank `rescue e` already typed `%Exception{}` (verified);
+  `tuple_size == n` already exact (verified); 24 new tests.
+
+## Independent review — round 4 (2026-06-11, Fable, vs Elixir 1.20.1 sources)
+
+Scope: adversarial review of the wave-3 code (TypeHints, descr-backed intersection,
+apply mirror) + a semantic parity sweep of constructs not re-audited since the big
+rewrites (for/try/receive/cond/case-with/guards/binary patterns/map updates/operators),
+all verified empirically through the full pipeline. GPT round 4 found nothing new;
+this review found:
+
+**P1 (unsound, new):** map update with an UNKNOWN base collapses to a closed map —
+`def f(m), do: %{m | a: 1}` renders `%{a: 1}` (indistinguishable from a closed
+literal; compiler preserves the full base type, expr.ex:168-206). Scoped to
+unresolvable bases (`binding.ex` drops the base, presentation ignores the `updated`
+slot). Fix: treat unresolved-base updates as OPEN (render `%{..., a: 1}`).
+
+**P1 (under-trust):** TypeHints local-call provenance looks up
+`mods_funs_to_positions` by the ACTUAL call arity, but default-arity functions are
+keyed only under max arity — `f(x)` for `def f(a, b \\ 1)` misattributes
+`:native_inferred` as `:shape`/`:spec`. Safe direction (drops good hints, never
+shows bad ones) but wrong; effective_params already does the default-aware lookup.
+
+**P2:** TypeHints pdict caches have no `discard/1` and rely on an unenforced
+request-process-dies contract; `combine_intersection` re-probes
+`enabled?()`/`available?()` (Code.ensure_loaded? + function_exported?) on every
+hot-path call — memoize the immutable parts (capabilities) per process, keep
+`enabled?` reading the env (tests toggle it).
+
+**P2 precision (sound):** `is_function/2` not narrowed to `{:fun, arity}`;
+`is_exception/1` and blank `rescue e` not narrowed to exception structs; `for`
+result over-wide on emptiness. Negated guards correctly never invert (sound).
+
+**Verified sound:** the wave-3 subtraction precision gates under adversarial mixes,
+cond/receive/try/with unions, binary segments, pin/rebind, `<>`/`in`/ranges/`not`,
+apply parity (re-confirmed against apply.ex), the intersection whitelist (nil
+members, empty unions, `:number` round-trip all safe), `:__fallthrough__` sentinel,
+`:error -> dynamic -> nil` fallback chain, effective_params elision rule
+(adversarial default layouts re-verified).
+
+**Perf (closes the benchmark backlog item):** 1795-line module, 832 binding sites —
+metadata build 104ms native-on vs 67ms off; full-document hints 802ms ON vs 1912ms
+OFF (native is 2.4x FASTER thanks to request-scoped sig caching); 100-line viewport
+140ms ON vs 317ms OFF. All under thresholds.
+
+
 Third review pass, 2026-06-11. This file is now the SINGLE prioritized backlog for the
 elixir_sense side, consolidating:
 - ELIXIR_SENSE_TYPES_GPT.md (second GPT review, same date)
