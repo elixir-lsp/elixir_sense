@@ -5,6 +5,7 @@ defmodule ElixirSense.Core.Binding do
 
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.ElixirTypes
+  alias ElixirSense.Core.ExCkReader
   alias ElixirSense.Core.Introspection
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.State
@@ -125,11 +126,18 @@ defmodule ElixirSense.Core.Binding do
       case Enum.find(sorted_variables, fn %State.VarInfo{} = var ->
              var.name == variable and (var.version == version or version == :any)
            end) do
-        nil ->
-          # no variable found - treat as a local call
-          # this can happen if no parens call is missclassed as variable e.g. by
-          # Code.Fragment APIs
+        nil when version == :any ->
+          # no variable found - treat as a local call. This only applies to the
+          # Code.Fragment misclassification case (a no-parens call parsed as a
+          # variable), which carries `version == :any`. A *versioned* variable not
+          # in scope (e.g. a clause-local pattern var embedded in a
+          # `{:case_result}`/`{:difference}` thunk) must NOT resolve to a same-named
+          # 0-arity local function — that would inject the function's return type
+          # into feasibility/subtraction. Such vars are simply unknown.
           {:local_call, variable, env.cursor_position, []}
+
+        nil ->
+          nil
 
         %State.VarInfo{type: type} ->
           type
@@ -345,7 +353,8 @@ defmodule ElixirSense.Core.Binding do
     rescue
       e ->
         Logger.debug("Application.fetch_env expand failed: #{Exception.message(e)}")
-        :none
+        # Unknown, not bottom: `:none` is dropped from unions and over-claims.
+        nil
     end
   end
 
@@ -384,7 +393,8 @@ defmodule ElixirSense.Core.Binding do
     rescue
       e ->
         Logger.debug("Application.#{fun} expand failed: #{Exception.message(e)}")
-        :none
+        # Unknown, not bottom: `:none` is dropped from unions and over-claims.
+        nil
     end
   end
 
@@ -482,6 +492,14 @@ defmodule ElixirSense.Core.Binding do
   # `:list` is the generic list shape (from `is_list/1`); keep it as-is so union
   # subsumption (`:list` over `{:list, _}`) and intersection work on it.
   def do_expand(_env, :list, _stack), do: :list
+  # Terminals produced by ElixirTypes.to_shape (native descr -> shape).
+  def do_expand(_env, :empty_map, _stack), do: :empty_map
+  def do_expand(_env, :empty_list, _stack), do: {:list, :empty}
+  def do_expand(_env, :non_struct_map, _stack), do: :non_struct_map
+
+  def do_expand(env, {:tuple_open, elems}, stack) when is_list(elems),
+    do: {:tuple_open, Enum.map(elems, &expand(env, &1, stack))}
+
   def do_expand(_env, {:binary, _} = shape, _stack), do: shape
   def do_expand(_env, {:float, _} = shape, _stack), do: shape
   def do_expand(_env, {:fun, arity} = shape, _stack) when is_integer(arity), do: shape
@@ -553,20 +571,18 @@ defmodule ElixirSense.Core.Binding do
   defp normalize_union(members) do
     members = flatten_unions(members)
 
-    cond do
-      Enum.any?(members, &is_nil/1) ->
-        nil
-
-      true ->
-        case members
-             |> Enum.reject(&(&1 == :none))
-             |> Enum.uniq()
-             |> drop_subsumed()
-             |> coalesce_union() do
-          [] -> :none
-          [one] -> one
-          many -> {:union, many}
-        end
+    if Enum.any?(members, &is_nil/1) do
+      nil
+    else
+      case members
+           |> Enum.reject(&(&1 == :none))
+           |> Enum.uniq()
+           |> drop_subsumed()
+           |> coalesce_union() do
+        [] -> :none
+        [one] -> one
+        many -> {:union, many}
+      end
     end
   end
 
@@ -649,6 +665,10 @@ defmodule ElixirSense.Core.Binding do
     kinds = Enum.map(args, fn arg -> numeric_kind(expand(env, arg, stack)) end)
 
     cond do
+      # A known non-numeric operand (atom, binary, map, tuple, list, ...) is a
+      # type error in the compiler (`apply.ex:106-111` has no such clause), so we
+      # return nil (unknown) rather than over-claiming `:number`.
+      :not_numeric in kinds -> nil
       :float in kinds -> {:float, nil}
       Enum.all?(kinds, &(&1 == :integer)) -> {:integer, nil}
       true -> :number
@@ -659,9 +679,12 @@ defmodule ElixirSense.Core.Binding do
   defp numeric_kind(:integer), do: :integer
   defp numeric_kind({:float, _}), do: :float
   defp numeric_kind(:float), do: :float
-  # number() operand, or an operand we can't pin down — either way the result is
-  # at best number().
-  defp numeric_kind(_other), do: :number
+  defp numeric_kind(:number), do: :number
+  # An unknown operand (`nil`) could still be numeric — result is at best number().
+  defp numeric_kind(nil), do: :number
+
+  # Everything else is a KNOWN non-numeric shape -> the call is a type error.
+  defp numeric_kind(_other), do: :not_numeric
 
   # Field values are unioned per key (keys are the same on both sides). A key
   # missing from one side unions with nil, which `normalize_union/1` treats as
@@ -827,10 +850,12 @@ defmodule ElixirSense.Core.Binding do
          stack
        )
        when name in [:++, :--] and module in [Kernel, :erlang] do
-    # `a ++ b` / `a -- b` always produce a list (the left side must be a list),
-    # so the result is `{:list, …}` even when the left's element type is unknown
-    # (e.g. `payload` here is an unresolved `expand_hrp(hrp) ++ data` thunk). A
-    # concrete non-list left is a type error -> :none.
+    # Ground truth: `apply.ex` `:erlang.++` /`:erlang.--`.
+    #   `++`: `[empty_list, term] -> term`, `[non_empty_list(e), term] -> non_empty_list(e, term)`
+    #   `--`: `[list(term), list(term)] -> list(term)`
+    # So `[] ++ x` is `x` (any term), `[1|_] ++ x` may be improper. `--` always
+    # yields a (possibly-empty, proper) sublist of the left, so it stays correct
+    # as a list of the left's element type.
     left = expand(env, left_candidate, stack)
 
     cond do
@@ -845,13 +870,28 @@ defmodule ElixirSense.Core.Binding do
         {:list, list_element_type(left)}
 
       true ->
-        # `a ++ b`: elements are the union of both sides' element types.
+        # `a ++ b`. The result is a proper `{:list, elem}` only when the RHS is a
+        # known proper list (then the elements are the union of both sides). For a
+        # non-list/improper or unknown RHS the result can be improper or be the RHS
+        # itself (when LHS is `[]`), neither of which the shape algebra can model
+        # soundly, so we return nil (unknown) rather than over-claiming a list.
         right = if match?([_ | _], rest), do: expand(env, hd(rest), stack), else: nil
 
-        if right == :none do
-          :none
-        else
-          {:list, concat_element_type(left, right)}
+        cond do
+          right == :none ->
+            :none
+
+          # Known proper-list RHS: result is a proper list of the unioned elements.
+          match?({:list, _}, right) or match?({:nonempty_list, _}, right) or right == :list ->
+            {:list, concat_element_type(left, right)}
+
+          # Empty-list LHS: `[] ++ x` is exactly `x` (any term).
+          left == {:list, :empty} ->
+            right
+
+          # Unknown / non-list / improper RHS: can't be modeled as a list shape.
+          true ->
+            nil
         end
     end
   end
@@ -1064,12 +1104,13 @@ defmodule ElixirSense.Core.Binding do
          stack
        )
        when (module == Tuple and fun == :to_list) or (module == :erlang and fun == :tuple_to_list) do
-    with {:tuple, _elems_count, elems} <- expand(env, tuple_candidate, stack) do
-      case elems do
-        [] -> {:list, :empty}
-        _ -> {:list, normalize_union(elems)}
-      end
-    else
+    case expand(env, tuple_candidate, stack) do
+      {:tuple, _elems_count, elems} ->
+        case elems do
+          [] -> {:list, :empty}
+          _ -> {:list, normalize_union(elems)}
+        end
+
       nil ->
         nil
 
@@ -1763,8 +1804,11 @@ defmodule ElixirSense.Core.Binding do
                 :or,
                 :not,
                 :xor,
-                :andalso,
-                :orelse,
+                # NOTE `:andalso`/`:orelse` are intentionally NOT here: they are
+                # not boolean-typed. `true and 5` is `5` — only the left operand
+                # must be boolean, the result is the right operand (or `false`).
+                # They fall through to the generic call path (nil/unknown) rather
+                # than over-claiming `:boolean`.
                 :is_atom,
                 :is_integer,
                 :is_float,
@@ -1842,10 +1886,10 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp expand_call_from_introspection(env, mod, fun, arity, arg_shapes, include_private, stack) do
-    case ElixirSense.Core.ElixirTypes.spec_signature_from_metadata(env, mod, fun, arity) do
+    case ElixirTypes.spec_signature_from_metadata(env, mod, fun, arity) do
       {:ok, sig} ->
-        descr = ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
-        shape = ElixirSense.Core.ElixirTypes.to_shape(descr)
+        descr = ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
+        shape = ElixirTypes.to_shape(descr)
 
         case expand(env, shape, stack) do
           nil ->
@@ -1909,12 +1953,12 @@ defmodule ElixirSense.Core.Binding do
       {:function, arity} ->
         # Try ExCk native signature first, then fall back to legacy spec parsing
         exck_result =
-          if ElixirSense.Core.ElixirTypes.enabled?() do
-            case ElixirSense.Core.ExCkReader.lookup_signature(mod, fun, arity) do
+          if ElixirTypes.enabled?() do
+            case ExCkReader.lookup_signature(mod, fun, arity) do
               {:ok, %{sig: {sig_kind, _domain, _clauses} = sig}}
               when sig_kind in [:infer, :strong] ->
-                descr = ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
-                shape = ElixirSense.Core.ElixirTypes.to_shape(descr)
+                descr = ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
+                shape = ElixirTypes.to_shape(descr)
                 expand(env, shape, stack)
 
               _ ->
@@ -1997,8 +2041,8 @@ defmodule ElixirSense.Core.Binding do
 
           %State.SpecInfo{elixir_types_sig: {sig_kind, _domain, _clauses} = sig} = spec
           when sig_kind in [:infer, :strong] ->
-            descr = ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
-            shape = ElixirSense.Core.ElixirTypes.to_shape(descr)
+            descr = ElixirTypes.extract_return_type_from_sig(sig, arg_shapes)
+            shape = ElixirTypes.to_shape(descr)
 
             case expand(env, shape, stack) do
               nil ->
@@ -2463,6 +2507,14 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  # Two structs of *different* concrete modules are disjoint.
+  defp combine_intersection(
+         {:struct, _fields_1, {:atom, mod_1}, nil},
+         {:struct, _fields_2, {:atom, mod_2}, nil}
+       )
+       when mod_1 != mod_2,
+       do: :none
+
   defp combine_intersection(
          {:struct, _fields_1, nil, nil} = s1,
          {:struct, _fields_2, _type, nil} = s2
@@ -2511,6 +2563,9 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  # Fixed-arity tuples of different sizes are disjoint.
+  defp combine_intersection({:tuple, n1, _}, {:tuple, n2, _}) when n1 != n2, do: :none
+
   # Union on the left is handled here; this clause must come *before* the flip
   # clause below, otherwise `union ∩ union` flips left/right forever.
   defp combine_intersection({:union, variants}, other) do
@@ -2529,16 +2584,123 @@ defmodule ElixirSense.Core.Binding do
   defp combine_intersection(other, {:union, variants}),
     do: combine_intersection({:union, variants}, other)
 
+  # List ∩ list: intersect element types. Both `{:list, _}` shapes include `[]`,
+  # so their intersection always includes `[]` and is therefore never `:none`
+  # even when the element intersection bottoms out (e.g. `list(:a) ∩ list(:b)`
+  # is `[]`, represented as `{:list, :empty}`). A nonempty side forces the result
+  # nonempty.
+  defp combine_intersection({:list, e1}, {:list, e2}) do
+    {:list, intersect_list_elem(e1, e2)}
+  end
+
+  defp combine_intersection({:nonempty_list, e1}, {:nonempty_list, e2}) do
+    case intersect_list_elem(e1, e2) do
+      :empty -> :none
+      elem -> {:nonempty_list, elem}
+    end
+  end
+
+  defp combine_intersection({:nonempty_list, e1}, {:list, e2}) do
+    case intersect_list_elem(e1, e2) do
+      :empty -> :none
+      elem -> {:nonempty_list, elem}
+    end
+  end
+
+  defp combine_intersection({:list, _} = l, {:nonempty_list, _} = nl) do
+    combine_intersection(nl, l)
+  end
+
+  # The generic `:list` atom intersected with a concrete list shape is that
+  # concrete shape.
+  defp combine_intersection(:list, {tag, _} = l) when tag in [:list, :nonempty_list], do: l
+  defp combine_intersection({tag, _} = l, :list) when tag in [:list, :nonempty_list], do: l
+
   # Scalar specificity: if one side subsumes the other the intersection is the
   # narrower of the two (e.g. `integer() and 5` is `5`, `atom() and :ok` is
-  # `:ok`). Genuinely disjoint shapes intersect to :none.
+  # `:ok`). Otherwise the fallback is *conservative*: `covers?/2` is subsumption,
+  # not overlap, so a non-subsuming pair is only `:none` when the two top-level
+  # shape kinds are provably disjoint (atom vs tuple vs map vs list vs number vs
+  # binary vs ...). Same-kind or unknown/new-kind pairs intersect to `nil`
+  # (unknown) rather than `:none` to avoid over-claiming disjointness.
   defp combine_intersection(a, b) do
     cond do
       covers?(a, b) -> b
       covers?(b, a) -> a
-      true -> :none
+      disjoint_kinds?(a, b) -> :none
+      disjoint_literals?(a, b) -> :none
+      true -> nil
     end
   end
+
+  # Two distinct concrete literals of the same scalar kind are disjoint
+  # (`:a ∩ :b`, `1 ∩ 2`, `1.0 ∩ 2.0`, `"a" ∩ "b"` are all `:none`). Same-kind but
+  # at least one *abstract* (e.g. `atom() ∩ :a`) is handled by `covers?/2` above,
+  # so this only fires for two pinned values that aren't equal (equality is caught
+  # by the `type, type` clause earlier).
+  defp disjoint_literals?({tag, v1}, {tag, v2})
+       when tag in [:atom, :integer, :float, :binary] and not is_nil(v1) and not is_nil(v2),
+       do: v1 != v2
+
+  defp disjoint_literals?(_a, _b), do: false
+
+  # Element intersection for two list shapes. Unknown (`nil`) element on either
+  # side means "any", so it yields the other side. `:empty` (element of `[]`)
+  # intersected with anything is `:empty` only for two empty lists; an empty list
+  # shape is `{:list, :empty}` and never appears as a `:nonempty_list` element.
+  defp intersect_list_elem(:empty, _), do: :empty
+  defp intersect_list_elem(_, :empty), do: :empty
+  defp intersect_list_elem(nil, e), do: e
+  defp intersect_list_elem(e, nil), do: e
+
+  defp intersect_list_elem(e1, e2) do
+    case combine_intersection(e1, e2) do
+      # Disjoint element types still leave `[]` in a (possibly-empty) list, so the
+      # element collapses to `:empty` rather than the whole list to `:none`.
+      :none -> :empty
+      other -> other
+    end
+  end
+
+  # Provably-disjoint top-level shape kinds. Only returns true for pairs whose
+  # runtime value sets cannot overlap. Unknown/new shape kinds fall through to
+  # `false` (conservative). Same-kind pairs are also `false` (handled above or
+  # genuinely overlapping).
+  defp disjoint_kinds?(a, b) do
+    ka = shape_kind(a)
+    kb = shape_kind(b)
+    ka != nil and kb != nil and ka != kb
+  end
+
+  # Coarse top-level kind classifier used only for disjointness. Returns nil for
+  # shapes whose kind we don't want to assert disjointness on (unknown/new
+  # shapes), so they never get collapsed to `:none`.
+  defp shape_kind(:atom), do: :atom
+  defp shape_kind(:boolean), do: :atom
+  defp shape_kind({:atom, _}), do: :atom
+  defp shape_kind(:integer), do: :number
+  defp shape_kind({:integer, _}), do: :number
+  defp shape_kind(:float), do: :number
+  defp shape_kind({:float, _}), do: :number
+  defp shape_kind(:number), do: :number
+  defp shape_kind(:binary), do: :binary
+  defp shape_kind({:binary, _}), do: :binary
+  defp shape_kind(:bitstring), do: :binary
+  defp shape_kind(:list), do: :list
+  defp shape_kind({:list, _}), do: :list
+  defp shape_kind({:nonempty_list, _}), do: :list
+  defp shape_kind(:tuple), do: :tuple
+  defp shape_kind({:tuple, _, _}), do: :tuple
+  defp shape_kind({:map, _, _}), do: :map
+  defp shape_kind({:struct, _, _, _}), do: :map
+  defp shape_kind(:pid), do: :pid
+  defp shape_kind(:port), do: :port
+  defp shape_kind(:reference), do: :reference
+  # number vs integer/float kinds overlap, so we do NOT treat integer vs float as
+  # disjoint here (both map to :number); that is intentional — an over-claim of
+  # disjointness is worse than a missed one. Everything else (fun, unknown, new
+  # shapes) is left unclassified.
+  defp shape_kind(_other), do: nil
 
   defp expand_map_fields(env, map_or_struct, stack) do
     case expand(env, map_or_struct, stack) do

@@ -40,7 +40,10 @@ defmodule ElixirSense.Core.BindingTest do
       safe_fetchers = [:get_env, :compile_env]
 
       Enum.each(unsafe_fetchers, fn fetcher ->
-        assert :none ==
+        # `fetch_env!`/`compile_env!` raise when the env is unset; the failure is
+        # now rescued to nil (unknown) rather than :none (bottom). :none is dropped
+        # from unions and over-claims; an unresolvable config value is simply unknown.
+        assert nil ==
                  Binding.expand(
                    build_dependency_injection_binding(fetcher),
                    {:attribute, :some_module}
@@ -437,9 +440,13 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "unknown variable" do
-      assert :none == Binding.expand(@env, {:variable, :v, 1})
+      # A *versioned* var not in scope is unknown (nil), not :none. Previously it
+      # fell back to a same-named 0-arity local call which resolved to :none here;
+      # that fallback now only applies to the `version == :any` (Code.Fragment
+      # misclassification) case.
+      assert nil == Binding.expand(@env, {:variable, :v, 1})
 
-      assert :none ==
+      assert nil ==
                Binding.expand(
                  @env
                  |> Map.put(:vars, [%VarInfo{version: 1, name: :v, type: {:integer, 1}}]),
@@ -2168,7 +2175,27 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "local call no parens imported fun with spec t expanding to atom" do
+      # A no-parens call misclassified as a variable carries `version == :any`
+      # (Code.Fragment / surround_context spelling). Only that case falls back to a
+      # 0-arity local/imported call. A *versioned* out-of-scope var would be nil.
       assert {:atom, :asd} ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   vars: [
+                     %VarInfo{version: 1, name: :ref, type: {:variable, :f02, :any}}
+                   ],
+                   functions: [{ElixirSenseExample.FunctionsWithReturnSpec, [{:f02, 0}]}]
+                 }),
+                 {:variable, :ref, 1}
+               )
+    end
+
+    test "versioned out-of-scope var does not resolve to a 0-arity local function" do
+      # Regression for task #6: a versioned var not in `env.vars` must be unknown
+      # (nil), never a same-named 0-arity function, even when such a function is
+      # imported. Otherwise the function's return type leaks into thunks.
+      assert nil ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -3257,6 +3284,184 @@ defmodule ElixirSense.Core.BindingTest do
     end
   end
 
+  describe "intersection overlap matrix (soundness regressions)" do
+    # Task #3: the fallback used `covers?/2` (subsumption) to decide disjointness,
+    # so any non-subsuming pair collapsed to :none even when the value sets overlap.
+
+    test "nonempty_list ∩ list intersects elements and stays nonempty" do
+      # Both contain [] for the list side, but a nonempty side forces nonempty;
+      # element types intersect.
+      assert {:nonempty_list, {:integer, nil}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:nonempty_list, nil}, {:list, {:integer, nil}}]}
+               )
+
+      assert {:nonempty_list, {:integer, nil}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:list, {:integer, nil}}, {:nonempty_list, nil}]}
+               )
+    end
+
+    test "list ∩ list with overlapping element types" do
+      assert {:list, {:integer, 1}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:list, :integer}, {:list, {:integer, 1}}]}
+               )
+    end
+
+    test "list(:a) ∩ list(:b) is the empty list, not :none (both contain [])" do
+      # Disjoint element types still leave `[]` reachable -> {:list, :empty}.
+      assert {:list, :empty} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:list, {:atom, :a}}, {:list, {:atom, :b}}]}
+               )
+    end
+
+    test "generic :list ∩ concrete list yields the concrete list" do
+      assert {:list, {:integer, nil}} ==
+               Binding.expand(@env, {:intersection, [:list, {:list, {:integer, nil}}]})
+
+      assert {:nonempty_list, {:integer, nil}} ==
+               Binding.expand(@env, {:intersection, [{:nonempty_list, {:integer, nil}}, :list]})
+    end
+
+    test "provably-disjoint top-level kinds are :none" do
+      # atom vs list, integer vs binary, tuple vs map, etc.
+      assert :none ==
+               Binding.expand(@env, {:intersection, [{:atom, :a}, {:list, {:integer, nil}}]})
+
+      assert :none ==
+               Binding.expand(@env, {:intersection, [{:integer, 1}, {:binary, nil}]})
+
+      assert :none ==
+               Binding.expand(@env, {:intersection, [:tuple, {:map, [], nil}]})
+
+      assert :none == Binding.expand(@env, {:intersection, [:list, {:integer, nil}]})
+    end
+
+    test "different-arity tuples are disjoint" do
+      assert :none ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:tuple, 2, [nil, nil]}, {:tuple, 1, [nil]}]}
+               )
+    end
+
+    test "distinct concrete literals of the same kind are disjoint" do
+      assert :none == Binding.expand(@env, {:intersection, [{:atom, :a}, {:atom, :b}]})
+      assert :none == Binding.expand(@env, {:intersection, [{:integer, 1}, {:integer, 2}]})
+      assert :none == Binding.expand(@env, {:intersection, [{:binary, "a"}, {:binary, "b"}]})
+    end
+
+    test "structs of different concrete modules are disjoint" do
+      assert :none ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [{:struct, [], {:atom, Foo}, nil}, {:struct, [], {:atom, Bar}, nil}]}
+               )
+    end
+
+    test "same-kind, non-subsuming, non-literal pair is unknown (nil), never :none" do
+      # integer() ∩ float() both live in the number tower: we do not assert these
+      # disjoint (conservative). Result is unknown rather than a false :none.
+      assert nil == Binding.expand(@env, {:intersection, [{:integer, nil}, {:float, nil}]})
+    end
+  end
+
+  describe "++ operator (improper / non-list RHS soundness)" do
+    # Task #5: `++` returned {:list, _} unconditionally. Ground truth
+    # (:erlang.++): `[] ++ x` is `x`; `[1|_] ++ x` may be improper.
+
+    test "proper-list RHS yields a proper list of unioned elements" do
+      assert {:list, {:integer, nil}} ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :++,
+                  [{:list, {:integer, nil}}, {:list, {:integer, nil}}]}
+               )
+    end
+
+    test "non-empty LHS with unknown RHS is unknown (may be improper)" do
+      assert nil ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :++, [{:nonempty_list, {:integer, nil}}, nil]}
+               )
+    end
+
+    test "non-empty LHS with non-list RHS is unknown (improper list)" do
+      assert nil ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :++, [{:nonempty_list, {:integer, nil}}, {:atom, :a}]}
+               )
+    end
+
+    test "empty-list LHS yields exactly the RHS" do
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :++, [{:list, :empty}, {:atom, :a}]}
+               )
+    end
+
+    test "-- stays a proper list of the left element type" do
+      assert {:list, {:integer, nil}} ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :--, [{:list, {:integer, nil}}, {:atom, :a}]}
+               )
+    end
+  end
+
+  describe "numeric operators on known non-numeric operands" do
+    # Task #27: numeric_result over-claimed :number for non-numeric operands.
+
+    test "+ with a known non-numeric operand is unknown, not :number" do
+      assert nil ==
+               Binding.expand(@env, {:call, {:atom, Kernel}, :+, [{:integer, 1}, {:atom, :a}]})
+
+      assert nil ==
+               Binding.expand(@env, {:call, {:atom, Kernel}, :*, [{:binary, "x"}, {:integer, 2}]})
+    end
+
+    test "+ with an unknown operand may still be numeric (number())" do
+      assert :number ==
+               Binding.expand(@env, {:call, {:atom, Kernel}, :+, [{:integer, 1}, nil]})
+    end
+
+    test "+ of two integers is integer()" do
+      assert {:integer, nil} ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :+, [{:integer, 1}, {:integer, 2}]}
+               )
+    end
+  end
+
+  describe "andalso/orelse are not boolean-typed (task #27)" do
+    test "andalso/orelse do not resolve to :boolean" do
+      refute :boolean ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, :erlang}, :andalso, [:boolean, {:integer, 5}]}
+               )
+
+      refute :boolean ==
+               Binding.expand(@env, {:call, {:atom, :erlang}, :orelse, [:boolean, {:integer, 5}]})
+    end
+
+    test "strict and/or still resolve to :boolean" do
+      assert :boolean ==
+               Binding.expand(@env, {:call, {:atom, :erlang}, :and, [:boolean, :boolean]})
+    end
+  end
+
   describe "from_var" do
     defmodule Elixir.BindingTest.Some do
       defstruct [:asd]
@@ -3391,8 +3596,12 @@ defmodule ElixirSense.Core.BindingTest do
                {:atom, :a}
     end
 
-    test "an unresolvable base (:none) stays :none" do
-      assert Binding.expand(@env, {:difference, {:variable, :missing, 9}, {:atom, :a}}) == :none
+    test "a versioned out-of-scope base var is unknown (nil), not a 0-arity local call" do
+      # Previously a versioned var not in `env.vars` fell back to a same-named
+      # 0-arity local call (yielding :none here). That injected unrelated function
+      # return types into difference/feasibility thunks; a versioned var that is
+      # not in scope is simply unknown, so the difference is unknown (nil).
+      assert Binding.expand(@env, {:difference, {:variable, :missing, 9}, {:atom, :a}}) == nil
     end
   end
 

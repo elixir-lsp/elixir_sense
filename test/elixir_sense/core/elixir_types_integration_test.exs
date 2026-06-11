@@ -62,8 +62,10 @@ defmodule ElixirSense.Core.ElixirTypesIntegrationTest do
       result = TypeInference.type_of(42, :none)
       assert result == {:integer, 42} or result == {:integer, nil}
 
+      # task #22: a non-empty literal list surfaces as {:nonempty_list, _} via
+      # the native path (or {:list, _} via the custom fallback engine).
       result = TypeInference.type_of([1, 2, 3], :none)
-      assert match?({:list, _}, result)
+      assert match?({:list, _}, result) or match?({:nonempty_list, _}, result)
 
       result = TypeInference.type_of({:{}, [], [1, 2]}, :none)
       assert match?({:tuple, 2, _}, result)

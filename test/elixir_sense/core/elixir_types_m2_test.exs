@@ -243,8 +243,15 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       call_ast = {:add, [], [1, 2]}
       result = TypeInference.type_of_with_elixir_types(call_ast, :none, local_sigs_map)
 
-      # add/2 body is %{foo: x, bar: y}, which returns a map
-      assert {:map, fields, nil} = result
+      # add/2 body is %{foo: x, bar: y}, which returns a map. task #20: native
+      # dynamic-mode inference yields a dynamic-wrapped descr, so to_shape now
+      # surfaces a {:dynamic, {:map, ...}} marker — unwrap it for the assertion.
+      {:map, fields, nil} =
+        case result do
+          {:dynamic, inner} -> inner
+          inner -> inner
+        end
+
       assert Keyword.has_key?(fields, :foo)
       assert Keyword.has_key?(fields, :bar)
     end
@@ -440,8 +447,18 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
         {[Module.Types.Descr.atom([false])], Module.Types.Descr.atom([:no])}
       ]
 
+      # The chunk must be tagged with the *running* runtime's checker version;
+      # ExCkReader (task #12) now rejects foreign versions with
+      # {:error, :version_mismatch} since descr internals changed across releases.
+      checker_version =
+        if :erlang.function_exported(:elixir_erl, :checker_version, 0) do
+          :elixir_erl.checker_version()
+        else
+          :elixir_checker_v2
+        end
+
       chunk_payload =
-        {:elixir_checker_v2,
+        {checker_version,
          %{
            exports: [
              {{:choose, 1}, %{sig: {:infer, nil, clauses}}}
@@ -617,7 +634,15 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         result = ElixirTypes.to_shape(struct_descr)
 
-        case result do
+        # task #20: struct_type produces a dynamic-wrapped descr; to_shape now
+        # surfaces the {:dynamic, _} marker. Unwrap it for the struct assertion.
+        unwrapped =
+          case result do
+            {:dynamic, inner} -> inner
+            inner -> inner
+          end
+
+        case unwrapped do
           {:struct, fields, {:atom, Date}, nil} ->
             assert is_list(fields)
             field_names = Keyword.keys(fields)
@@ -1116,9 +1141,11 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
 
         case result do
           {:ok, vars, _descrs} when is_map(vars) ->
-            # Pattern refinement should work
-            assert vars[{:a, 1}] == {:integer, nil}
-            assert vars[{:b, 2}] == {:atom, :ok}
+            # Pattern refinement should work. task #20: a refined singleton atom
+            # coming from the native (dynamic-mode) descr surfaces with a
+            # {:dynamic, _} marker, so accept either the bare or wrapped form.
+            assert vars[{:a, 1}] in [{:integer, nil}, {:dynamic, {:integer, nil}}]
+            assert vars[{:b, 2}] in [{:atom, :ok}, {:dynamic, {:atom, :ok}}]
 
           other ->
             flunk("Unexpected result: #{inspect(other)}")

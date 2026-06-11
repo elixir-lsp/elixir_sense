@@ -145,11 +145,27 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   defp nonempty_length?(:>, n) when is_integer(n) and n >= 0, do: true
   defp nonempty_length?(:>=, n) when is_integer(n) and n >= 1, do: true
   defp nonempty_length?(p, n) when p in [:==, :===] and is_integer(n) and n >= 1, do: true
+  defp nonempty_length?(p, 0) when p in [:!=, :!==], do: true
   defp nonempty_length?(_p, _n), do: false
 
+  # Invert a comparison operator (for when operands are flipped).
+  defp invert_comparison(:<), do: :>
+  defp invert_comparison(:>), do: :<
+  defp invert_comparison(:<=), do: :>=
+  defp invert_comparison(:>=), do: :<=
+  defp invert_comparison(p) when p in [:==, :===, :!=, :!==], do: p
+
   # A map known to NOT have `key` (from `not is_map_key/2`).
-  defp not_set_map_type(key) when is_atom(key) or is_binary(key) or is_integer(key),
+  # Atom keys are stored raw; non-atom keys use the `{:domain, key_type}` form
+  # that matches type_inference.ex `get_fields_type` and binding.ex `{:map_key, ...}`.
+  defp not_set_map_type(key) when is_atom(key),
     do: {:map, [{key, :not_set}], nil}
+
+  defp not_set_map_type(key) when is_binary(key),
+    do: {:map, [{{:domain, type_of(key)}, :not_set}], nil}
+
+  defp not_set_map_type(key) when is_integer(key),
+    do: {:map, [{{:domain, type_of(key)}, :not_set}], nil}
 
   defp not_set_map_type(_key), do: {:map, [], nil}
 
@@ -225,16 +241,21 @@ defmodule ElixirSense.Core.TypeInference.Guard do
     guard_predicate_type(p, [call, lhs])
   end
 
-  # when length(x) > 0 / >= 1 / == n (n >= 1) -> non-empty list
+  # when length(x) > 0 / >= 1 / == n (n >= 1) / != 0 -> non-empty list
+  # Also handles operators that do NOT imply non-emptiness (< / <= / != 0-like),
+  # but in all cases length/1 already constrains the variable to a proper list.
   defp guard_predicate_type(p, [{{:., _, [:erlang, :length]}, _, [first | _]}, size])
-       when p in [:>, :>=, :==, :===] do
+       when p in [:>, :>=, :==, :===, :<, :<=, :!=, :!==] do
     type = if nonempty_length?(p, size), do: {:nonempty_list, nil}, else: {:list, nil}
     {type, first}
   end
 
+  # When the size literal is on the LEFT (e.g. `5 > length(x)`), flip the
+  # operand order AND invert the comparison operator so that the delegated call
+  # sees `length(x) < 5` rather than `length(x) > 5`.
   defp guard_predicate_type(p, [size, {{:., _, [:erlang, :length]}, _, _guard_params} = call])
-       when p in [:>, :>=, :<=, :<, :==, :===] do
-    guard_predicate_type(p, [call, size])
+       when p in [:>, :>=, :<=, :<, :==, :===, :!=, :!==] do
+    guard_predicate_type(invert_comparison(p), [call, size])
   end
 
   defp guard_predicate_type(p, [first | _]) when p in [:is_tuple],
@@ -272,10 +293,13 @@ defmodule ElixirSense.Core.TypeInference.Guard do
         key == :__struct__ ->
           {:struct, [], nil, nil}
 
-        is_atom(key) or is_binary(key) or is_integer(key) ->
+        is_atom(key) ->
           rhs_type = type_of(value)
-
           {:map, [{key, rhs_type}], nil}
+
+        is_binary(key) or is_integer(key) ->
+          rhs_type = type_of(value)
+          {:map, [{{:domain, type_of(key)}, rhs_type}], nil}
 
         true ->
           {:map, [], nil}
@@ -322,8 +346,11 @@ defmodule ElixirSense.Core.TypeInference.Guard do
         :__struct__ ->
           {:struct, [], nil, nil}
 
-        key when is_atom(key) when is_binary(key) when is_integer(key) ->
+        key when is_atom(key) ->
           {:map, [{key, nil}], nil}
+
+        key when is_binary(key) or is_integer(key) ->
+          {:map, [{{:domain, type_of(key)}, nil}], nil}
 
         _ ->
           {:map, [], nil}
@@ -338,8 +365,11 @@ defmodule ElixirSense.Core.TypeInference.Guard do
         :__struct__ ->
           {:struct, [], nil, nil}
 
-        key when is_atom(key) when is_binary(key) when is_integer(key) ->
+        key when is_atom(key) ->
           {:map, [{key, nil}], nil}
+
+        key when is_binary(key) or is_integer(key) ->
+          {:map, [{{:domain, type_of(key)}, nil}], nil}
 
         _ ->
           {:map, [], nil}

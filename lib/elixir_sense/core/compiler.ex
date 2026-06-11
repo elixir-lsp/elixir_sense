@@ -8,6 +8,7 @@ defmodule ElixirSense.Core.Compiler do
   alias ElixirSense.Core.TypeInference.Guard
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
   alias ElixirSense.Core.State.ModFunInfo
+  alias ElixirSense.Core.ElixirTypes
 
   @trace_key :elixir_sense_trace
   @trace_paused_key :elixir_sense_trace_paused
@@ -2166,7 +2167,7 @@ defmodule ElixirSense.Core.Compiler do
 
     # Capture clause AST for ElixirTypes inference
     state =
-      if ElixirSense.Core.ElixirTypes.enabled?() and def_kind in [:def, :defp] and
+      if ElixirTypes.enabled?() and def_kind in [:def, :defp] and
            not has_unquotes and name != :__unknown__ do
         clause_ast = %{
           meta: meta,
@@ -3202,7 +3203,7 @@ defmodule ElixirSense.Core.Compiler do
       existing_vars == [] ->
         {existing_vars, %{}}
 
-      not ElixirSense.Core.ElixirTypes.enabled?() ->
+      not ElixirTypes.enabled?() ->
         {existing_vars, %{}}
 
       true ->
@@ -3222,7 +3223,7 @@ defmodule ElixirSense.Core.Compiler do
         # statements instead of collapsing to `dynamic()`.
         variables = elixir_types_scope_variables(state)
 
-        case ElixirSense.Core.ElixirTypes.of_match(
+        case ElixirTypes.of_match(
                pattern_ast,
                nil,
                match_ast,
@@ -3288,12 +3289,10 @@ defmodule ElixirSense.Core.Compiler do
   defp env_for_meta(state, meta) do
     line = Keyword.get(meta, :line, 0)
 
-    cond do
-      is_integer(line) and line > 0 ->
-        Map.get(state.lines_to_env, line) || closest_env(state)
-
-      true ->
-        closest_env(state)
+    if is_integer(line) and line > 0 do
+      Map.get(state.lines_to_env, line) || closest_env(state)
+    else
+      closest_env(state)
     end
   end
 
@@ -3312,13 +3311,13 @@ defmodule ElixirSense.Core.Compiler do
   # Maybe infer local function signature from accumulated clauses
   defp maybe_infer_local_signature(state, %{module: module, file: file}, {fun, arity})
        when is_atom(module) and is_atom(fun) and is_integer(arity) do
-    if ElixirSense.Core.ElixirTypes.enabled?() do
+    if ElixirTypes.enabled?() do
       key = {module, fun, arity}
 
       case state.mods_funs_to_positions[key] do
         %{elixir_types_clauses: clauses} when is_list(clauses) and clauses != [] ->
           # Run inference on accumulated clauses
-          case ElixirSense.Core.ElixirTypes.infer_local_signature(
+          case ElixirTypes.infer_local_signature(
                  module,
                  {fun, arity},
                  clauses,

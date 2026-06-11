@@ -6,6 +6,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   alias ElixirSense.Core.Compiler.State
   alias ElixirSense.Core.TypeInference
   alias ElixirSense.Core.TypeInference.Occurrence
+  alias ElixirSense.Core.ElixirTypes
 
   # See ElixirSense.Core.Compiler.@stamp_version — gates version stamping
   # on `with` to host Elixir 1.20+ (commit 603602e67 — reverse arrows).
@@ -302,7 +303,17 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
         {e_clause, s_acc, _e_acc} = clause(head_fun, clause, State.new_vars_scope(sa), e)
 
-        {e_clause, {State.remove_vars_scope(s_acc, sa), [clause_pattern_type(clause) | prior]}}
+        # A clause contributes to the subtracted set only when its pattern (with
+        # no guard) is precise — an under-approximation of the matched values.
+        # Imprecise clauses are skipped (the catch-all keeps the wider type),
+        # mirroring the compiler's `pattern_precise? and guard_precise?` gate.
+        next_prior =
+          case clause_pattern_type(clause) do
+            :imprecise -> prior
+            {:ok, type} -> [type | prior]
+          end
+
+        {e_clause, {State.remove_vars_scope(s_acc, sa), next_prior}}
       end)
 
     {values, se}
@@ -351,14 +362,17 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   defp strip_guard({:when, _meta, [pattern | _guards]}), do: pattern
   defp strip_guard(other), do: other
 
-  # Best-effort type of a clause's (raw) pattern, used as the subtracted type for
-  # later clauses. Literals/atoms (the cases we can actually subtract) type
-  # precisely here; anything else stays conservative.
+  # Under-approximated type a clause's head pattern may contribute to the
+  # subtracted set for later clauses. Returns `{:ok, type}` when the pattern (and
+  # the absence of a guard) is precise enough to subtract soundly, or `:imprecise`
+  # when the clause must be skipped. A non-trivial `when` guard makes the clause
+  # imprecise (the guard narrows the matched set, so the full pattern would
+  # over-subtract) — `precise_pattern_type/1` rejects guarded heads directly.
   defp clause_pattern_type({:->, _meta, [[head | _], _body]}) do
-    head |> strip_guard() |> TypeInference.type_of(:match)
+    TypeInference.precise_pattern_type(head)
   end
 
-  defp clause_pattern_type(_clause), do: nil
+  defp clause_pattern_type(_clause), do: :imprecise
 
   # cond
 
@@ -504,19 +518,24 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     sl = State.merge_inferred_types(sl, Occurrence.scrutinee_refinements(e_right, e_left))
 
     # The value that reaches `else` from this generator is the RHS minus what the
-    # left pattern matched (the failing part). A bare-variable (or `_`) pattern
-    # always matches, so it contributes nothing to the failure space. Strip any
-    # `when` guard first so we type the pattern, not the guard expression.
-    failure_pattern = strip_guard(e_left)
-
+    # left pattern matched (the failing part). We may only subtract the pattern
+    # when it (and the absence of a guard) is precise — an under-approximation of
+    # the matched values; otherwise the full RHS reaches `else` (sound, wider).
+    # This mirrors `expr.ex:883` (`else_type = if precise?, do: difference, else:
+    # type`) — guarded clauses are never precise. A bare-variable (or `_`) pattern
+    # always matches, so it contributes nothing to the failure space at all.
     failures =
-      if bare_var_pattern?(failure_pattern) do
-        failures
-      else
-        difference =
-          {:difference, match_context_r, TypeInference.type_of(failure_pattern, :match)}
+      case TypeInference.precise_pattern_type(e_left) do
+        {:ok, nil} ->
+          # bare var / `_`: matches everything, no failure space
+          failures
 
-        [difference | failures]
+        {:ok, type} ->
+          [{:difference, match_context_r, type} | failures]
+
+        :imprecise ->
+          # guarded or over-approximated pattern: the whole RHS may fail to match
+          [match_context_r | failures]
       end
 
     {{:<-, meta, [e_left, e_right]}, {sl, el, failures}}
@@ -884,9 +903,9 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   defp match_context_to_descr(:none), do: nil
 
   defp match_context_to_descr(match_context) do
-    if ElixirSense.Core.ElixirTypes.enabled?() do
+    if ElixirTypes.enabled?() do
       try do
-        descr = ElixirSense.Core.ElixirTypes.coerce_var_type_public(match_context)
+        descr = ElixirTypes.coerce_var_type_public(match_context)
 
         # coerce_var_type returns dynamic() for unrecognized shapes — treat as nil
         # to avoid passing uninformative constraints to native pattern matching
@@ -942,12 +961,10 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     meta = extract_meta_from_ast(ast)
     line = Keyword.get(meta, :line, 0)
 
-    cond do
-      is_integer(line) and line > 0 ->
-        Map.get(state.lines_to_env, line) || closest_env_clauses(state)
-
-      true ->
-        closest_env_clauses(state)
+    if is_integer(line) and line > 0 do
+      Map.get(state.lines_to_env, line) || closest_env_clauses(state)
+    else
+      closest_env_clauses(state)
     end
   end
 
@@ -1004,7 +1021,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     # L1 guard layer.
     native_pattern = strip_guard(pattern_ast)
 
-    if ElixirSense.Core.ElixirTypes.enabled?() and clause_vars != [] and
+    if ElixirTypes.enabled?() and clause_vars != [] and
          not bare_var_pattern?(native_pattern) do
       try do
         env = env_for_meta_clauses(state, pattern_ast)
@@ -1015,7 +1032,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
         expected_descr = match_context_to_descr(match_context)
         target_keys = Enum.map(clause_vars, &elem(&1, 0))
 
-        case ElixirSense.Core.ElixirTypes.of_match(
+        case ElixirTypes.of_match(
                native_pattern,
                expected_descr,
                {:variable_match, match_label},

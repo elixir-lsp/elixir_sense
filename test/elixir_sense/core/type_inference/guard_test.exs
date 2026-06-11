@@ -185,9 +185,40 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       assert Guard.type_information_from_guards(quote(do: length(x) >= 1) |> expand()) ==
                %{{:x, 0} => {:nonempty_list, nil}}
 
-      # a plain length comparison that doesn't imply non-empty stays a list
+      # A plain length comparison that doesn't imply non-empty stays a list.
+      # Returns {:list, nil} (not bare :list) because it now hits the direct
+      # comparison clause rather than falling through to the is_list/length base
+      # case. {:list, nil} and :list both represent "any proper list"; the change
+      # in representation is a side-effect of the task-#4 operator-coverage fix.
       assert Guard.type_information_from_guards(quote(do: length(x) < 3) |> expand()) ==
-               %{{:x, 0} => :list}
+               %{{:x, 0} => {:list, nil}}
+    end
+
+    # Regression for task #4: flipped comparisons must invert the operator.
+    # `5 > length(x)` means length(x) < 5, which does NOT imply non-empty.
+    # Bug was: the flip clause delegated `guard_predicate_type(:>, [length(x), 5])`
+    # without inversion, so nonempty_length?(:>, 5) returned true → wrong.
+    test "5 > length(x) does NOT produce non-empty (just {:list, nil})" do
+      # size on left, should be treated as length(x) < 5 — not non-empty
+      result = Guard.type_information_from_guards(quote(do: 5 > length(x)) |> expand())
+      assert result == %{{:x, 0} => {:list, nil}}
+    end
+
+    test "0 < length(x) produces non-empty list (common spelling)" do
+      # `0 < length(x)` is equivalent to `length(x) > 0`, must infer non-empty
+      result = Guard.type_information_from_guards(quote(do: 0 < length(x)) |> expand())
+      assert result == %{{:x, 0} => {:nonempty_list, nil}}
+    end
+
+    test "length(x) >= 0 does not produce non-empty (zero is allowed)" do
+      result = Guard.type_information_from_guards(quote(do: length(x) >= 0) |> expand())
+      assert result == %{{:x, 0} => {:list, nil}}
+    end
+
+    test "1 <= length(x) produces non-empty list" do
+      # `1 <= length(x)` flips to `length(x) >= 1` which implies non-empty
+      result = Guard.type_information_from_guards(quote(do: 1 <= length(x)) |> expand())
+      assert result == %{{:x, 0} => {:nonempty_list, nil}}
     end
 
     test "infers type from guard with list: hd/1 and tl/1" do
@@ -218,6 +249,25 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       result = Guard.type_information_from_guards(guard_expr)
       assert result == %{{:x, 0} => {:map, [{:key, nil}], nil}}
     end
+
+    # Regression for task #28: non-atom map keys must be stored with the
+    # `{:domain, key_type}` encoding matching type_inference.ex get_fields_type,
+    # so that covers?/same_keys?/map_key lookup see a single spelling.
+    # Bug was: guard.ex stored raw `{"a", nil}` / `{1, nil}` while the rest
+    # of the codebase uses `{{:domain, {:binary, "a"}}, nil}` etc.
+    test "is_map_key with string key produces domain-key encoding" do
+      guard_expr = quote(do: is_map_key(x, "akey")) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      # Must match get_fields_type encoding: {{:domain, {:binary, "akey"}}, nil}
+      assert result == %{{:x, 0} => {:map, [{{:domain, {:binary, "akey"}}, nil}], nil}}
+    end
+
+    test "is_map_key with integer key produces domain-key encoding" do
+      guard_expr = quote(do: is_map_key(x, 42)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      # Must match get_fields_type encoding: {{:domain, {:integer, 42}}, nil}
+      assert result == %{{:x, 0} => {:map, [{{:domain, {:integer, 42}}, nil}], nil}}
+    end
   end
 
   describe "type_information_from_guards not" do
@@ -231,6 +281,14 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       guard_expr = quote(do: not is_map_key(x, :foo)) |> expand()
       result = Guard.type_information_from_guards(guard_expr)
       assert result == %{{:x, 0} => {:map, [foo: :not_set], nil}}
+    end
+
+    # Regression for task #28: not is_map_key with non-atom key must also
+    # produce the domain-key encoding for :not_set facts.
+    test "negative is_map_key with string key uses domain-key encoding" do
+      guard_expr = quote(do: not is_map_key(x, "foo")) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:map, [{{:domain, {:binary, "foo"}}, :not_set}], nil}}
     end
 
     # for simplicity we do not traverse not guards in the guard tree

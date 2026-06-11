@@ -36,7 +36,8 @@ defmodule ElixirSense.Core.TypePresentationGoldenTest do
     """
 
     # at the `other` clause body, `other` is the scrutinee minus `:a`
-    assert hint(code, :other, {5, 18}) == {:ok, ":b | :c"}
+    # compiler dialect: " or " separator (task #18)
+    assert hint(code, :other, {5, 18}) == {:ok, ":b or :c"}
   end
 
   test "map variable renders its fields" do

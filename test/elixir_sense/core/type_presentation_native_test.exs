@@ -417,7 +417,10 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     assert_in_scope(code, [:acc])
 
     if ElixirTypes.available?() do
-      assert hint(code, :acc, {4, 9}) == {:ok, "map()"}
+      # The native seed types `acc` from the `reduce:` initial value `%{}`,
+      # which is the closed empty map — rendered with the compiler's
+      # `empty_map()` spelling (previously conflated with `map()`).
+      assert hint(code, :acc, {4, 9}) == {:ok, "empty_map()"}
     end
   end
 

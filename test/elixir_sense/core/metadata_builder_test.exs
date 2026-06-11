@@ -3046,8 +3046,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       vars = state |> get_line_vars(8)
 
-      # Cross-clause occurrence typing: the second clause sees `a` with the first
-      # clause's `%{b: 2}` pattern subtracted (the `{:difference, ...}` term).
+      # Cross-clause occurrence typing: the first clause's pattern `%{b: 2}` is a
+      # map pattern, which is *not* precise (map patterns are open, so matching
+      # `%{b: 2}` does not exclude other maps from reaching the next clause).
+      # It therefore contributes NOTHING to the subtraction — `a` is unsubtracted
+      # in the second clause (sound: the catch-all keeps the wider type).
       assert %VarInfo{
                name: :a2,
                positions: [{7, 18}],
@@ -3055,7 +3058,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  :intersection,
                  [
                    {:map, [b: {:variable, :b, 1}], nil},
-                   {:difference, {:variable, :a, 0}, {:map, [b: {:integer, 2}], nil}}
+                   {:variable, :a, 0}
                  ]
                }
              } = Enum.find(vars, &(&1.name == :a2))
@@ -4145,10 +4148,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :x, type: {:tuple, 2, [nil, nil]}}
              ] = get_line_vars(state, 5)
 
-      # `else` now types its clauses against the failure space (the `<-` RHS
-      # with the generator pattern subtracted): `e` is `:atom` (from the guard)
-      # intersected with the 2nd element of that space. `x` (param) is unknown,
-      # so the difference resolves to nil and the intersection reduces to :atom.
+      # `else` types its clauses against the failure space (the `<-` RHS). The
+      # generator pattern `{a, b}` carries a `when` guard, so it is *not* precise
+      # (a guard narrows the matched set) and contributes NOTHING to the
+      # subtraction — the full RHS `x` reaches `else`. `e` is `:atom` (from the
+      # guard) intersected with the 2nd element of `x`.
       assert [
                %VarInfo{
                  name: :e,
@@ -4156,7 +4160,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                    {:intersection,
                     [
                       :atom,
-                      {:tuple_nth, {:difference, {:variable, :x, 0}, {:tuple, 2, [nil, nil]}}, 1}
+                      {:tuple_nth, {:variable, :x, 0}, 1}
                     ]}
                },
                %VarInfo{name: :x, type: nil}
@@ -4165,6 +4169,128 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 10)
 
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
+    end
+
+    # Cross-clause subtraction precision gate (tasks #1/#2/#26). A clause is only
+    # subtracted from later clauses when its pattern is an under-approximation of
+    # the matched values (mirrors the compiler's `pattern_precise?`/`guard_precise?`).
+    test "cons pattern subtracts at most a non-empty-list shape from the catch-all" do
+      # `[h | t]` over-approximates as `{:list, _}` (which includes `[]`) in
+      # `type_of`, but contributes only `{:nonempty_list, nil}` to the
+      # subtraction — so `[]` still reaches `other`.
+      buffer = """
+      defmodule MyModule do
+        def func(xs) do
+          case xs do
+            [h | t] ->
+              IO.puts ""
+            other ->
+              IO.puts(other)
+          end
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+      other = state |> get_line_vars(7) |> Enum.find(&(&1.name == :other))
+
+      assert %VarInfo{
+               type: {:difference, {:variable, :xs, 0}, {:nonempty_list, nil}}
+             } = other
+    end
+
+    test "a guarded clause contributes NOTHING to the catch-all subtraction" do
+      # `{:ok, x} when x > 10` narrows the matched set, so the catch-all must
+      # still include all `{:ok, _}` — no `{:difference, ...}` wrapper.
+      buffer = """
+      defmodule MyModule do
+        def func(v) do
+          case v do
+            {:ok, x} when x > 10 ->
+              IO.puts ""
+            other ->
+              IO.puts(other)
+          end
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+      other = state |> get_line_vars(7) |> Enum.find(&(&1.name == :other))
+
+      assert %VarInfo{type: {:variable, :v, 0}} = other
+    end
+
+    test "a precise tagged-tuple clause is subtracted from the catch-all" do
+      # `{:ok, x}` (no guard) is precise, so `other` is the scrutinee with
+      # `{:ok, _}` subtracted — the precise case must not regress.
+      buffer = """
+      defmodule MyModule do
+        def func(v) do
+          case v do
+            {:ok, x} ->
+              IO.puts ""
+            other ->
+              IO.puts(other)
+          end
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+      other = state |> get_line_vars(7) |> Enum.find(&(&1.name == :other))
+
+      assert %VarInfo{
+               type: {:difference, {:variable, :v, 0}, {:tuple, 2, [{:atom, :ok}, nil]}}
+             } = other
+    end
+
+    test "with-else failure space: a guarded generator is not subtracted" do
+      # The `<-` generator carries a `when` guard, so the whole RHS reaches the
+      # `else` failure space (no subtraction) — the `else` var widens out to the
+      # full RHS rather than the difference.
+      buffer = """
+      defmodule MyModule do
+        def func(v) do
+          with {:ok, x} when x > 0 <- v do
+            IO.puts ""
+          else
+            other ->
+              IO.puts(other)
+          end
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+      other = state |> get_line_vars(7) |> Enum.find(&(&1.name == :other))
+
+      # Guarded generator ⇒ full RHS `v` reaches else (no difference).
+      assert %VarInfo{type: {:variable, :v, 0}} = other
+    end
+
+    test "with-else failure space: a precise generator IS subtracted" do
+      # `{:ok, x}` (no guard) is precise, so the failure space is `v` minus
+      # `{:ok, _}` — the precise with-else case must not regress.
+      buffer = """
+      defmodule MyModule do
+        def func(v) do
+          with {:ok, x} <- v do
+            IO.puts ""
+          else
+            other ->
+              IO.puts(other)
+          end
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+      other = state |> get_line_vars(7) |> Enum.find(&(&1.name == :other))
+
+      assert %VarInfo{
+               type: {:difference, {:variable, :v, 0}, {:tuple, 2, [{:atom, :ok}, nil]}}
+             } = other
     end
 
     test "guards in receive clauses" do
@@ -4435,7 +4561,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %VarInfo{name: :x, type: {:map, [a: nil], nil}} =
                var_with_guards("is_map_key(x, :a)")
 
-      assert %VarInfo{name: :x, type: {:map, [{"a", nil}], nil}} =
+      assert %VarInfo{name: :x, type: {:map, [{{:domain, {:binary, "a"}}, nil}], nil}} =
                var_with_guards(~s/is_map_key(x, "a")/)
     end
 

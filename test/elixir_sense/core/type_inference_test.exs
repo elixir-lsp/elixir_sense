@@ -442,10 +442,15 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "list operators" do
+      # Native mode no longer eagerly claims a proper list for `++`: the
+      # `:erlang.++` signature's improper-tail result (`non_empty_list(term(),
+      # term())`) has no shape equivalent, so native typing falls back to a
+      # call thunk (with natively-typed args — `[a]` is a non-empty list) and
+      # Binding expansion applies the precise rule later.
       assert_old_and_native(
         ":erlang.++([a], [b])",
         {:call, {:atom, :erlang}, :++, [list: {:variable, :a, 1}, list: {:variable, :b, 1}]},
-        {:list, nil}
+        {:call, {:atom, :erlang}, :++, [nonempty_list: nil, nonempty_list: nil]}
       )
 
       assert_old_and_native(
@@ -659,8 +664,15 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "with without else unions the do body and each <- failure value" do
+      # The `{:ok, v}` generator pattern is a precise tagged tuple (no guard), so
+      # the failure value is the RHS `a` with `{:ok, _}` subtracted (task #26 /
+      # mirrors `expr.ex:883` — subtract only when the pattern is precise).
       assert type_of("with {:ok, v} <- a, do: :done") ==
-               {:union, [{:atom, :done}, {:variable, :a, 1}]}
+               {:union,
+                [
+                  {:atom, :done},
+                  {:difference, {:variable, :a, 1}, {:tuple, 2, [{:atom, :ok}, nil]}}
+                ]}
     end
 
     test "a clause body that is just a head-bound var widens to nil (no leak)" do
@@ -719,12 +731,14 @@ defmodule ElixirSense.Core.TypeInferenceTest do
         {:local_call, :process, {2, 1}, [{:variable, :msg, 1}]},
       "for x <- list, do: x * 2" => {:list, nil},
       # no `else`: result is the `do` body unioned with each `<-` failure value
+      # (RHS minus the matched pattern when precise; `{:ok, _}` here is precise).
       "with {:ok, a} <- fetch_a(), {:ok, b} <- fetch_b(a), do: a + b" =>
         {:union,
          [
            {:local_call, :+, {1, 1}, [{:variable, :a, 1}, {:variable, :b, 1}]},
-           {:local_call, :fetch_a, {1, 1}, []},
-           {:local_call, :fetch_b, {1, 1}, [{:variable, :a, 1}]}
+           {:difference, {:local_call, :fetch_a, {1, 1}, []}, {:tuple, 2, [{:atom, :ok}, nil]}},
+           {:difference, {:local_call, :fetch_b, {1, 1}, [{:variable, :a, 1}]},
+            {:tuple, 2, [{:atom, :ok}, nil]}}
          ]},
       "quote do: a + b" => nil,
       "unquote(expr)" => nil,
@@ -748,12 +762,14 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       "receive do\n  {:msg, msg} -> process(msg)\nend" =>
         {:local_call, :process, {2, 1}, [{:variable, :msg, 1}]},
       # no `else`: result is the `do` body unioned with each `<-` failure value
+      # (RHS minus the matched pattern when precise; `{:ok, _}` here is precise).
       "with {:ok, a} <- fetch_a(), {:ok, b} <- fetch_b(a), do: a + b" =>
         {:union,
          [
            {:local_call, :+, {1, 1}, [{:variable, :a, 1}, {:variable, :b, 1}]},
-           {:local_call, :fetch_a, {1, 1}, []},
-           {:local_call, :fetch_b, {1, 1}, [{:variable, :a, 1}]}
+           {:difference, {:local_call, :fetch_a, {1, 1}, []}, {:tuple, 2, [{:atom, :ok}, nil]}},
+           {:difference, {:local_call, :fetch_b, {1, 1}, [{:variable, :a, 1}]},
+            {:tuple, 2, [{:atom, :ok}, nil]}}
          ]},
       "for x <- list, do: x * 2" => {:list, nil}
     }
@@ -841,6 +857,68 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "type_of/4 handles empty vars_info gracefully" do
       result = type_of_with_context(":ok", %{})
       assert result == {:atom, :ok}
+    end
+  end
+
+  # Precision gate for cross-clause subtraction (tasks #1/#2/#26): a clause head
+  # may contribute to the subtracted set only when it is an under-approximation
+  # of the matched value set. Mirrors the compiler's `pattern_precise? and
+  # guard_precise?` (`Module.Types.Pattern`).
+  describe "precise_pattern_type" do
+    defp precise(code) do
+      code |> Code.string_to_quoted!() |> TypeInference.precise_pattern_type()
+    end
+
+    test "atom literals are precise" do
+      assert precise(":ok") == {:ok, {:atom, :ok}}
+      assert precise("nil") == {:ok, {:atom, nil}}
+    end
+
+    test "bare var / underscore are precise but contribute nil (subtraction no-op)" do
+      assert precise("x") == {:ok, nil}
+      assert precise("_") == {:ok, nil}
+    end
+
+    test "non-atom literals are imprecise (type_of widens to the whole domain)" do
+      assert precise("1") == :imprecise
+      assert precise("1.0") == :imprecise
+      assert precise(~s("foo")) == :imprecise
+    end
+
+    test "tagged tuples of exact-or-wildcard elements are precise" do
+      assert precise("{:ok, x}") == {:ok, {:tuple, 2, [{:atom, :ok}, nil]}}
+      assert precise("{:ok, _}") == {:ok, {:tuple, 2, [{:atom, :ok}, nil]}}
+      assert precise("{:a, :b, c}") == {:ok, {:tuple, 3, [{:atom, :a}, {:atom, :b}, nil]}}
+    end
+
+    test "tuples with a non-atom literal element are imprecise" do
+      assert precise("{:ok, 1}") == :imprecise
+      assert precise("{1, x}") == :imprecise
+    end
+
+    test "empty list is precise; cons contributes at most a non-empty-list shape" do
+      assert precise("[]") == {:ok, {:list, :empty}}
+      assert precise("[h | t]") == {:ok, {:nonempty_list, nil}}
+    end
+
+    test "fixed-length list patterns are imprecise" do
+      assert precise("[x]") == :imprecise
+      assert precise("[a, b]") == :imprecise
+      assert precise("[a, b | t]") == :imprecise
+    end
+
+    test "binary patterns with segments are imprecise" do
+      assert precise("<<c, rest::binary>>") == :imprecise
+      assert precise("<<1, 2, 3>>") == :imprecise
+    end
+
+    test "maps are imprecise (open in patterns)" do
+      assert precise("%{a: 1}") == :imprecise
+    end
+
+    test "any clause with a when guard is imprecise" do
+      assert precise("{:ok, x} when x > 10") == :imprecise
+      assert precise("x when is_integer(x)") == :imprecise
     end
   end
 end

@@ -40,10 +40,12 @@ defmodule ElixirSense.Core.ElixirTypesRealTest do
       # Should have at least the basic structure
       assert length(elements) == 2
 
-      # List should be enhanced with ElixirTypes
+      # List should be enhanced with ElixirTypes. task #22: a non-empty literal
+      # list now surfaces as {:nonempty_list, _} (or {:list, _} via the custom
+      # fallback engine), so accept either.
       list_ast = [1, 2, 3]
       result = TypeInference.type_of(list_ast, :none)
-      assert {:list, _element_type} = result
+      assert match?({:list, _element_type}, result) or match?({:nonempty_list, _}, result)
     end
 
     test "fallback typing works for unknown expressions" do
@@ -66,10 +68,11 @@ defmodule ElixirSense.Core.ElixirTypesRealTest do
         {3.14, {:float, nil}},
         {"test", {:binary, nil}},
         {:atom_test, {:atom, :atom_test}},
-        {[], {:list, :empty}},
+        # task #22: [] -> :empty_list, non-empty list -> {:nonempty_list, _}
+        {[], :empty_list},
 
         # Complex types (AST form)
-        {[1, 2, 3], {:list, {:integer, nil}}},
+        {[1, 2, 3], {:nonempty_list, {:integer, nil}}},
         {{:{}, [], [1, :ok]}, {:tuple, 2, [{:integer, nil}, {:atom, :ok}]}},
         {{:%{}, [], [key: :value]}, {:map, [key: {:atom, :value}], nil}}
       ]

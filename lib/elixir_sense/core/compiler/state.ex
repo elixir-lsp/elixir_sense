@@ -1025,7 +1025,6 @@ defmodule ElixirSense.Core.Compiler.State do
     |> substitute_spec_vars(guards)
     |> spec_ast_to_shape(module)
     |> ElixirTypes.coerce_var_type_public()
-    |> Kernel.||(Module.Types.Descr.dynamic())
   rescue
     e ->
       Logger.debug(

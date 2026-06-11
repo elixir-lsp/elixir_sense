@@ -39,9 +39,9 @@ defmodule ElixirSense.Core.ElixirTypes do
       ElixirTypes.available?()
       #=> true
 
-      # Type an expression
+      # Type an expression — returns an opaque Descr.t()
       ElixirTypes.of_expr(42)
-      #=> {:ok, %{bitmap: 4}}
+      #=> {:ok, descr}  # descr is an opaque type descriptor
 
       # Convert to ElixirSense shape
       {:ok, descr} = ElixirTypes.of_expr([1, 2, 3])
@@ -70,7 +70,19 @@ defmodule ElixirSense.Core.ElixirTypes do
       true
 
   """
-  def available?() do
+  # All `apply/3` calls in this module are deliberate — they dispatch to
+  # version-specific `Module.Types` APIs whose arity differs across Elixir
+  # releases.  A literal call to the wrong-version arity would be an
+  # undefined-function compile warning on the other Elixir, so `apply/3` is the
+  # only safe choice here.
+  # credo:disable-for-this-file Credo.Check.Refactor.Apply
+  alias Module.Types.Descr
+  alias ElixirSense.Core.ExCkReader
+  alias ElixirSense.Core.State.VarInfo
+  alias ElixirSense.Core.State.AttributeInfo
+  alias ElixirSense.Core.State.SpecInfo
+
+  def available? do
     Code.ensure_loaded?(Module.Types.Expr) and expr_api() != :none and
       loaded_exported?(Module.Types, :stack, 7)
   end
@@ -92,7 +104,7 @@ defmodule ElixirSense.Core.ElixirTypes do
       true
 
   """
-  def enabled?() do
+  def enabled? do
     Application.get_env(:elixir_sense, :use_elixir_types, false) and available?()
   end
 
@@ -106,7 +118,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   stays on the custom engine, while pattern-match refinement (`of_match`) and
   local-signature inference (`of_head`) still use the native backend.
   """
-  def expr_typing_enabled?() do
+  def expr_typing_enabled? do
     enabled?() and available?(:expr)
   end
 
@@ -127,8 +139,6 @@ defmodule ElixirSense.Core.ElixirTypes do
           | :head
           | :local_signature
           | :previous
-          | :reverse_arrow
-          | :domain_map_ops
 
   @doc """
   Probes the running Elixir's `Module.Types` capabilities.
@@ -143,10 +153,8 @@ defmodule ElixirSense.Core.ElixirTypes do
     * `:head` — `Pattern.of_head/8` (1.20) or `/7` (1.18/1.19)
     * `:local_signature` — local handler on the stack (`Module.Types.stack/7`), 1.18+
     * `:previous` — cross-clause `Pattern.init_previous/0`, 1.20+
-    * `:reverse_arrow` — occurrence typing via `stack.reverse_arrow`, 1.20+
-    * `:domain_map_ops` — domain-aware map ops (`Descr.map_update/5`), 1.20+
   """
-  def capabilities() do
+  def capabilities do
     %{
       expr: expr_api() == :expected,
       expr_basic: expr_api() != :none,
@@ -155,15 +163,13 @@ defmodule ElixirSense.Core.ElixirTypes do
         loaded_exported?(Module.Types.Pattern, :of_head, 8) or
           loaded_exported?(Module.Types.Pattern, :of_head, 7),
       local_signature: loaded_exported?(Module.Types, :stack, 7),
-      previous: loaded_exported?(Module.Types.Pattern, :init_previous, 0),
-      reverse_arrow: reverse_arrow_capability?(),
-      domain_map_ops: loaded_exported?(Module.Types.Descr, :map_update, 5)
+      previous: loaded_exported?(Module.Types.Pattern, :init_previous, 0)
     }
   end
 
   # Expression-typer shape: 1.19+ has the expected-type `Expr.of_expr/5`; 1.18
   # has the basic `of_expr/3` (no expected type / expr-tracking args).
-  defp expr_api() do
+  defp expr_api do
     cond do
       loaded_exported?(Module.Types.Expr, :of_expr, 5) -> :expected
       loaded_exported?(Module.Types.Expr, :of_expr, 3) -> :basic
@@ -174,7 +180,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   # Pattern API generation, keyed off the unambiguous `of_match` arity:
   # 1.18 `of_match/7`, 1.19 `of_match/5`, 1.20 `of_match/6`. (1.18 also exports
   # `/6` via a defaulted `guards` arg, so `/7` must be checked first.)
-  defp pattern_api() do
+  defp pattern_api do
     cond do
       loaded_exported?(Module.Types.Pattern, :of_match, 7) -> :v18
       loaded_exported?(Module.Types.Pattern, :of_match, 5) -> :v19
@@ -189,14 +195,6 @@ defmodule ElixirSense.Core.ElixirTypes do
   @spec available?(capability()) :: boolean()
   def available?(capability) when is_atom(capability) do
     Map.get(capabilities(), capability, false)
-  end
-
-  # `Pattern.init_previous/0` is the marker for the 1.20 cross-clause / reverse
-  # arrow machinery (it accompanies the `stack.reverse_arrow` field). Probing
-  # the function is enough and avoids constructing a stack just to inspect it.
-  defp reverse_arrow_capability?() do
-    loaded_exported?(Module.Types.Pattern, :init_previous, 0) and
-      loaded_exported?(Module.Types, :stack, 7)
   end
 
   defp loaded_exported?(module, fun, arity) do
@@ -219,9 +217,11 @@ defmodule ElixirSense.Core.ElixirTypes do
   # and `expr` arguments are simply dropped.
   defp call_of_expr(ast, expected, expr, stack, context) do
     case expr_api() do
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
       :expected -> apply(Module.Types.Expr, :of_expr, [ast, expected, expr, stack, context])
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
       :basic -> apply(Module.Types.Expr, :of_expr, [ast, stack, context])
-      :none -> {Module.Types.Descr.dynamic(), context}
+      :none -> {Descr.dynamic(), context}
     end
   end
 
@@ -238,6 +238,7 @@ defmodule ElixirSense.Core.ElixirTypes do
       :v20 ->
         expected_fun = of_match_expected_fun(value_ast, expected_descr, full_match, stack)
 
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
         apply(Module.Types.Pattern, :of_match, [
           pattern_ast,
           expected_fun,
@@ -250,6 +251,7 @@ defmodule ElixirSense.Core.ElixirTypes do
       :v19 ->
         expected_fun = of_match_expected_fun(value_ast, expected_descr, full_match, stack)
 
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
         apply(Module.Types.Pattern, :of_match, [
           pattern_ast,
           expected_fun,
@@ -259,8 +261,11 @@ defmodule ElixirSense.Core.ElixirTypes do
         ])
 
       :v18 ->
-        tag = {:match, full_match}
+        # 1.18 `of_match/7` expects the tag to carry the expected descr
+        # (`{:match, expected}`), not the full match AST (v1.18.4 expr.ex:135).
+        tag = {:match, expected_descr}
 
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
         apply(Module.Types.Pattern, :of_match, [
           pattern_ast,
           [],
@@ -285,13 +290,19 @@ defmodule ElixirSense.Core.ElixirTypes do
   #   * 1.20 `of_head/8` -> {trees, …}; arg types via `of_domain(trees, stack, ctx)`
   #   * 1.19 `of_head/7` -> {trees, ctx}; arg types via `of_domain(trees, expected, ctx)`
   #   * 1.18 `of_head/7` -> {types, ctx}; `types` ARE the arg types (no of_domain)
-  defp call_of_head(args, guards, expected, meta, stack, context) do
+  defp call_of_head(args, guards, expected, meta, stack, context, fun_arity) do
     case pattern_api() do
       :v20 ->
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
         previous = apply(Module.Types.Pattern, :init_previous, [])
-        info = {{:def, :def, :infer, expected}, args, guards}
+        # task #37: thread the real `{fun, arity}` into the info tuple instead of
+        # the `:infer` placeholder. of_head reads this as
+        # `{{:def, kind, fun, types}, args, guards}` (pattern.ex:1519/1637) — the
+        # `fun` element is used in diagnostics, so a placeholder mislabels them.
+        info = {{:def, :def, fun_arity, expected}, args, guards}
 
-        {trees, _precise?, _no_prev, _previous, clause_ctx} =
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
+        result_v20 =
           apply(Module.Types.Pattern, :of_head, [
             args,
             guards,
@@ -303,10 +314,13 @@ defmodule ElixirSense.Core.ElixirTypes do
             context
           ])
 
+        {trees, _precise?, _no_prev, _previous, clause_ctx} = result_v20
+
         {trees, clause_ctx, :trees}
 
       :v19 ->
-        {trees, clause_ctx} =
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
+        result_v19 =
           apply(Module.Types.Pattern, :of_head, [
             args,
             guards,
@@ -316,11 +330,14 @@ defmodule ElixirSense.Core.ElixirTypes do
             stack,
             context
           ])
+
+        {trees, clause_ctx} = result_v19
 
         {trees, clause_ctx, :trees}
 
       :v18 ->
-        {types, clause_ctx} =
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
+        result_v18 =
           apply(Module.Types.Pattern, :of_head, [
             args,
             guards,
@@ -330,6 +347,8 @@ defmodule ElixirSense.Core.ElixirTypes do
             stack,
             context
           ])
+
+        {types, clause_ctx} = result_v18
 
         # 1.18 has no of_domain; of_head already returns the arg types.
         {types, clause_ctx, :types}
@@ -348,7 +367,9 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp arg_types_from_head(trees, :trees, expected, stack, clause_ctx) do
     case pattern_api() do
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
       :v20 -> apply(Module.Types.Pattern, :of_domain, [trees, stack, clause_ctx])
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
       _ -> apply(Module.Types.Pattern, :of_domain, [trees, expected, clause_ctx])
     end
   end
@@ -402,7 +423,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   and allows callers to provide best-effort types.
 
   Accepted `variables` formats (keys are `{name, version}`):
-  - `%{{atom, non_neg_integer} => Module.Types.Descr.t()}`
+  - `%{{atom, non_neg_integer} => Descr.t()}`
   - `%{{atom, non_neg_integer} => :dynamic | :term}`
   - `%{{atom, non_neg_integer} => var_shape}` where `var_shape` is a minimal
     ElixirSense variable shape (e.g. `{:atom, atom}`, `{:map, keyword}`,
@@ -460,20 +481,25 @@ defmodule ElixirSense.Core.ElixirTypes do
   ## Examples
 
       # Type a literal
-      iex> ElixirTypes.of_expr(42)
-      {:ok, %{bitmap: 4}}
+      # Returns {:ok, descr} where descr is an opaque Descr.t().
+      # Use `to_shape/1` to get a stable ElixirSense shape from it.
+      ElixirTypes.of_expr(42)
+      #=> {:ok, descr}
 
-      # Type a variable with known type
-      iex> ElixirTypes.of_expr({:foo, [version: 0], nil}, variables: %{{:foo, 0}: => Module.Types.Descr.integer()})
-      {:ok, %{bitmap: 4}}
+      # Type a variable with a known type
+      ElixirTypes.of_expr({:foo, [version: 0], nil},
+        variables: %{{:foo, 0} => Descr.integer()})
+      #=> {:ok, descr}
 
-      # Type a list
-      iex> ElixirTypes.of_expr([1, 2, 3])
-      {:ok, %{list: [{%{bitmap: 4}, %{bitmap: 2}, []}]}}
+      # Type a list, then convert to a shape
+      {:ok, descr} = ElixirTypes.of_expr([1, 2, 3])
+      ElixirTypes.to_shape(descr)
+      #=> {:list, {:integer, nil}}
 
-      # Type a tuple (requires AST form)
-      iex> ElixirTypes.of_expr({:{}, [], [1, :ok]})
-      {:ok, %{tuple: [closed: [%{bitmap: 4}, %{atom: {:union, %{ok: []}}}]]}}
+      # Type a tuple (requires AST form), then convert to a shape
+      {:ok, descr} = ElixirTypes.of_expr({:{}, [], [1, :ok]})
+      ElixirTypes.to_shape(descr)
+      #=> {:tuple, 2, [{:integer, nil}, {:atom, :ok}]}
 
   """
   def of_expr(ast, opts_or_module \\ [])
@@ -530,7 +556,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
             if stack && context do
               {descr, _context} =
-                call_of_expr(ast, Module.Types.Descr.term(), ast, stack, context)
+                call_of_expr(ast, Descr.term(), ast, stack, context)
 
               {:ok, descr}
             else
@@ -558,20 +584,38 @@ defmodule ElixirSense.Core.ElixirTypes do
     case Process.get(:elixir_sense_checker_cache) do
       {checker, table} = cache
       when is_pid(checker) and (is_reference(table) or is_integer(table)) ->
-        cache
+        # task #15: validate liveness, not just shape. A dead checker process or
+        # a torn-down ETS table makes Apply.export -> fetch_export raise badarg,
+        # which gets rescued to :error and silently stops native typing for the
+        # rest of this process. Start a fresh checker and replace the stale entry.
+        if checker_alive?(checker, table) do
+          cache
+        else
+          start_checker_cache()
+        end
 
       _ ->
-        case Module.ParallelChecker.start_link() do
-          {:ok, cache} ->
-            Process.put(:elixir_sense_checker_cache, cache)
-            cache
-
-          _ ->
-            nil
-        end
+        start_checker_cache()
     end
   rescue
     _ -> nil
+  end
+
+  defp checker_alive?(checker, table) do
+    Process.alive?(checker) and :ets.info(table) != :undefined
+  rescue
+    _ -> false
+  end
+
+  defp start_checker_cache do
+    case Module.ParallelChecker.start_link() do
+      {:ok, cache} ->
+        Process.put(:elixir_sense_checker_cache, cache)
+        cache
+
+      _ ->
+        nil
+    end
   end
 
   def maybe_remote_call_sig(
@@ -582,7 +626,7 @@ defmodule ElixirSense.Core.ElixirTypes do
     if enabled?() do
       case module_from_ast(target_ast, metadata) do
         {:ok, module} ->
-          case ElixirSense.Core.ExCkReader.lookup_signature(module, fun, length(args)) do
+          case ExCkReader.lookup_signature(module, fun, length(args)) do
             {:ok, %{sig: {sig_kind, _domain, _clauses} = sig}}
             when sig_kind in [:infer, :strong] ->
               {:ok, sig}
@@ -619,10 +663,10 @@ defmodule ElixirSense.Core.ElixirTypes do
     case metadata_env(metadata) do
       %{attributes: attrs} when is_list(attrs) ->
         case Enum.find(attrs, &(&1.name == attr)) do
-          %ElixirSense.Core.State.AttributeInfo{type: {:atom, module}} when is_atom(module) ->
+          %AttributeInfo{type: {:atom, module}} when is_atom(module) ->
             {:ok, module}
 
-          %ElixirSense.Core.State.AttributeInfo{type: {:attribute, nested_attr}}
+          %AttributeInfo{type: {:attribute, nested_attr}}
           when is_atom(nested_attr) ->
             module_from_ast({:@, [], [{nested_attr, [], nil}]}, metadata)
 
@@ -640,7 +684,7 @@ defmodule ElixirSense.Core.ElixirTypes do
     case metadata_env(metadata) do
       %{vars: vars} when is_list(vars) ->
         case Enum.find(vars, &(&1.name == var)) do
-          %ElixirSense.Core.State.VarInfo{type: {:atom, module}} when is_atom(module) ->
+          %VarInfo{type: {:atom, module}} when is_atom(module) ->
             {:ok, module}
 
           _ ->
@@ -752,7 +796,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   Returns `{:ok, var_shapes, var_descrs}` where `var_shapes` is a map of
   `{var_name, version} => ElixirSense shape` and `var_descrs` is a map of
-  `{var_name, version} => Module.Types.Descr.t()`. Returns `:error` when
+  `{var_name, version} => Descr.t()`. Returns `:error` when
   typing fails or Module.Types cannot be used.
   """
   def of_match(
@@ -805,7 +849,7 @@ defmodule ElixirSense.Core.ElixirTypes do
           effective_vars = merge_variables(Keyword.get(opts, :variables), auto_vars)
           context = init_context(effective_vars)
 
-          expected_descr = expected_descr || Module.Types.Descr.term()
+          expected_descr = expected_descr || Descr.term()
 
           # Only real match patterns can be typed by `Pattern.of_match`. Quoted /
           # macro code routed through here can carry non-pattern AST — local or
@@ -813,20 +857,18 @@ defmodule ElixirSense.Core.ElixirTypes do
           # typespec operators (`{:"__::__"}`, `{:"__|__"}`) — on which native
           # `of_pattern` raises a `FunctionClauseError`. Skip native typing for
           # those (the custom engine still handles the match).
-          cond do
-            not native_typeable_pattern?(pattern_ast) ->
-              :error
-
-            true ->
-              do_native_match(
-                pattern_ast,
-                value_ast,
-                expected_descr,
-                full_match,
-                stack,
-                context,
-                targets
-              )
+          if native_typeable_pattern?(pattern_ast) do
+            do_native_match(
+              pattern_ast,
+              value_ast,
+              expected_descr,
+              full_match,
+              stack,
+              context,
+              targets
+            )
+          else
+            :error
           end
         else
           :error
@@ -915,12 +957,12 @@ defmodule ElixirSense.Core.ElixirTypes do
        ) do
     try do
       # First, try to get more specific type information from the value
-      value_type = call_of_expr(value_ast, Module.Types.Descr.term(), full_match, stack, context)
+      value_type = call_of_expr(value_ast, Descr.term(), full_match, stack, context)
 
       # Use more refined expected descriptor if value typing succeeded
       refined_expected =
         case value_type do
-          {type_descr, _} -> Module.Types.Descr.intersection(expected_descr, type_descr)
+          {type_descr, _} -> Descr.intersection(expected_descr, type_descr)
           _ -> expected_descr
         end
 
@@ -1100,12 +1142,10 @@ defmodule ElixirSense.Core.ElixirTypes do
             key_literal = literal_from_key_ast(key_ast)
 
             field_shape =
-              cond do
-                key_literal != nil && Map.has_key?(value_field_map, key_literal) ->
-                  Map.get(value_field_map, key_literal)
-
-                true ->
-                  Map.get(var_shapes, var_key)
+              if key_literal != nil && Map.has_key?(value_field_map, key_literal) do
+                Map.get(value_field_map, key_literal)
+              else
+                Map.get(var_shapes, var_key)
               end
 
             if field_shape do
@@ -1470,6 +1510,43 @@ defmodule ElixirSense.Core.ElixirTypes do
     to_shape_eager(descr)
   end
 
+  @doc """
+  Renders a `Module.Types.Descr` to the compiler's own type string.
+
+  Delegates to `Descr.to_quoted_string/2` (with
+  `collapse_structs: true`, matching how the compiler formats warning types) so
+  the presentation layer can show types exactly as the compiler would, rather
+  than going through the lossy `to_shape/1 -> custom renderer` path.
+
+  Returns `{:ok, String.t()}` on success, or `:error` when the native backend is
+  unavailable or rendering fails for any reason (everything is rescued/caught).
+  """
+  @spec descr_to_string(term()) :: {:ok, String.t()} | :error
+  def descr_to_string(descr), do: descr_to_string(descr, collapse_structs: true)
+
+  @spec descr_to_string(term(), keyword()) :: {:ok, String.t()} | :error
+  def descr_to_string(descr, opts) when is_list(opts) do
+    if available?() and function_exported?(Module.Types.Descr, :to_quoted_string, 2) do
+      try do
+        opts = Keyword.put_new(opts, :collapse_structs, true)
+        # credo:disable-for-next-line Credo.Check.Refactor.Apply
+        string = apply(Module.Types.Descr, :to_quoted_string, [descr, opts])
+
+        if is_binary(string) do
+          {:ok, string}
+        else
+          :error
+        end
+      rescue
+        _ -> :error
+      catch
+        _, _ -> :error
+      end
+    else
+      :error
+    end
+  end
+
   # Extract AST meta from a pattern node, defaulting to [] for literals.
   defp pattern_meta({_form, meta, _args}) when is_list(meta), do: meta
   defp pattern_meta(_), do: []
@@ -1480,21 +1557,19 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp to_shape_eager(descr) do
     if available?() do
       try do
-        cond do
-          # not_set() has an :optional key that to_quoted doesn't handle
-          is_map(descr) and is_map_key(descr, :optional) ->
-            optional_descr = Map.delete(descr, :optional)
+        # not_set() has an :optional key that to_quoted doesn't handle
+        if is_map(descr) and is_map_key(descr, :optional) do
+          optional_descr = Map.delete(descr, :optional)
 
-            if map_size(optional_descr) > 0 do
-              {:optional, to_shape(optional_descr)}
-            else
-              :not_set
-            end
-
-          true ->
-            descr
-            |> Module.Types.Descr.to_quoted()
-            |> quoted_to_shape()
+          if map_size(optional_descr) > 0 do
+            {:optional, to_shape(optional_descr)}
+          else
+            :not_set
+          end
+        else
+          descr
+          |> Descr.to_quoted()
+          |> quoted_to_shape()
         end
       rescue
         e ->
@@ -1526,10 +1601,19 @@ defmodule ElixirSense.Core.ElixirTypes do
       {:none, [], []} ->
         :none
 
+      # dynamic() — the gradual top carries no information, so at the shape
+      # boundary it is "unknown" (nil): consumers then fall back to the
+      # structural engine. Compiler-fidelity display of `dynamic(...)` is
+      # preserved separately via `descr_to_string/1`, which renders the raw
+      # descr; shapes feed the Binding algebra, which has no gradual marker.
       {:dynamic, [], []} ->
         nil
 
-      # dynamic(inner) — unwrap and convert the inner type
+      # dynamic(inner) — unwrap to the inner shape for the same reason.
+      # Note: `Descr.to_quoted/1` only emits this `{:dynamic, [], [inner]}`
+      # form when the inner part is itself non-trivial (e.g. a struct);
+      # `dynamic(integer())` quotes to a bare `{:integer, [], []}`, so those
+      # stay unwrapped automatically.
       {:dynamic, [], [inner]} ->
         quoted_to_shape(inner)
 
@@ -1556,13 +1640,25 @@ defmodule ElixirSense.Core.ElixirTypes do
         :reference
 
       {:empty_list, [], []} ->
-        {:list, :empty}
+        :empty_list
 
+      # closed `%{}` / empty_map() — distinct from the map top type (task #22).
       {:empty_map, [], []} ->
-        {:map, [], nil}
+        :empty_map
 
+      # boolean() — keep as a dedicated shape (task #22); the compiler prints
+      # `boolean()` rather than decomposing it to `false | true`.
       {:boolean, [], []} ->
-        {:union, [{:atom, false}, {:atom, true}]}
+        :boolean
+
+      {:bitstring, [], []} ->
+        :bitstring
+
+      {:non_struct_map, [], []} ->
+        :non_struct_map
+
+      {:not_set, [], []} ->
+        :not_set
 
       # map() — the map top type with no specific fields
       {:map, [], []} ->
@@ -1595,59 +1691,69 @@ defmodule ElixirSense.Core.ElixirTypes do
             quoted_to_shape_block(clauses)
         end
 
-      # List types
+      # List types (task #22 — preserve non-emptiness; drop improper-tail forms)
       {:list, [], [elem]} ->
         {:list, quoted_to_shape(elem)}
 
       {:non_empty_list, [], [elem]} ->
-        {:list, quoted_to_shape(elem)}
+        {:nonempty_list, quoted_to_shape(elem)}
 
-      # non_empty_list with explicit tail (improper list) — we lose the tail info
-      {:non_empty_list, [], [elem, _tail]} ->
-        {:list, quoted_to_shape(elem)}
+      # non_empty_list with explicit (non-list) tail — improper list, which we
+      # cannot represent; degrade to nil rather than claiming a proper list.
+      {:non_empty_list, [], [_elem, _tail]} ->
+        nil
 
-      # Tuple types (all arities use {:{}, [], elems} form)
+      # Tuple types. The top type `tuple()` quotes to a single open marker
+      # `{:{}, [], [{:..., [], nil}]}` → `:tuple` (don't claim arity 0). Tuples
+      # carrying a trailing `{:..., [], nil}` are open → `{:tuple_open, shapes}`;
+      # closed tuples → `{:tuple, n, shapes}` (task #7).
+      {:{}, [], [{:..., [], nil}]} ->
+        :tuple
+
       {:{}, [], elems} when is_list(elems) ->
-        # Filter out open tuple marker {:..., [], nil}
-        elems = Enum.reject(elems, &match?({:..., [], _}, &1))
+        {open?, elems} = strip_open_tuple_marker(elems)
         shapes = Enum.map(elems, &quoted_to_shape/1)
-        {:tuple, length(shapes), shapes}
+
+        if open? do
+          {:tuple_open, shapes}
+        else
+          {:tuple, length(shapes), shapes}
+        end
 
       # Map types (may contain structs)
       {:%{}, [], fields} when is_list(fields) ->
         quoted_map_to_shape(fields)
 
-      # Union types
+      # Union types. If ANY member is unconvertible, degrade the whole union to
+      # nil rather than silently dropping the member (task #9) — a dropped member
+      # would make the displayed type narrower than the truth.
       {:or, [], [_left, _right]} = union ->
-        shapes =
-          flatten_quoted_union(union)
-          |> Enum.map(&quoted_to_shape/1)
-          |> Enum.reject(&is_nil/1)
+        members = flatten_quoted_union(union)
+        shapes = Enum.map(members, &quoted_to_shape/1)
 
-        case shapes do
-          [] -> nil
-          [single] -> single
-          multiple -> {:union, multiple}
+        cond do
+          Enum.any?(shapes, &is_nil/1) -> nil
+          match?([_single], shapes) -> hd(shapes)
+          true -> {:union, shapes}
         end
 
-      # Intersection types — function intersections become multi-clause funs,
-      # non-function intersections fall back to the left branch as best approximation
+      # Intersection types — function intersections become multi-clause funs.
+      # Non-function intersections are degraded to nil (task #9): picking one
+      # convertible branch would make the displayed type broader than reality.
       {:and, [], [_left, _right]} = intersection ->
-        fun_clauses = extract_fun_clauses_from_intersection(intersection)
-
-        case fun_clauses do
-          [_ | _] ->
-            {:fun_clauses, fun_clauses}
-
-          [] ->
-            # For non-function intersections, try both branches and use the first non-nil shape
-            flatten_quoted_intersection(intersection)
-            |> Enum.find_value(&quoted_to_shape/1)
+        case extract_fun_clauses_from_intersection(intersection) do
+          [_ | _] = fun_clauses -> {:fun_clauses, fun_clauses}
+          [] -> nil
         end
 
-      # Negation types — try to interpret as the base type when possible
+      # Negation types — unrepresentable as a shape (task #9).
       {:not, [], [_inner]} ->
         nil
+
+      # Struct quoted form `%Struct{...}` (descr.ex map_literal_to_quoted emits
+      # this for loaded, complete structs). task #19 — biggest display-loss fix.
+      {:%, _, [module_alias, {:%{}, _, fields}]} ->
+        quoted_struct_to_shape(module_alias, fields)
 
       # Optional map field value
       {:if_set, [], [inner]} ->
@@ -1688,6 +1794,38 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp quoted_to_shape_block([value]) when is_integer(value), do: {:integer, value}
   defp quoted_to_shape_block(_), do: nil
 
+  # Split off a trailing open-tuple marker `{:..., [], nil}`. Returns
+  # `{open?, element_quoteds}`.
+  defp strip_open_tuple_marker(elems) do
+    case List.last(elems) do
+      {:..., [], _} -> {true, Enum.drop(elems, -1)}
+      _ -> {false, elems}
+    end
+  end
+
+  # Convert a struct quoted form `%Mod{field: val, ...}` into a struct shape.
+  defp quoted_struct_to_shape(module_alias, fields) do
+    module =
+      case module_alias do
+        {:__aliases__, _, parts} when is_list(parts) -> Module.concat(parts)
+        atom when is_atom(atom) -> atom
+        _ -> nil
+      end
+
+    if module do
+      field_shapes =
+        for {key_quoted, value_quoted} <- fields,
+            not match?({:..., [], _}, key_quoted),
+            key = extract_quoted_map_key(key_quoted),
+            key != nil and key != :__struct__,
+            do: {key, quoted_to_shape(value_quoted)}
+
+      {:struct, field_shapes, {:atom, module}, nil}
+    else
+      nil
+    end
+  end
+
   # Extract function clauses from an intersection of function types.
   # fun_from_non_overlapping_clauses produces {:and, [], [fun1, fun2]}
   defp extract_fun_clauses_from_intersection({:and, [], [left, right]}) do
@@ -1706,12 +1844,14 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   # Convert quoted map fields to either a struct or map shape.
   defp quoted_map_to_shape(fields) do
-    # Extract field key-value pairs, skipping open map markers. Non-atom
-    # (domain) keys like `integer() => binary()` are preserved as
-    # `{{:domain, key_shape}, value}` rather than collapsed to a nil key.
+    # Extract field key-value pairs. Non-atom (domain) keys like
+    # `integer() => binary()` are preserved as `{{:domain, key_shape}, value}`
+    # rather than collapsed to a nil key. The open-map marker `{:..., [], nil}`
+    # is a bare 3-tuple element, not a `{key, value}` pair, so the `{key, value}`
+    # generator already skips it — we treat all maps as open in coercion anyway
+    # (task #22), so the previous explicit 2-tuple filter was dead code.
     kv_pairs =
-      for {key_quoted, value_quoted} <- fields,
-          not match?({:..., [], _}, key_quoted) do
+      for {key_quoted, value_quoted} <- fields do
         case extract_quoted_map_key(key_quoted) do
           nil -> {{:domain, quoted_to_shape(key_quoted)}, value_quoted}
           atom_key -> {atom_key, value_quoted}
@@ -1759,12 +1899,6 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp flatten_quoted_union(other), do: [other]
-
-  defp flatten_quoted_intersection({:and, [], [left, right]}) do
-    flatten_quoted_intersection(left) ++ flatten_quoted_intersection(right)
-  end
-
-  defp flatten_quoted_intersection(other), do: [other]
 
   @doc """
   Merges two shapes, preferring the more specific one.
@@ -1893,105 +2027,188 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp variables_to_context_vars(_), do: nil
 
   # Accept Module.Types.Descr, sentinel atoms, or ElixirSense minimal shapes
-  # and coerce into a Module.Types.Descr.t()
+  # and coerce into a Descr.t()
   def coerce_var_type_public(type_like), do: coerce_var_type(type_like)
 
+  # task #10: Binding shapes are best-effort. Seeding them as *static* descrs
+  # makes the typesystem treat them as certain, so intersections/matches collapse
+  # to none() and valid clauses get filtered out. The compiler wraps inferred
+  # values in `dynamic/1`; mirror that by dynamic-wrapping every coerced shape.
+  # (Already-built descrs passed in by callers are taken as-is — the caller owns
+  # that contract — and the dynamic sentinels are idempotent.)
   defp coerce_var_type(%{} = descr), do: descr
-  defp coerce_var_type(:dynamic), do: Module.Types.Descr.dynamic()
-  defp coerce_var_type(:term), do: Module.Types.Descr.term()
-  defp coerce_var_type(nil), do: Module.Types.Descr.dynamic()
+  defp coerce_var_type(:dynamic), do: Descr.dynamic()
+  defp coerce_var_type(:term), do: Descr.term()
+  defp coerce_var_type(nil), do: Descr.dynamic()
 
-  defp coerce_var_type({:atom, atom}) when is_atom(atom),
-    do: Module.Types.Descr.atom([atom])
+  defp coerce_var_type(shape), do: Descr.dynamic(coerce_static_descr(shape))
 
-  defp coerce_var_type(:atom), do: Module.Types.Descr.atom()
-  defp coerce_var_type(:boolean), do: Module.Types.Descr.atom([true, false])
-  defp coerce_var_type(:integer), do: Module.Types.Descr.integer()
-  defp coerce_var_type(:binary), do: Module.Types.Descr.binary()
-  defp coerce_var_type(:bitstring), do: Module.Types.Descr.binary()
-  defp coerce_var_type(:float), do: Module.Types.Descr.float()
-  defp coerce_var_type(:pid), do: Module.Types.Descr.pid()
-  defp coerce_var_type(:port), do: Module.Types.Descr.port()
-  defp coerce_var_type(:reference), do: Module.Types.Descr.reference()
-  defp coerce_var_type(:tuple), do: Module.Types.Descr.tuple()
-  defp coerce_var_type(:fun), do: Module.Types.Descr.fun()
-  defp coerce_var_type(:none), do: Module.Types.Descr.none()
+  # Inner coercion: shape -> static descr. Always dynamic-wrapped by
+  # coerce_var_type/1 (task #10) — never call this directly for a seed value.
+  defp coerce_static_descr(:term), do: Descr.term()
 
-  defp coerce_var_type(:number),
-    do: Module.Types.Descr.union(Module.Types.Descr.integer(), Module.Types.Descr.float())
+  defp coerce_static_descr({:atom, atom}) when is_atom(atom),
+    do: Descr.atom([atom])
 
-  defp coerce_var_type({:integer, _}), do: Module.Types.Descr.integer()
-  defp coerce_var_type({:float, _}), do: Module.Types.Descr.float()
-  defp coerce_var_type({:binary, _}), do: Module.Types.Descr.binary()
-  defp coerce_var_type({:list, :empty}), do: Module.Types.Descr.empty_list()
+  defp coerce_static_descr(:atom), do: Descr.atom()
+  defp coerce_static_descr(:boolean), do: Descr.atom([true, false])
+  defp coerce_static_descr(:integer), do: Descr.integer()
+  defp coerce_static_descr(:binary), do: Descr.binary()
+  # task #21: prefer the real bitstring() descr when the running Descr exposes
+  # it (1.20 quotes `bitstring()`); fall back to binary() on older Elixirs.
+  defp coerce_static_descr(:bitstring), do: bitstring_descr()
+  defp coerce_static_descr(:float), do: Descr.float()
+  defp coerce_static_descr(:pid), do: Descr.pid()
+  defp coerce_static_descr(:port), do: Descr.port()
+  defp coerce_static_descr(:reference), do: Descr.reference()
+  defp coerce_static_descr(:tuple), do: Descr.tuple()
+  defp coerce_static_descr(:fun), do: Descr.fun()
+  defp coerce_static_descr(:none), do: Descr.none()
+  # task #21: non_struct_map has no descr constructor; an open map is the closest
+  # representation (any map at all, struct or not).
+  defp coerce_static_descr(:non_struct_map), do: Descr.open_map()
+  defp coerce_static_descr(:empty_map), do: Descr.empty_map()
+  defp coerce_static_descr(:empty_list), do: Descr.empty_list()
+  defp coerce_static_descr(:not_set), do: Descr.not_set()
 
-  defp coerce_var_type({:list, element_type}) do
-    Module.Types.Descr.list(coerce_var_type(element_type))
+  defp coerce_static_descr(:number),
+    do: Descr.union(Descr.integer(), Descr.float())
+
+  defp coerce_static_descr({:integer, _}), do: Descr.integer()
+  defp coerce_static_descr({:float, _}), do: Descr.float()
+  defp coerce_static_descr({:binary, _}), do: Descr.binary()
+  defp coerce_static_descr({:list, :empty}), do: Descr.empty_list()
+
+  defp coerce_static_descr({:list, element_type}) do
+    Descr.list(coerce_var_type(element_type))
   end
 
-  defp coerce_var_type({:tuple, _arity, elements}) when is_list(elements) do
-    Module.Types.Descr.tuple(Enum.map(elements, &coerce_var_type/1))
+  defp coerce_static_descr({:nonempty_list, element_type}) do
+    Descr.non_empty_list(coerce_var_type(element_type))
   end
 
-  defp coerce_var_type({:map, fields, _}) when is_list(fields) do
+  defp coerce_static_descr({:tuple, _arity, elements}) when is_list(elements) do
+    Descr.tuple(Enum.map(elements, &coerce_var_type/1))
+  end
+
+  # Open tuple — we know a prefix but not the full arity; build an open tuple.
+  defp coerce_static_descr({:tuple_open, elements}) when is_list(elements) do
+    Descr.open_tuple(Enum.map(elements, &coerce_var_type/1))
+  end
+
+  defp coerce_static_descr({:map, fields, _}) when is_list(fields) do
     coerce_map_descr(fields, [])
   end
 
-  defp coerce_var_type({:map, fields}) when is_list(fields) do
+  defp coerce_static_descr({:map, fields}) when is_list(fields) do
     coerce_map_descr(fields, [])
   end
 
-  defp coerce_var_type({:struct, fields, {:atom, module}, _updated})
+  defp coerce_static_descr({:struct, fields, {:atom, module}, _updated})
        when is_atom(module) and is_list(fields) do
-    coerce_map_descr(fields, [{:__struct__, Module.Types.Descr.atom([module])}])
+    coerce_struct_descr(module, fields)
   end
 
-  defp coerce_var_type({:struct, fields, module}) when is_atom(module) do
-    coerce_map_descr(fields, [{:__struct__, Module.Types.Descr.atom([module])}])
+  defp coerce_static_descr({:struct, fields, module}) when is_atom(module) and is_list(fields) do
+    coerce_struct_descr(module, fields)
   end
 
-  defp coerce_var_type({:fun, arity}) when is_integer(arity) do
+  defp coerce_static_descr({:fun, arity}) when is_integer(arity) do
     fun_descr(arity)
   end
 
-  defp coerce_var_type({:fun, args, _return}) when is_list(args) do
+  defp coerce_static_descr({:fun, args, _return}) when is_list(args) do
     fun_descr(length(args))
   end
 
-  defp coerce_var_type({:fun_clauses, clauses}) when is_list(clauses) do
+  defp coerce_static_descr({:fun_clauses, clauses}) when is_list(clauses) do
     # fun_clauses is multi-clause function — coerce as generic fun with arity of first clause
     case clauses do
       [{args, _return} | _] when is_list(args) -> fun_descr(length(args))
-      _ -> Module.Types.Descr.fun()
+      _ -> Descr.fun()
     end
   end
 
-  defp coerce_var_type({:union, types}) when is_list(types) do
+  # task #20: a `dynamic()` marker shape coerces to the gradual top.
+  defp coerce_static_descr({:dynamic, nil}), do: Descr.dynamic()
+  defp coerce_static_descr({:dynamic, inner}), do: coerce_static_descr(inner)
+
+  defp coerce_static_descr({:union, types}) when is_list(types) do
     types
     |> Enum.map(&coerce_var_type/1)
-    |> Enum.reduce(Module.Types.Descr.none(), &Module.Types.Descr.union/2)
+    |> Enum.reduce(Descr.none(), &Descr.union/2)
   end
 
-  defp coerce_var_type({:intersection, types}) when is_list(types) do
+  defp coerce_static_descr({:intersection, types}) when is_list(types) do
     types
     |> Enum.map(&coerce_var_type/1)
-    |> Enum.reduce(Module.Types.Descr.term(), &Module.Types.Descr.intersection/2)
+    |> Enum.reduce(Descr.term(), &Descr.intersection/2)
   end
 
-  defp coerce_var_type({:optional, inner}), do: coerce_var_type(inner)
+  defp coerce_static_descr({:optional, inner}), do: coerce_static_descr(inner)
 
-  defp coerce_var_type(_), do: Module.Types.Descr.dynamic()
+  defp coerce_static_descr(_), do: Descr.dynamic()
 
-  # Build a map descriptor from shape fields. Only atom keys can be sent to
-  # `Descr` as concrete pairs; if the shape also carries non-atom (domain) keys
-  # we emit an *open* map so those keys are not wrongly asserted absent.
+  # Build a map descriptor from plain-map shape fields. task #10: always build an
+  # OPEN map — Binding shapes only know a subset of keys, and a closed_map would
+  # assert all other keys absent, making the intersection with the real (open or
+  # fuller) map empty and filtering out valid clauses.
   defp coerce_map_descr(fields, extra_pairs) do
     atom_pairs = extra_pairs ++ for({k, v} when is_atom(k) <- fields, do: {k, coerce_var_type(v)})
+    Descr.open_map(atom_pairs)
+  end
 
-    if Enum.all?(fields, fn {k, _} -> is_atom(k) end) do
-      Module.Types.Descr.closed_map(atom_pairs)
+  # Build a struct descriptor. task #10: when the struct module is loaded we can
+  # expand the FULL defstruct field set and build a precise closed_map (known
+  # field types layered over the complete key set); otherwise fall back to an
+  # open_map over just the known fields so we don't wrongly assert keys absent.
+  defp coerce_struct_descr(module, fields) do
+    struct_pair = {:__struct__, Descr.atom([module])}
+
+    known_pairs =
+      for {k, v} when is_atom(k) and k != :__struct__ <- fields, do: {k, coerce_var_type(v)}
+
+    case loaded_struct_fields(module) do
+      {:ok, all_keys} ->
+        known = Map.new(known_pairs)
+
+        full_pairs =
+          for key <- all_keys do
+            {key, Map.get(known, key, Descr.dynamic())}
+          end
+
+        Descr.closed_map([struct_pair | full_pairs])
+
+      :error ->
+        Descr.open_map([struct_pair | known_pairs])
+    end
+  end
+
+  # Safely introspect a loaded struct's field keys (excluding :__struct__).
+  defp loaded_struct_fields(module) when is_atom(module) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :__struct__, 0) do
+      keys =
+        module.__struct__()
+        |> Map.from_struct()
+        |> Map.keys()
+
+      {:ok, keys}
     else
-      Module.Types.Descr.open_map(atom_pairs)
+      :error
+    end
+  rescue
+    _ -> :error
+  catch
+    _, _ -> :error
+  end
+
+  # task #21: real bitstring() descr when available, else binary().
+  defp bitstring_descr do
+    if function_exported?(Module.Types.Descr, :bitstring, 0) do
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
+      apply(Module.Types.Descr, :bitstring, [])
+    else
+      Descr.binary()
     end
   end
 
@@ -1999,9 +2216,10 @@ defmodule ElixirSense.Core.ElixirTypes do
   # to the generic `fun/0`. `apply/3` avoids an undefined-function warning there.
   defp fun_descr(arity) do
     if function_exported?(Module.Types.Descr, :fun, 1) do
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
       apply(Module.Types.Descr, :fun, [arity])
     else
-      Module.Types.Descr.fun()
+      Descr.fun()
     end
   end
 
@@ -2018,7 +2236,7 @@ defmodule ElixirSense.Core.ElixirTypes do
                   # it must be present in the context (otherwise `refine_body_var`
                   # crashes on `{_, false}`-style patterns typed in isolation).
                   if name == :_ or valid_variable_name?(name) do
-                    Map.put(acc, {name, version}, Module.Types.Descr.dynamic())
+                    Map.put(acc, {name, version}, Descr.dynamic())
                   else
                     acc
                   end
@@ -2092,7 +2310,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp descr_to_shape(descr) do
     cond do
-      Module.Types.Descr.empty?(descr) -> :none
+      Descr.empty?(descr) -> :none
       shape = to_shape(descr) -> shape
       true -> nil
     end
@@ -2111,7 +2329,7 @@ defmodule ElixirSense.Core.ElixirTypes do
     with true <- enabled?(),
          true <- arity >= 0,
          false <- clauses == [] do
-      expected = List.duplicate(Module.Types.Descr.dynamic(), arity)
+      expected = List.duplicate(Descr.dynamic(), arity)
 
       stack =
         init_stack(module, fun_arity, file || "nofile", mode)
@@ -2123,7 +2341,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
         _stack ->
           context = init_context()
-          reduced = do_infer_local_signature(stack, context, clauses, expected)
+          reduced = do_infer_local_signature(stack, context, clauses, expected, fun_arity)
 
           case reduced do
             [] ->
@@ -2146,7 +2364,7 @@ defmodule ElixirSense.Core.ElixirTypes do
     %{stack | local_handler: fn _, _, _, context -> {:def, :none, context} end}
   end
 
-  defp do_infer_local_signature(stack, context, clauses, expected) do
+  defp do_infer_local_signature(stack, context, clauses, expected, fun_arity) do
     Enum.reduce_while(clauses, [], fn clause, acc ->
       %{meta: meta, args: args, guards: guards, body: body} = normalise_clause(clause)
       body = body |> ensure_body_var_versions() |> replace_module_attributes()
@@ -2163,10 +2381,10 @@ defmodule ElixirSense.Core.ElixirTypes do
         # dispatch on pattern_api() (see their definitions). `head_kind` is
         # :trees (1.19/1.20, needs of_domain) or :types (1.18, types as-is).
         {head_result, clause_ctx, head_kind} =
-          call_of_head(args, guards || [], expected, meta, stack, seeded_context)
+          call_of_head(args, guards || [], expected, meta, stack, seeded_context, fun_arity)
 
         {return_type, clause_ctx} =
-          call_of_expr(body, Module.Types.Descr.term(), body, stack, clause_ctx)
+          call_of_expr(body, Descr.term(), body, stack, clause_ctx)
 
         arg_types = arg_types_from_head(head_result, head_kind, expected, stack, clause_ctx)
 
@@ -2192,7 +2410,7 @@ defmodule ElixirSense.Core.ElixirTypes do
     |> Enum.map(fn tuple ->
       tuple
       |> Tuple.to_list()
-      |> Enum.reduce(&Module.Types.Descr.union/2)
+      |> Enum.reduce(&Descr.union/2)
     end)
   end
 
@@ -2235,30 +2453,46 @@ defmodule ElixirSense.Core.ElixirTypes do
     end)
   end
 
+  # Stamp a `:version` on every unversioned variable so native typing (whose
+  # context vars are keyed by version only — `Of.declare_var` does
+  # `Map.put(vars, version, data)`) doesn't alias distinct names. task #11:
+  # previously ALL unversioned named vars were stamped `version: 0`, so two
+  # different names collapsed into one context slot and cross-contaminated each
+  # other's refinements. We now assign each distinct *name* its own version via
+  # a `name => version` map (repeated occurrences of the same name share it),
+  # mirroring how each underscore already gets a unique version.
   defp ensure_body_var_versions(ast) do
-    {ast, _counter} =
-      Macro.prewalk(ast, @underscore_version_base, fn
-        {:@, _, _} = node, counter ->
-          {node, counter}
+    {ast, _acc} =
+      Macro.prewalk(ast, {@underscore_version_base, %{}}, fn
+        {:@, _, _} = node, acc ->
+          {node, acc}
 
-        {:_, meta, context} = node, counter when is_list(meta) and is_atom(context) ->
+        {:_, meta, context} = node, {counter, names} when is_list(meta) and is_atom(context) ->
           if Keyword.has_key?(meta, :version) do
-            {node, counter}
+            {node, {counter, names}}
           else
-            {{:_, Keyword.put(meta, :version, counter), context}, counter + 1}
+            {{:_, Keyword.put(meta, :version, counter), context}, {counter + 1, names}}
           end
 
-        {name, meta, context} = node, counter
+        {name, meta, context} = node, {counter, names}
         when is_atom(name) and is_list(meta) and is_atom(context) and
                name not in [:__MODULE__, :__DIR__, :__ENV__, :__CALLER__, :__STACKTRACE__] ->
           if Keyword.has_key?(meta, :version) do
-            {node, counter}
+            {node, {counter, names}}
           else
-            {{name, Keyword.put(meta, :version, 0), context}, counter}
+            case Map.fetch(names, name) do
+              {:ok, version} ->
+                {{name, Keyword.put(meta, :version, version), context}, {counter, names}}
+
+              :error ->
+                version = counter
+                names = Map.put(names, name, version)
+                {{name, Keyword.put(meta, :version, version), context}, {counter + 1, names}}
+            end
           end
 
-        node, counter ->
-          {node, counter}
+        node, acc ->
+          {node, acc}
       end)
 
     ast
@@ -2269,8 +2503,12 @@ defmodule ElixirSense.Core.ElixirTypes do
     {body, _counter} =
       Macro.prewalk(body, 0, fn
         {:@, _meta, [{_attr_name, _, _}]} = _node, counter ->
-          # Replace @attr with a fresh variable that of_expr can handle
-          placeholder = {:__attr_placeholder__, [version: 1_000_000 + counter], nil}
+          # Replace @attr with a fresh variable that of_expr can handle. Use a
+          # version base well above the @underscore_version_base range that
+          # ensure_body_var_versions now draws from for both underscores AND
+          # distinct named vars (task #11), so attr placeholders can't alias a
+          # real variable's context slot.
+          placeholder = {:__attr_placeholder__, [version: 2_000_000 + counter], nil}
           {placeholder, counter + 1}
 
         node, counter ->
@@ -2290,31 +2528,32 @@ defmodule ElixirSense.Core.ElixirTypes do
       metadata.mods_funs_to_positions
       |> Enum.filter(fn {{mod, _fun, _arity}, _info} -> mod == module end)
       |> Enum.reduce(%{}, fn {{_mod, fun, arity}, info}, acc ->
-        with %{type: type} <- info do
-          kind = get_def_kind_for_types(type)
+        case info do
+          %{type: type} ->
+            kind = get_def_kind_for_types(type)
 
-          sig =
-            case {Map.get(info, :elixir_types_sig),
-                  spec_signature_from_metadata(metadata, module, fun, arity)} do
-              {_inferred, {:ok, {:strong, _domain, _clauses} = spec_sig}} ->
-                spec_sig
+            sig =
+              case {Map.get(info, :elixir_types_sig),
+                    spec_signature_from_metadata(metadata, module, fun, arity)} do
+                {_inferred, {:ok, {:strong, _domain, _clauses} = spec_sig}} ->
+                  spec_sig
 
-              {sig, _} when sig != nil ->
-                sig
+                {sig, _} when sig != nil ->
+                  sig
 
-              {nil, {:ok, spec_sig}} ->
-                spec_sig
+                {nil, {:ok, spec_sig}} ->
+                  spec_sig
 
-              _ ->
-                nil
+                _ ->
+                  nil
+              end
+
+            if sig != nil do
+              Map.put(acc, {fun, arity}, {kind, sig})
+            else
+              acc
             end
 
-          if sig != nil do
-            Map.put(acc, {fun, arity}, {kind, sig})
-          else
-            acc
-          end
-        else
           _ ->
             acc
         end
@@ -2330,14 +2569,14 @@ defmodule ElixirSense.Core.ElixirTypes do
   Create a closure-based local handler from a signatures map.
   """
   def local_handler_from(local_sigs_map) when is_map(local_sigs_map) do
-    fn meta, {_fun, _arity} = fun_arity, stack, context ->
+    fn _meta, {_fun, _arity} = fun_arity, _stack, context ->
       case Map.get(local_sigs_map, fun_arity) do
         {kind, {sig_kind, _domain, _clause_types} = sig}
         when sig_kind in [:infer, :strong] ->
-          {kind, sig, maybe_put_remote_sig(context, meta, stack)}
+          {kind, sig, context}
 
         {kind, :none} ->
-          {kind, :none, maybe_put_remote_sig(context, meta, stack)}
+          {kind, :none, context}
 
         _ ->
           false
@@ -2348,7 +2587,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   def spec_signature_from_metadata(metadata, module, fun, arity)
       when is_map(metadata) and is_atom(module) and is_atom(fun) and is_integer(arity) do
     case metadata.specs[{module, fun, arity}] do
-      %ElixirSense.Core.State.SpecInfo{elixir_types_sig: {kind, _domain, _clauses} = sig}
+      %SpecInfo{elixir_types_sig: {kind, _domain, _clauses} = sig}
       when kind in [:infer, :strong] ->
         {:ok, sig}
 
@@ -2358,38 +2597,6 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   def spec_signature_from_metadata(_, _, _, _), do: :error
-
-  defp maybe_put_remote_sig(context, meta, stack) do
-    call = build_remote_call_from_meta(meta)
-
-    case call do
-      nil ->
-        context
-
-      remote_ast ->
-        case maybe_remote_call_sig(remote_ast, stack[:metadata]) do
-          {:ok, sig} ->
-            arity = remote_ast |> elem(2) |> length()
-            put_in(context.local_sigs[{:__remote__, arity}], sig)
-
-          :error ->
-            context
-        end
-    end
-  end
-
-  defp build_remote_call_from_meta(meta) when is_list(meta) do
-    case Keyword.get(meta, :type_check) do
-      {:invoked_as, module, fun, arity}
-      when is_atom(module) and is_atom(fun) and is_integer(arity) ->
-        {{:., [], [module, fun]}, [], List.duplicate(nil, arity)}
-
-      _ ->
-        nil
-    end
-  end
-
-  defp build_remote_call_from_meta(_), do: nil
 
   # Helper to convert ElixirSense def types to Module.Types kinds
   defp get_def_kind_for_types(:def), do: :def
@@ -2417,12 +2624,12 @@ defmodule ElixirSense.Core.ElixirTypes do
 
     case extract_return_type_from_clauses(effective) do
       {:ok, return_type} -> return_type
-      :error -> Module.Types.Descr.dynamic()
+      :error -> Descr.dynamic()
     end
   end
 
-  def extract_return_type_from_sig(:none, _arg_shapes), do: Module.Types.Descr.dynamic()
-  def extract_return_type_from_sig(_, _arg_shapes), do: Module.Types.Descr.dynamic()
+  def extract_return_type_from_sig(:none, _arg_shapes), do: Descr.dynamic()
+  def extract_return_type_from_sig(_, _arg_shapes), do: Descr.dynamic()
 
   # Filter clauses whose arg domains are compatible with the given arg shapes.
   # A clause matches if each arg shape is a subtype of (or intersects with) the clause's arg domain.
@@ -2467,7 +2674,7 @@ defmodule ElixirSense.Core.ElixirTypes do
       Enum.zip(clause_args, arg_descrs)
       |> Enum.all?(fn {domain, arg} ->
         # Check if arg type intersects with domain (not empty intersection)
-        not Module.Types.Descr.empty?(Module.Types.Descr.intersection(arg, domain))
+        not Descr.empty?(Descr.intersection(arg, domain))
       end)
     rescue
       e ->
@@ -2493,7 +2700,7 @@ defmodule ElixirSense.Core.ElixirTypes do
         return_type ->
           try do
             combined =
-              if acc == nil, do: return_type, else: Module.Types.Descr.union(acc, return_type)
+              if acc == nil, do: return_type, else: Descr.union(acc, return_type)
 
             {:cont, combined}
           rescue

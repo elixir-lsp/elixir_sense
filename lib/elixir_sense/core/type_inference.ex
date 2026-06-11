@@ -1,5 +1,9 @@
 defmodule ElixirSense.Core.TypeInference do
   @moduledoc false
+  alias ElixirSense.Core.ElixirTypes
+  alias ElixirSense.Core.State.VarInfo
+  alias Module.Types.Descr
+
   def type_of(
         {:%, _struct_meta,
          [
@@ -35,7 +39,7 @@ defmodule ElixirSense.Core.TypeInference do
     # Native typing only narrows calls it understands; when it returns nil
     # (unsupported call/signature, or 1.18) keep the `{:call, ...}` shape Binding
     # relies on.
-    with true <- ElixirSense.Core.ElixirTypes.expr_typing_enabled?(),
+    with true <- ElixirTypes.expr_typing_enabled?(),
          native when not is_nil(native) <- type_of_with_elixir_types(ast, context) do
       native
     else
@@ -207,7 +211,7 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   def type_of({:fn, _meta, clauses} = ast, context) do
-    if ElixirSense.Core.ElixirTypes.expr_typing_enabled?() do
+    if ElixirTypes.expr_typing_enabled?() do
       type_of_with_elixir_types(ast, context)
     else
       # Without native expression typing (disabled, or 1.18) at least extract
@@ -326,7 +330,7 @@ defmodule ElixirSense.Core.TypeInference do
   def type_of({var, meta, args} = ast, context) when is_atom(var) and is_list(args) do
     # As with remote calls: fall back to the `{:local_call, ...}` shape Binding
     # relies on when native typing returns nil for this local call (or on 1.18).
-    with true <- ElixirSense.Core.ElixirTypes.expr_typing_enabled?(),
+    with true <- ElixirTypes.expr_typing_enabled?(),
          native when not is_nil(native) <- type_of_with_elixir_types(ast, context) do
       native
     else
@@ -372,23 +376,177 @@ defmodule ElixirSense.Core.TypeInference do
         nil
 
       branches ->
-        types = Enum.map(branches, fn {head, body} -> branch_result_type(head, body, context) end)
+        types = Enum.map(branches, &branch_type(&1, context))
 
-        cond do
-          Enum.any?(types, &is_nil/1) ->
-            nil
-
-          true ->
-            case Enum.uniq(types) do
-              [single] -> single
-              members -> {:union, members}
-            end
+        if Enum.any?(types, &is_nil/1) do
+          nil
+        else
+          case Enum.uniq(types) do
+            [single] -> single
+            members -> {:union, members}
+          end
         end
     end
   end
 
   defp strip_when_guard({:when, _, [pattern | _]}), do: pattern
   defp strip_when_guard(other), do: other
+
+  # A branch is normally `{head, body}` (body's type, var-leaks widened). A `with`
+  # failure branch is `{:failure, pattern, rhs}`: the value that reaches the
+  # implicit `else` is the RHS minus the matched pattern, but only when the
+  # pattern (no guard) is precise (an under-approximation); otherwise the whole
+  # RHS may fail to match. Mirrors `expr.ex:883`.
+  defp branch_type({:failure, pattern, rhs}, context) do
+    rhs_type = type_of(rhs, context)
+
+    case precise_pattern_type(pattern) do
+      {:ok, nil} -> rhs_type
+      {:ok, pattern_type} -> {:difference, rhs_type, pattern_type}
+      :imprecise -> rhs_type
+    end
+  end
+
+  defp branch_type({head, body}, context), do: branch_result_type(head, body, context)
+
+  @doc """
+  Under-approximated type of a clause head pattern, for cross-clause subtraction.
+
+  Subtracting an earlier clause's pattern from a later clause's scrutinee is only
+  sound when the contributed type is an *under*-approximation of the value set the
+  pattern actually matches. `type_of/2` over-approximates several patterns
+  (`[h|t]` and `[x]` both become `{:list, _}` which includes `[]`; `<<c, rest>>`
+  becomes `{:binary, nil}` which includes `""`), so using it directly removes
+  values that can still reach the catch-all.
+
+  This mirrors the compiler's `pattern_precise? and guard_precise?` gate
+  (`Module.Types.Pattern`): a clause contributes to the subtracted set only when
+  its pattern is exact for the matched value set.
+
+  Returns `{:ok, type}` when the clause may safely contribute `type` to the
+  subtraction, or `:imprecise` when the clause must be skipped (the catch-all then
+  keeps the wider type — the conservative, sound choice).
+
+  Rules (mirroring the compiler):
+
+    * any non-trivial `when` guard ⇒ `:imprecise` (compiler `guard_precise?` is
+      false for guards)
+    * atom literals ⇒ precise
+    * bare vars / `_` ⇒ precise (a first-binding var is `precise?` in the
+      compiler; its type is `nil`, a subtraction no-op)
+    * other literals (integers, floats, binaries) ⇒ `:imprecise` (the compiler
+      types them as the whole `integer()`/`float()`/`binary()` domain, not the
+      singleton, so they are not precise)
+    * tuples (incl. 2-tuples) whose every element is exact-or-wildcard ⇒ precise
+      (tagged tuples like `{:ok, _}` are the key case)
+    * structs whose every field is exact-or-wildcard ⇒ precise
+    * empty list `[]` ⇒ precise
+    * cons patterns `[h | t]` ⇒ contribute at most a non-empty-list shape
+      (`{:nonempty_list, nil}`), never the element types
+    * fixed-length list patterns (`[x]`, `[a, b]`) ⇒ `:imprecise`
+    * binary patterns with segments ⇒ `:imprecise`
+    * maps ⇒ `:imprecise` (open in patterns; subtracting an open shape is unsound)
+  """
+  def precise_pattern_type({:when, _, _}), do: :imprecise
+
+  # bare var / underscore — matches everything; contributes nil (subtraction no-op)
+  def precise_pattern_type({name, _meta, ctx}) when is_atom(name) and is_atom(ctx),
+    do: {:ok, nil}
+
+  # pinned var: matches a single (unknown at this layer) value — not precise
+  def precise_pattern_type({:^, _, [_pinned]}), do: :imprecise
+
+  # atom literal
+  def precise_pattern_type(atom) when is_atom(atom), do: {:ok, {:atom, atom}}
+
+  # other literals: type_of widens to the whole domain — not precise
+  def precise_pattern_type(literal)
+      when is_integer(literal) or is_float(literal) or is_binary(literal),
+      do: :imprecise
+
+  # empty list
+  def precise_pattern_type([]), do: {:ok, {:list, :empty}}
+
+  # cons `[h | t]`: contribute at most a non-empty-list shape (element types
+  # over-approximate, so drop them); fixed-length lists contribute nothing.
+  def precise_pattern_type([{:|, _, [_head, _tail]}]), do: {:ok, {:nonempty_list, nil}}
+  def precise_pattern_type(list) when is_list(list), do: :imprecise
+
+  # 2-tuple
+  def precise_pattern_type(tuple) when is_tuple(tuple) and tuple_size(tuple) == 2 do
+    precise_pattern_type({:{}, [], Tuple.to_list(tuple)})
+  end
+
+  # n-tuple
+  def precise_pattern_type({:{}, _, elements}) when is_list(elements) do
+    case precise_elements(elements) do
+      {:ok, types} -> {:ok, {:tuple, length(types), types}}
+      :imprecise -> :imprecise
+    end
+  end
+
+  # struct `%S{...}`: precise iff every field is exact-or-wildcard
+  def precise_pattern_type({:%, _, [_struct_ast, {:%{}, _, [{:|, _, _} | _]}]}), do: :imprecise
+
+  def precise_pattern_type({:%, _, [struct_ast, {:%{}, _, fields}]}) when is_list(fields) do
+    with {:ok, field_types} <- precise_fields(fields) do
+      struct_type = type_of(struct_ast, :match)
+
+      module =
+        case struct_type do
+          {:atom, mod} -> {:atom, mod}
+          _ -> nil
+        end
+
+      {:ok, {:struct, Keyword.delete(field_types, :__struct__), module, nil}}
+    end
+  end
+
+  # maps and binaries with segments: imprecise
+  def precise_pattern_type({:%{}, _, _}), do: :imprecise
+  def precise_pattern_type({:<<>>, _, _}), do: :imprecise
+
+  # `=` match: both sides must match; precise iff both sides are precise. Use the
+  # narrower (whichever is concrete); if either is imprecise, the whole is.
+  def precise_pattern_type({:=, _, [left, right]}) do
+    with {:ok, left_type} <- precise_pattern_type(left),
+         {:ok, right_type} <- precise_pattern_type(right) do
+      {:ok, intersect(left_type, right_type)}
+    end
+  end
+
+  # anything else (calls, etc.): not a safe-to-subtract pattern
+  def precise_pattern_type(_other), do: :imprecise
+
+  defp precise_elements(elements) do
+    Enum.reduce_while(elements, {:ok, []}, fn element, {:ok, acc} ->
+      case precise_pattern_type(element) do
+        {:ok, type} -> {:cont, {:ok, [type | acc]}}
+        :imprecise -> {:halt, :imprecise}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      :imprecise -> :imprecise
+    end
+  end
+
+  defp precise_fields(fields) do
+    Enum.reduce_while(fields, {:ok, []}, fn
+      {key, value}, {:ok, acc} when is_atom(key) ->
+        case precise_pattern_type(value) do
+          {:ok, type} -> {:cont, {:ok, [{key, type} | acc]}}
+          :imprecise -> {:halt, :imprecise}
+        end
+
+      _other, _acc ->
+        {:halt, :imprecise}
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      :imprecise -> :imprecise
+    end
+  end
 
   defp branch_result_type(nil, body, context), do: type_of(body, context)
 
@@ -437,13 +595,14 @@ defmodule ElixirSense.Core.TypeInference do
 
       true ->
         # Without `else`, a failed `<-` returns its unmatched right-hand value, so
-        # the result is `do_body | each <- RHS`. All are typed against the
-        # generators' bound vars.
+        # the result is `do_body | each <- (RHS minus the matched pattern)`. The
+        # pattern is subtracted only when precise (`{:failure, ...}` handles the
+        # gate); the `do` body is typed against the generators' bound vars.
         bound = with_patterns(generators)
 
         [
           {bound, opts[:do]}
-          | for({:<-, _, [_pattern, rhs]} <- generators, do: {bound, rhs})
+          | for({:<-, _, [pattern, rhs]} <- generators, do: {:failure, pattern, rhs})
         ]
     end
   end
@@ -584,7 +743,7 @@ defmodule ElixirSense.Core.TypeInference do
 
   defp type_of_with_state(ast, context, %{vars_info: [current_scope | _]} = _state, env)
        when is_map(current_scope) do
-    if ElixirSense.Core.ElixirTypes.expr_typing_enabled?() do
+    if ElixirTypes.expr_typing_enabled?() do
       env_context = build_env_context(current_scope, env)
       native_result = type_of_with_elixir_types(ast, context, nil, nil, env_context)
       native_result || type_of(ast, context)
@@ -603,7 +762,7 @@ defmodule ElixirSense.Core.TypeInference do
     vars =
       current_scope
       |> Map.values()
-      |> Enum.filter(&match?(%ElixirSense.Core.State.VarInfo{}, &1))
+      |> Enum.filter(&match?(%VarInfo{}, &1))
 
     # `env` is a compiler env struct (no Access behaviour), so use Map.get
     # rather than `env[:key]`, which would raise.
@@ -631,9 +790,9 @@ defmodule ElixirSense.Core.TypeInference do
       ) do
     # General expression typing requires the expected-type API (1.19+). On 1.18
     # the custom engine handles expressions; see ElixirTypes.expr_typing_enabled?/0.
-    if ElixirSense.Core.ElixirTypes.expr_typing_enabled?() do
+    if ElixirTypes.expr_typing_enabled?() do
       case type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do
-        {:ok, descr} -> ElixirSense.Core.ElixirTypes.to_shape(descr)
+        {:ok, descr} -> ElixirTypes.to_shape(descr)
         :error -> nil
       end
     else
@@ -655,7 +814,7 @@ defmodule ElixirSense.Core.TypeInference do
         (is_map(local_sigs_map) && Map.get(local_sigs_map, :__module__)) ||
         extract_module_from_context(ast)
 
-    ElixirSense.Core.ElixirTypes.of_expr(ast,
+    ElixirTypes.of_expr(ast,
       module: module,
       function: Map.get(env_context, :function),
       file: Map.get(env_context, :file),
@@ -675,10 +834,9 @@ defmodule ElixirSense.Core.TypeInference do
 
     if is_list(vars) do
       Enum.reduce(vars, %{}, fn
-        %ElixirSense.Core.State.VarInfo{name: name, version: version, elixir_types_descr: descr},
-        acc
+        %VarInfo{name: name, version: version, elixir_types_descr: descr}, acc
         when is_atom(name) and is_integer(version) ->
-          descr = descr || Module.Types.Descr.dynamic()
+          descr = descr || Descr.dynamic()
           Map.put(acc, {name, version}, descr)
 
         _, acc ->
