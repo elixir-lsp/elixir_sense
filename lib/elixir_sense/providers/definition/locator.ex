@@ -338,9 +338,8 @@ defmodule ElixirSense.Providers.Definition.Locator do
   #
   # The set of used modules comes from the tracked `uses` (resolved at macro
   # expansion time, so aliases and `Kernel.use/1` are handled correctly).
-  defp redirect_into_using_macro(%Location{line: line} = location, mod, fun, metadata) do
-    with true <- use_site?(location, metadata, line),
-         [_ | _] = used_modules <- used_modules(location, mod, metadata) do
+  defp redirect_into_using_macro(location, mod, fun, metadata) do
+    with [_ | _] = used_modules <- used_modules(location, mod, metadata) do
       Enum.find_value(used_modules, fn mod ->
         with %Location{file: file, line: l, end_line: el} when not is_nil(file) <-
                Location.find_mod_fun_source(mod, :__using__, :any) do
@@ -352,31 +351,8 @@ defmodule ElixirSense.Providers.Definition.Locator do
     end
   end
 
-  defp redirect_into_using_macro(_location, _mod, _fun, _metadata), do: nil
-
-  # Matches the start of a `use Foo` / `use Foo, opts` / `Kernel.use(Foo)` /
-  # `Kernel.use Foo` statement. The trailing `[\s(]` ensures we match the `use`
-  # keyword and not an identifier like `use_foo`.
-  @use_line_detector ~r/^\s*(?:Kernel\s*\.\s*)?use[\s(]/
-
-  # Does the recorded definition sit on a `use Foo` / `Kernel.use(Foo)` line?
-  #
-  # We match the line textually rather than parsing it: a `use` may span
-  # several lines (`use Foo,\n  opt: 1`), in which case the recorded line on its
-  # own (`use Foo,`) is not valid Elixir and would fail to parse.
-  defp use_site?(location, metadata, line) do
-    with source when is_binary(source) <- location_source(location, metadata),
-         text when is_binary(text) <- Enum.at(Source.split_lines(source), line - 1) do
-      not comment_line?(text) and Regex.match?(@use_line_detector, text)
-    else
-      _ -> false
-    end
-  end
-
   # Modules `mod` uses, resolved at expansion time. For the current buffer they
-  # are in `metadata.uses`; for an external module we parse its source (only
-  # reached once we already know the position is a `use` site, so this is not
-  # on the hot path of ordinary remote lookups).
+  # are in `metadata.uses`; for an external module we parse its source.
   defp used_modules(%Location{file: nil}, mod, metadata) do
     Map.get(metadata.uses, mod, [])
   end
@@ -389,17 +365,6 @@ defmodule ElixirSense.Providers.Definition.Locator do
 
       _ ->
         []
-    end
-  end
-
-  # Source text backing the location: the in-memory buffer for the current
-  # module (file == nil), or the file contents for an external module.
-  defp location_source(%Location{file: nil}, metadata), do: metadata.source
-
-  defp location_source(%Location{file: file}, _metadata) do
-    case File.read(file) do
-      {:ok, content} -> content
-      _ -> nil
     end
   end
 
