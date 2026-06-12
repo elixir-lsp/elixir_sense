@@ -9,6 +9,14 @@ defmodule ElixirSense.Core.TypePresentation do
   `{:difference, ...}`, etc. Callers must never display those directly. This
   module guarantees a resolved, thunk-free result.
 
+  ## Gradual-shape policy
+
+  Gradualness lives in descrs (the `Module.Types` layer). Shapes produced by the
+  structural engine are gradual-free by policy: a bare `dynamic()` is the gradual
+  top, and `{:dynamic, inner}` segments are retained only for defensive rendering
+  of shapes that arrived from the native descr path. New shapes emitted by the
+  structural engine must never be wrapped in `{:dynamic, _}`.
+
   ## Dialect notes
 
   Shared constructs (unions, lists, booleans, etc.) use the **compiler dialect**,

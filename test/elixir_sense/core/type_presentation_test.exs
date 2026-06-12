@@ -72,6 +72,18 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert TP.render({:dynamic, {:atom, :ok}}) == {:ok, "dynamic(:ok)"}
     end
 
+    # Canary: a stray {:dynamic, inner} shape must render as dynamic(inner),
+    # NOT fall through to the catch-all segment/1 clause that returns "term()".
+    # This guards the gradual-shape policy: {:dynamic, _} segments arriving from
+    # the native-descr path must never silently degrade to "unknown".
+    test "stray {:dynamic, inner} renders dynamic(inner) — not term() or unknown" do
+      assert TP.render({:dynamic, :boolean}) == {:ok, "dynamic(boolean())"}
+      assert TP.render({:dynamic, {:list, :integer}}) == {:ok, "dynamic(list(integer()))"}
+      # A nested dynamic inside a union must also survive, not collapse to term().
+      assert TP.render({:union, [{:atom, :ok}, {:dynamic, :integer}]}) ==
+               {:ok, ":ok or dynamic(integer())"}
+    end
+
     test "open tuple shape" do
       assert TP.render({:tuple_open, []}) == {:ok, "{...}"}
       assert TP.render({:tuple_open, [{:atom, :ok}]}) == {:ok, "{:ok, ...}"}

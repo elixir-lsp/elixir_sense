@@ -249,8 +249,9 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
          opts
        ) do
     filter = struct_module_filter(only_structs, env, metadata)
+    binding = Binding.from_env(env, metadata, cursor_position)
 
-    case expand_dot_path(path, env, metadata, cursor_position) do
+    case expand_dot_path(path, binding, env, metadata) do
       {:ok, {:atom, mod}} when hint == "" ->
         expand_aliases(
           mod,
@@ -278,11 +279,14 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
     end
   end
 
+  # Expand a dot-path to a resolved shape. Accepts a pre-built `Binding.t()` so
+  # the caller (expand_dot/8) builds Binding.from_env exactly once per request,
+  # even for deeply-nested paths like `a.b.c` that recurse through this function.
   defp expand_dot_path(
          {:var, ~c"__MODULE__"},
+         _binding,
          %State.Env{} = env,
-         %Metadata{} = _metadata,
-         _cursor_position
+         %Metadata{} = _metadata
        ) do
     if env.module != nil and Introspection.elixir_module?(env.module) do
       {:ok, {:atom, env.module}}
@@ -291,24 +295,24 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
     end
   end
 
-  defp expand_dot_path({:var, var}, %State.Env{} = env, %Metadata{} = metadata, cursor_position) do
-    value_from_binding({:variable, List.to_atom(var), :any}, env, metadata, cursor_position)
+  defp expand_dot_path({:var, var}, binding, %State.Env{} = _env, %Metadata{} = _metadata) do
+    expand_with_binding({:variable, List.to_atom(var), :any}, binding)
   end
 
   defp expand_dot_path(
          {:module_attribute, attribute},
-         %State.Env{} = env,
-         %Metadata{} = metadata,
-         cursor_position
+         binding,
+         %State.Env{} = _env,
+         %Metadata{} = _metadata
        ) do
-    value_from_binding({:attribute, List.to_atom(attribute)}, env, metadata, cursor_position)
+    expand_with_binding({:attribute, List.to_atom(attribute)}, binding)
   end
 
   defp expand_dot_path(
          {:alias, hint},
+         _binding,
          %State.Env{} = env,
-         %Metadata{} = metadata,
-         _cursor_position
+         %Metadata{} = metadata
        ) do
     alias = hint |> List.to_string() |> String.split(".") |> value_from_alias(env, metadata)
 
@@ -320,9 +324,9 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
 
   defp expand_dot_path(
          {:alias, {:local_or_var, var}, hint},
+         _binding,
          %State.Env{} = env,
-         %Metadata{} = metadata,
-         _cursor_position
+         %Metadata{} = metadata
        ) do
     case var do
       ~c"__MODULE__" ->
@@ -341,11 +345,11 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
 
   defp expand_dot_path(
          {:alias, {:module_attribute, attribute}, hint},
+         binding,
          %State.Env{} = env,
-         %Metadata{} = metadata,
-         cursor_position
+         %Metadata{} = metadata
        ) do
-    case value_from_binding({:attribute, List.to_atom(attribute)}, env, metadata, cursor_position) do
+    case expand_with_binding({:attribute, List.to_atom(attribute)}, binding) do
       {:ok, {:atom, atom}} ->
         if Introspection.elixir_module?(atom) do
           alias_suffix = hint |> List.to_string() |> String.split(".")
@@ -366,45 +370,49 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
 
   defp expand_dot_path(
          {:alias, _, _hint},
+         _binding,
          %State.Env{} = _env,
-         %Metadata{} = _metadata,
-         _cursor_position
+         %Metadata{} = _metadata
        ) do
     :error
   end
 
   defp expand_dot_path(
          {:unquoted_atom, var},
+         _binding,
          %State.Env{} = _env,
-         %Metadata{} = _metadata,
-         _cursor_position
+         %Metadata{} = _metadata
        ) do
     {:ok, {:atom, List.to_atom(var)}}
   end
 
   defp expand_dot_path(
          {:dot, parent, call},
+         binding,
          %State.Env{} = env,
-         %Metadata{} = metadata,
-         cursor_position
+         %Metadata{} = metadata
        ) do
-    case expand_dot_path(parent, env, metadata, cursor_position) do
+    case expand_dot_path(parent, binding, env, metadata) do
       {:ok, expanded} ->
-        value_from_binding(
-          {:call, expanded, List.to_atom(call), []},
-          env,
-          metadata,
-          cursor_position
-        )
+        expand_with_binding({:call, expanded, List.to_atom(call), []}, binding)
 
       :error ->
         :error
     end
   end
 
-  defp expand_dot_path(:expr, %State.Env{} = _env, %Metadata{} = _metadata, _cursor_position) do
+  defp expand_dot_path(:expr, _binding, %State.Env{} = _env, %Metadata{} = _metadata) do
     # TODO expand expression
     :error
+  end
+
+  # Expand a binding_ast using a pre-built Binding struct. Returns {:ok, value} or :error.
+  defp expand_with_binding(binding_ast, %Binding{} = binding) do
+    case Binding.expand(binding, binding_ast) do
+      :none -> :error
+      nil -> :error
+      other -> {:ok, other}
+    end
   end
 
   defp expand_expr(%State.Env{} = env, %Metadata{} = metadata, cursor_position, opts) do

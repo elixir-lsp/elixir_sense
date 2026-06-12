@@ -1,5 +1,41 @@
 # ElixirSense types integration — consolidated backlog (Fable)
 
+## Round-5 polish wave — DONE (2026-06-12, workflow types-round5-polish)
+
+GPT round 5 confirmed no correctness P0s; all addressable items shipped
+(gates: 1980 tests, +36; compile/format/credo clean):
+
+- **Alias-fallback decision (the deferred semantics call)** — empirically pinned
+  against the real 1.20.1 compiler: BOTH legacy fallbacks were wrong for the
+  single-part case (an unaliased `B` inside `Sib.A` is `Elixir.B`, never `Sib.B`;
+  `Macro.Env.expand_alias` returns :error and the compiler keeps refs as written).
+  ModuleResolver fixed to match; Binding's `resolve_same_root_alias` heuristic and
+  ModuleResolver's `resolve_parent_alias` both deleted; `resolve_type_module` alias
+  path delegates fully; 6 regression tests pin the real-compiler answers.
+- **Algebra audit round 2** — `covers?` delegated to `Descr.subtype?` for exact
+  shape pairs (property `subtype?(dynamic(a), dynamic(b)) == subtype?(a, b)`
+  verified against descr.ex:891-908); union dedup improves for free (proven by an
+  end-to-end union-collapse test). Disjointness delegation REFUTED with
+  reachability evidence (every exact pair resolves before the conservative
+  fallback; abstract atoms pre-expand to non-exact forms) — documented in code,
+  no dead code shipped. Closed-map merge semantics audited sound.
+- **Construct fixtures** — 25 new end-to-end fixtures (try/receive/for-into/
+  captures/macro-generated/dependency-chain/argument-selected clauses),
+  deterministic across seeds.
+- **Perf regression check** — tagged :perf module (excluded by default) encoding
+  generous absolute thresholds + the relative cache-architecture guard
+  (native-on hint pass must stay within 2x of native-off). Note recorded: on the
+  synthetic fixture, metadata build is ~3.3x slower native-on (was 1.6x on the
+  round-4 fixture) — within thresholds, worth watching.
+- **Caller de-dup** — completion's dot-expansion chain (`expand_dot_path`/
+  `func_call_chain`) no longer rebuilds `Binding.from_env` per step; the
+  `{:dynamic, _}` policy is documented with a render canary (never falls through
+  to term()/unknown).
+
+Remaining: publishing-blocked release mechanics, multi-version CI evidence
+(recorded-matrix release gate), and the parked protocol options.
+
+
 ## Deep-architecture wave — DONE (2026-06-12, workflow types-deep-architecture)
 
 The three hardest deferred items, run as a sequential opus pipeline (each stage kept

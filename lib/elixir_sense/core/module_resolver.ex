@@ -28,6 +28,40 @@ defmodule ElixirSense.Core.ModuleResolver do
   Alias semantics are NOT reimplemented here: expansion is delegated to
   `ElixirSense.Core.Introspection.expand_alias/2` and
   `ElixirSense.Core.Normalized.Macro.Env.expand_alias/4`.
+
+  ## Alias fallback semantics (empirically pinned to the real compiler)
+
+  This module is the single canonical alias-fallback path. `Binding` previously
+  carried a divergent `resolve_same_root_alias`/`resolve_parent_alias` heuristic;
+  it has been removed and `Binding` now delegates here. The unified rules below
+  were checked against what the real Elixir compiler resolves (compiling tiny
+  modules and reading back `__MODULE__`-derived atoms):
+
+    * `alias Foo.Bar` then `Bar.Baz` -> `Foo.Bar.Baz`
+      (aliases-of-aliases and aliased submodules; handled by
+      `Introspection.expand_alias` / `Macro.Env.expand_alias`).
+    * `alias Foo.Bar, as: B` then `B.Baz` -> `Foo.Bar.Baz`.
+    * `__MODULE__`-relative submodules (`__MODULE__.Sub`) -> `<module>.Sub`.
+    * `alias MyApp.String` then `String` -> `MyApp.String` (an alias wins over a
+      same-named top-level module).
+    * A nested `defmodule Inner` inside `Outer` records a real alias entry
+      `{Inner, Outer.Inner}`, so `Inner` -> `Outer.Inner` via normal alias
+      expansion (NOT via any parent/sibling heuristic).
+
+  Crucially, when NO alias entry applies the real compiler does NOT invent a
+  parent/sibling module:
+
+    * In module `Sib.A`, an unaliased single `B` -> `Elixir.B`, NOT `Sib.B`.
+    * In module `Rooty.Child`, an unaliased `Rooty.Sibling` -> `Rooty.Sibling`
+      (kept fully-qualified as written), regardless of whether the first part
+      matches the current module's root segment.
+
+  `Macro.Env.expand_alias/4` returns `:error` for both of those, and the real
+  compiler then keeps the reference fully-qualified as written. Therefore the
+  no-alias fallback here is simply `Module.concat(parts)` for every arity. An
+  earlier `resolve_parent_alias` fallback that turned a single unaliased part
+  into a parent-sibling module (`B` -> `Sib.B`) was WRONG against the compiler
+  and has been removed.
   """
 
   alias ElixirSense.Core.Introspection
@@ -114,39 +148,19 @@ defmodule ElixirSense.Core.ModuleResolver do
 
     case Introspection.expand_alias(mod, aliases) do
       ^mod ->
+        # No alias substitution applied. Defer to the real compiler's alias
+        # expansion; if THAT also finds nothing, the reference stays exactly as
+        # written (`mod`). See the "Alias fallback semantics" moduledoc: the
+        # compiler never invents a parent/sibling module for an unaliased part.
         case expand_alias_from_env(current_module, aliases, parts) do
-          resolved when is_atom(resolved) and not is_nil(resolved) ->
-            resolved
-
-          _ ->
-            case parts do
-              [single] when is_atom(single) and is_atom(current_module) ->
-                resolve_parent_alias(current_module, single) || mod
-
-              _ ->
-                mod
-            end
+          resolved when is_atom(resolved) and not is_nil(resolved) -> resolved
+          _ -> mod
         end
 
       resolved ->
         resolved
     end
   end
-
-  defp resolve_parent_alias(module, single) when is_atom(module) and is_atom(single) do
-    parent = module |> Module.split() |> Enum.drop(-1)
-
-    case parent do
-      [] -> nil
-      parts -> Module.concat(parts ++ [single])
-    end
-  rescue
-    e ->
-      Logger.debug("resolve_parent_alias failed: #{Exception.format(:error, e, __STACKTRACE__)}")
-      nil
-  end
-
-  defp resolve_parent_alias(_, _), do: nil
 
   defp expand_alias_from_env(module, aliases, list)
        when is_atom(module) and is_list(aliases) and is_list(list) do

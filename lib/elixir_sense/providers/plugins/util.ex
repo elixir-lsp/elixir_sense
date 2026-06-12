@@ -53,7 +53,16 @@ defmodule ElixirSense.Providers.Plugins.Util do
 
   def partial_func_call(code, %State.Env{} = env, %Metadata{} = buffer_metadata, cursor_position) do
     binding_env = Binding.from_env(env, buffer_metadata, cursor_position)
+    partial_func_call_with_binding(code, binding_env, env, buffer_metadata, cursor_position)
+  end
 
+  defp partial_func_call_with_binding(
+         code,
+         binding_env,
+         %State.Env{} = env,
+         %Metadata{} = buffer_metadata,
+         cursor_position
+       ) do
     func_info = Source.which_func(code, binding_env)
 
     with %{candidate: {mod, fun}, npar: npar} <- func_info,
@@ -74,19 +83,25 @@ defmodule ElixirSense.Providers.Plugins.Util do
   end
 
   def func_call_chain(code, env, buffer_metadata, cursor_position) do
-    func_call_chain(code, env, buffer_metadata, cursor_position, [])
+    # Build Binding.from_env once for all recursion steps — env, buffer_metadata,
+    # and cursor_position do not change as we walk up the call chain.
+    binding_env = Binding.from_env(env, buffer_metadata, cursor_position)
+    func_call_chain(code, binding_env, env, buffer_metadata, cursor_position, [])
   end
 
   # TODO consider reimplementing using Code.Fragment.container_cursor_to_quoted
   # and Macro.path/2.
-  defp func_call_chain(code, env, buffer_metadata, cursor_position, chain) do
-    case partial_func_call(code, env, buffer_metadata, cursor_position) do
+  defp func_call_chain(code, binding_env, env, buffer_metadata, cursor_position, chain) do
+    case partial_func_call_with_binding(code, binding_env, env, buffer_metadata, cursor_position) do
       :none ->
         Enum.reverse(chain)
 
       {_mod, _fun, _npar, %{pos: {{line, col}, _}}} = func_call ->
         code_before = Source.text_before(code, line, col)
-        func_call_chain(code_before, env, buffer_metadata, cursor_position, [func_call | chain])
+
+        func_call_chain(code_before, binding_env, env, buffer_metadata, cursor_position, [
+          func_call | chain
+        ])
     end
   end
 end

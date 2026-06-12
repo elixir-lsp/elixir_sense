@@ -311,6 +311,10 @@ defmodule ElixirSense.Core.Binding do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
+  # The set-theoretic type backend. Coupled to unstable compiler internals — every
+  # use is guarded by `ElixirTypes.enabled?()` + try/rescue so API drift degrades
+  # gracefully to the custom algebra (see MEMORY: Module.Types API drift).
+  alias Module.Types.Descr
 
   # TODO refactor to use env
   defstruct structs: %{},
@@ -1101,52 +1105,102 @@ defmodule ElixirSense.Core.Binding do
     end)
   end
 
-  # Does shape `a` subsume shape `b`? Used to decide which union members a
-  # subtracted type removes. Conservative — exact matches, generic (value-less)
-  # types covering their literals, tagged tuples (element-wise, with `nil` as a
-  # wildcard element), and structs by module.
-  defp covers?(same, same), do: true
+  # Does shape `a` subsume shape `b` (is `b` a subtype of `a`)? Used to decide
+  # which union members a subtracted type removes and to dedup/collapse unions.
+  #
+  # DESCR-BACKED FAST PATH (GPT round-5 P1, item 1). When the native typesystem
+  # is enabled AND both operands are `descr_exact?` shape kinds (their static
+  # coercion to a `Descr.t()` loses no information), subsumption delegates to the
+  # real `Descr.subtype?/2`, which is strictly more faithful than the
+  # hand-written structural clauses below (it sees through unions, the number
+  # tower, etc.). `covers?(subsumer, member)` is exactly
+  # `Descr.subtype?(coerce(member), coerce(subsumer))`.
+  #
+  # WHY DYNAMIC-WRAPPING IS SAFE HERE: `coerce_var_type_public/1` produces
+  # `dynamic(static(shape))`. Both coerced operands are therefore gradual, so
+  # `Descr.subtype?/2` takes its `true ->` branch and compares the FULL descrs
+  # (`subtype_static?(left, right)`) — the dynamic wrappers cancel. Empirically
+  # verified that `subtype?(dynamic(a), dynamic(b)) == subtype?(a, b)` across
+  # int<:num, num<:int, atom(:ok)<:atom(), union membership, and literal pairs
+  # (see test "descr-backed covers? matches the static subtype relation"). This
+  # is the SAME dynamic-cancellation property the descr-backed intersection
+  # relies on. Any backend drift falls through to the custom clauses via
+  # try/rescue. Non-exact shapes (`nil` wildcard, maps/structs, literal scalars,
+  # generic `:list`/`:tuple`, `{:optional, _}`, improper 3-tuples) are NOT exact,
+  # so they always take the custom path below — preserving the existing
+  # wildcard/transparent-optional/map-top semantics those clauses encode.
+  defp covers?(a, b) do
+    case descr_backed_covers?(a, b) do
+      :__fallthrough__ -> covers_custom?(a, b)
+      bool -> bool
+    end
+  end
+
+  defp descr_backed_covers?(subsumer, member) do
+    if ElixirTypes.enabled?() and descr_exact?(subsumer) and descr_exact?(member) do
+      try do
+        descr_member = ElixirTypes.coerce_var_type_public(member)
+        descr_subsumer = ElixirTypes.coerce_var_type_public(subsumer)
+        Descr.subtype?(descr_member, descr_subsumer)
+      rescue
+        _ -> :__fallthrough__
+      catch
+        _, _ -> :__fallthrough__
+      end
+    else
+      :__fallthrough__
+    end
+  end
+
+  # Structural subsumption fallback. Conservative — exact matches, generic
+  # (value-less) types covering their literals, tagged tuples (element-wise, with
+  # `nil` as a wildcard element), and structs by module. Recurses through
+  # `covers?/2` (the dispatcher) so nested exact subshapes still get the faithful
+  # descr treatment.
+  defp covers_custom?(same, same), do: true
   # `nil` as a *subtracted* element means "any value here" (e.g. the `_` in
   # `{:ok, _}`), so it covers any member element. Reached only inside tuple
   # recursion — a top-level nil subtrahend is short-circuited by difference/2.
-  defp covers?(nil, _b), do: true
-  defp covers?(:atom, {:atom, _}), do: true
-  defp covers?(:boolean, {:atom, bool}) when is_boolean(bool), do: true
-  defp covers?(:integer, {:integer, _}), do: true
-  defp covers?({:integer, nil}, {:integer, _}), do: true
-  defp covers?(:float, {:float, _}), do: true
-  defp covers?({:float, nil}, {:float, _}), do: true
-  defp covers?(:binary, {:binary, _}), do: true
-  defp covers?({:binary, nil}, {:binary, _}), do: true
+  defp covers_custom?(nil, _b), do: true
+  defp covers_custom?(:atom, {:atom, _}), do: true
+  defp covers_custom?(:boolean, {:atom, bool}) when is_boolean(bool), do: true
+  defp covers_custom?(:integer, {:integer, _}), do: true
+  defp covers_custom?({:integer, nil}, {:integer, _}), do: true
+  defp covers_custom?(:float, {:float, _}), do: true
+  defp covers_custom?({:float, nil}, {:float, _}), do: true
+  defp covers_custom?(:binary, {:binary, _}), do: true
+  defp covers_custom?({:binary, nil}, {:binary, _}), do: true
 
   # Number tower: number() subsumes integer() and float() (in either spelling).
-  defp covers?(:number, {:integer, _}), do: true
-  defp covers?(:number, {:float, _}), do: true
-  defp covers?(:number, :integer), do: true
-  defp covers?(:number, :float), do: true
+  defp covers_custom?(:number, {:integer, _}), do: true
+  defp covers_custom?(:number, {:float, _}), do: true
+  defp covers_custom?(:number, :integer), do: true
+  defp covers_custom?(:number, :float), do: true
 
   # Generic container/callable atoms subsume their concrete instances.
-  defp covers?(:tuple, {:tuple, _, _}), do: true
-  defp covers?(:fun, {:fun, _}), do: true
-  defp covers?(:fun, {:fun, _, _}), do: true
-  defp covers?(:fun, {:fun_clauses, _}), do: true
+  defp covers_custom?(:tuple, {:tuple, _, _}), do: true
+  defp covers_custom?(:fun, {:fun, _}), do: true
+  defp covers_custom?(:fun, {:fun, _, _}), do: true
+  defp covers_custom?(:fun, {:fun_clauses, _}), do: true
 
   # `bitstring()` subsumes `binary()` (binaries are byte-aligned bitstrings).
-  defp covers?(:bitstring, {:binary, _}), do: true
-  defp covers?(:bitstring, :binary), do: true
+  defp covers_custom?(:bitstring, {:binary, _}), do: true
+  defp covers_custom?(:bitstring, :binary), do: true
 
   # Lists: the generic `:list` atom subsumes any list; a (possibly-empty) list
   # subsumes a non-empty list of the same/covered element; element type is
   # covariant.
-  defp covers?(:list, {:list, _}), do: true
-  defp covers?(:list, {:nonempty_list, _}), do: true
-  defp covers?({:list, :empty}, {:list, :empty}), do: true
-  defp covers?({:list, sub_elem}, {:list, mem_elem}), do: list_elem_covers?(sub_elem, mem_elem)
+  defp covers_custom?(:list, {:list, _}), do: true
+  defp covers_custom?(:list, {:nonempty_list, _}), do: true
+  defp covers_custom?({:list, :empty}, {:list, :empty}), do: true
 
-  defp covers?({:list, sub_elem}, {:nonempty_list, mem_elem}),
+  defp covers_custom?({:list, sub_elem}, {:list, mem_elem}),
     do: list_elem_covers?(sub_elem, mem_elem)
 
-  defp covers?({:nonempty_list, sub_elem}, {:nonempty_list, mem_elem}),
+  defp covers_custom?({:list, sub_elem}, {:nonempty_list, mem_elem}),
+    do: list_elem_covers?(sub_elem, mem_elem)
+
+  defp covers_custom?({:nonempty_list, sub_elem}, {:nonempty_list, mem_elem}),
     do: list_elem_covers?(sub_elem, mem_elem)
 
   # Improper non-empty list (3-tuple): conservative. An improper list is NOT
@@ -1154,33 +1208,33 @@ defmodule ElixirSense.Core.Binding do
   # cover an improper member; so the 3-tuple only covers an equal-kind 3-tuple
   # whose prefix element and tail both cover (elementwise). It covers no proper
   # list and is covered by no proper list.
-  defp covers?({:nonempty_list, sub_elem, sub_tail}, {:nonempty_list, mem_elem, mem_tail}),
+  defp covers_custom?({:nonempty_list, sub_elem, sub_tail}, {:nonempty_list, mem_elem, mem_tail}),
     do: list_elem_covers?(sub_elem, mem_elem) and covers?(sub_tail, mem_tail)
 
   # Map top (`%{}` / `map()`) subsumes any concrete map or struct. An open empty
   # map (`%{...}`) is likewise the map top.
-  defp covers?({:map, [], tail}, {:map, _, _}) when tail in [nil, :open], do: true
-  defp covers?({:map, [], tail}, {:struct, _, _, _}) when tail in [nil, :open], do: true
+  defp covers_custom?({:map, [], tail}, {:map, _, _}) when tail in [nil, :open], do: true
+  defp covers_custom?({:map, [], tail}, {:struct, _, _, _}) when tail in [nil, :open], do: true
 
-  defp covers?({:tuple, n, sub_elems}, {:tuple, n, mem_elems}) do
+  defp covers_custom?({:tuple, n, sub_elems}, {:tuple, n, mem_elems}) do
     sub_elems
     |> Enum.zip(mem_elems)
     |> Enum.all?(fn {sub, mem} -> covers?(sub, mem) end)
   end
 
-  defp covers?({:struct, _, {:atom, mod}, _}, {:struct, _, {:atom, mod}, _}), do: true
-  defp covers?({:struct, _, nil, _}, {:struct, _, _, _}), do: true
+  defp covers_custom?({:struct, _, {:atom, mod}, _}, {:struct, _, {:atom, mod}, _}), do: true
+  defp covers_custom?({:struct, _, nil, _}, {:struct, _, _, _}), do: true
 
   # Optional map-field wrappers (`if_set`). Treat the wrapper transparently:
   # coverage is decided by the inner shapes. This keeps `{:optional, x}` from
   # being spuriously disjoint from `x` (or from another optional of a covered
   # type). A possibly-absent key plus its inner value is conservatively handled
   # by comparing the values it can hold when present.
-  defp covers?({:optional, sub}, {:optional, mem}), do: covers?(sub, mem)
-  defp covers?({:optional, sub}, mem), do: covers?(sub, mem)
-  defp covers?(sub, {:optional, mem}), do: covers?(sub, mem)
+  defp covers_custom?({:optional, sub}, {:optional, mem}), do: covers?(sub, mem)
+  defp covers_custom?({:optional, sub}, mem), do: covers?(sub, mem)
+  defp covers_custom?(sub, {:optional, mem}), do: covers?(sub, mem)
 
-  defp covers?(_a, _b), do: false
+  defp covers_custom?(_a, _b), do: false
 
   # List element coverage: `:empty` (the element of `[]`) is covered by anything,
   # and otherwise defer to `covers?/2`.
@@ -2833,10 +2887,18 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp resolve_type_module(%Binding{} = env, {:__aliases__, _, list}) do
-    case resolve_alias(env, list) do
-      nil -> Module.concat(list)
-      resolved -> resolved
+  defp resolve_type_module(%Binding{} = env, {:__aliases__, _, _list} = ast) do
+    # Alias resolution (incl. the no-alias fallback) is delegated to the single
+    # canonical path in `ModuleResolver`. Binding previously carried a divergent
+    # `resolve_same_root_alias`/`resolve_parent_alias` heuristic that disagreed
+    # with the real compiler (e.g. it turned an unaliased single `B` inside
+    # `Sib.A` into `Sib.B`, whereas the compiler keeps it `Elixir.B`); that
+    # heuristic has been removed. `ModuleResolver.resolve` already falls back to
+    # `Module.concat(parts)` when no alias applies, so `nil`/`:error` here only
+    # arises for genuinely unresolvable forms.
+    case ModuleResolver.resolve(ast, env) do
+      {:ok, module} -> module
+      :error -> nil
     end
   end
 
@@ -2849,60 +2911,6 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp resolve_type_module(_env, _), do: nil
-
-  defp resolve_alias(%Binding{aliases: aliases, module: module}, [first | rest]) do
-    mod = Module.concat([first | rest])
-
-    case Introspection.expand_alias(mod, aliases) do
-      ^mod -> resolve_same_root_alias(module, first, rest)
-      resolved -> resolved
-    end
-  rescue
-    e ->
-      Logger.debug("resolve_alias failed: #{Exception.message(e)}")
-      nil
-  end
-
-  defp resolve_alias(_, _), do: nil
-
-  defp resolve_same_root_alias(module, first, rest)
-       when is_atom(first) and is_atom(module) and is_list(rest) do
-    cond do
-      rest == [] ->
-        resolve_parent_alias(module, first)
-
-      String.contains?(Atom.to_string(module), ".") ->
-        root = module |> Module.split() |> hd()
-
-        if Atom.to_string(first) == root do
-          Module.concat([first | rest])
-        end
-
-      true ->
-        nil
-    end
-  rescue
-    e ->
-      Logger.debug("resolve_same_root_alias failed: #{Exception.message(e)}")
-      nil
-  end
-
-  defp resolve_same_root_alias(_, _, _), do: nil
-
-  defp resolve_parent_alias(module, single) when is_atom(single) and is_atom(module) do
-    parent = module |> Module.split() |> Enum.drop(-1)
-
-    case parent do
-      [] -> nil
-      parts -> Module.concat(parts ++ [single])
-    end
-  rescue
-    e ->
-      Logger.debug("resolve_parent_alias failed: #{Exception.message(e)}")
-      nil
-  end
-
-  defp resolve_parent_alias(_, _), do: nil
 
   defp combine_intersection(:none, _), do: :none
   defp combine_intersection(_, :none), do: :none
@@ -2941,9 +2949,9 @@ defmodule ElixirSense.Core.Binding do
       try do
         descr_a = ElixirTypes.coerce_var_type_public(a)
         descr_b = ElixirTypes.coerce_var_type_public(b)
-        result = Module.Types.Descr.intersection(descr_a, descr_b)
+        result = Descr.intersection(descr_a, descr_b)
 
-        if Module.Types.Descr.empty?(result) do
+        if Descr.empty?(result) do
           :none
         else
           case ElixirTypes.to_shape(result) do
@@ -3166,6 +3174,18 @@ defmodule ElixirSense.Core.Binding do
       covers?(b, a) -> a
       disjoint_kinds?(a, b) -> :none
       disjoint_literals?(a, b) -> :none
+      # NOTE (GPT round-5 P1, item 2 — REFUTED): a `Descr.disjoint?/2`-backed
+      # clause was prototyped here to turn the conservative `nil` into a sound
+      # `:none` for exact same-kind pairs the coarse `shape_kind` check misses
+      # (e.g. `integer()` vs `float()`). It is faithful (`disjoint?(dynamic(a),
+      # dynamic(b)) == disjoint?(a, b)` — verified) BUT effectively UNREACHABLE
+      # through the expand pipeline: every exact same-kind pair that gets here is
+      # already resolved earlier — by `disjoint_literals?` (two pinned scalars),
+      # by the dedicated tuple/list/union/struct clauses, or by `covers?` — and
+      # the remaining abstract atoms/numbers are pre-expanded to NON-exact literal
+      # forms (`:integer` -> `{:integer, nil}`) by `do_expand`, so they fail the
+      # `descr_exact?` gate. Adding the clause would be dead code, so it is left
+      # out (audit: "add only with evidence").
       true -> nil
     end
   end

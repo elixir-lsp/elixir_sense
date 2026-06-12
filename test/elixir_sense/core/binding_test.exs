@@ -8,6 +8,7 @@ defmodule ElixirSense.Core.BindingTest do
   alias ElixirSense.Core.State.SpecInfo
   alias ElixirSense.Core.State.StructInfo
   alias ElixirSense.Core.State.TypeInfo
+  alias Module.Types.Descr
 
   @env %Binding{
     functions: __ENV__.functions,
@@ -4188,6 +4189,93 @@ defmodule ElixirSense.Core.BindingTest do
       # not to :none.
       assert Binding.expand(@env, {:intersection, [{:optional, {:integer, 5}}, :number]}) !=
                :none
+    end
+  end
+
+  describe "descr-backed covers?/disjointness/union dedup (native on, exact shapes)" do
+    # GPT round-5 P1 items 1-3: when native typing is enabled AND both operands
+    # are `descr_exact?` shapes, subsumption (`covers?`) delegates to the faithful
+    # `Descr.subtype?/2`, the intersection conservative fallback uses
+    # `Descr.disjoint?/2`, and union dedup (which is driven by `covers?`) improves
+    # for free. These assertions encode the Descr-faithful results.
+    setup do
+      prev = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+      on_exit(fn -> Application.put_env(:elixir_sense, :use_elixir_types, prev) end)
+      assert ElixirTypes.enabled?()
+      :ok
+    end
+
+    # --- item 1: covers? delegation, observed via union dedup ---
+
+    test "tuple whose element union subsumes another tuple's element dedups the union" do
+      # `{1-tuple of (:a | :b)} | {1-tuple of :a}`: the first subsumes the second
+      # because at the element level `(:a | :b)` covers `:a`. The custom `covers?`
+      # has no clause for `covers?({:union,...}, {:atom,_})`, so this collapse only
+      # happens on the descr-backed path. Not an over-dedup: the subsumption is
+      # genuine.
+      assert {:tuple, 1, [{:union, [atom: :a, atom: :b]}]} ==
+               Binding.expand(
+                 @env,
+                 {:union,
+                  [
+                    {:tuple, 1, [{:union, [atom: :a, atom: :b]}]},
+                    {:tuple, 1, [{:atom, :a}]}
+                  ]}
+               )
+    end
+
+    test "difference removes a member subsumed via the descr subtype relation" do
+      # `(:a | :b) - :a` => `:b`. (Also works on the custom path for atoms; the
+      # descr path is what makes the element-level subsumption above possible.)
+      assert {:atom, :b} ==
+               Binding.expand(
+                 @env,
+                 {:difference, {:union, [atom: :a, atom: :b]}, {:atom, :a}}
+               )
+    end
+
+    # --- empirical property documentation (the basis for delegation) ---
+
+    test "descr-backed covers? matches the static subtype relation (property)" do
+      # Documents the dynamic-cancellation property the delegation relies on:
+      # `subtype?(dynamic(a), dynamic(b)) == subtype?(a, b)` and likewise for
+      # `disjoint?` — because both `dynamic(static)` operands are gradual, so the
+      # dynamic wrappers cancel. This is what makes the exact-pair delegation
+      # faithful through the `coerce_var_type_public/1` (dynamic-wrapping) path.
+      d = &Descr.dynamic/1
+      a = Descr.integer()
+      b = Descr.union(Descr.integer(), Descr.float())
+
+      assert Descr.subtype?(d.(a), d.(b)) == Descr.subtype?(a, b)
+      assert Descr.disjoint?(d.(a), d.(b)) == Descr.disjoint?(a, b)
+    end
+  end
+
+  describe "descr-backed covers?/disjointness (native off, custom path preserved)" do
+    setup do
+      prev = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, false)
+      on_exit(fn -> Application.put_env(:elixir_sense, :use_elixir_types, prev) end)
+      :ok
+    end
+
+    test "element-level union subsumption is NOT applied on the custom path" do
+      # The custom `covers?` lacks a `covers?({:union,...}, {:atom,_})` clause, so
+      # the two tuples stay as distinct union members (fallthrough unchanged).
+      assert {:union,
+              [
+                {:tuple, 1, [{:union, [atom: :a, atom: :b]}]},
+                {:tuple, 1, [{:atom, :a}]}
+              ]} ==
+               Binding.expand(
+                 @env,
+                 {:union,
+                  [
+                    {:tuple, 1, [{:union, [atom: :a, atom: :b]}]},
+                    {:tuple, 1, [{:atom, :a}]}
+                  ]}
+               )
     end
   end
 end

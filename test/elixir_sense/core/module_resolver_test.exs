@@ -66,6 +66,56 @@ defmodule ElixirSense.Core.ModuleResolverTest do
     end
   end
 
+  describe "resolve/3 alias fallback (pinned to real Elixir semantics)" do
+    # Each assertion was checked against what the real Elixir compiler resolves
+    # (compiling tiny modules and reading back __MODULE__-derived atoms). These
+    # are the cases where Binding's old resolve_same_root_alias heuristic
+    # disagreed with the canonical path; ModuleResolver is now the single source.
+
+    test "alias Foo.Bar then Bar.Baz -> Foo.Bar.Baz" do
+      env = %{module: nil, aliases: [{Bar, Foo.Bar}]}
+      ast = {:__aliases__, [], [:Bar, :Baz]}
+      assert ModuleResolver.resolve(ast, env) == {:ok, Foo.Bar.Baz}
+    end
+
+    test "alias MyApp.String then String -> MyApp.String (alias wins over top-level)" do
+      env = %{module: nil, aliases: [{String, MyApp.String}]}
+      ast = {:__aliases__, [], [:String]}
+      assert ModuleResolver.resolve(ast, env) == {:ok, MyApp.String}
+    end
+
+    test "nested defmodule alias entry: Inner -> Outer.Inner" do
+      # A nested `defmodule Inner` inside `Outer` records {Inner, Outer.Inner}.
+      env = %{module: Outer, aliases: [{Inner, Outer.Inner}]}
+      ast = {:__aliases__, [], [:Inner]}
+      assert ModuleResolver.resolve(ast, env) == {:ok, Outer.Inner}
+    end
+
+    test "unaliased single part is NOT resolved to a parent/sibling module" do
+      # Real Elixir: in module `Sib.A`, an unaliased `B` is `Elixir.B`, NOT `Sib.B`.
+      # The removed resolve_parent_alias fallback used to (wrongly) return Sib.B.
+      env = %{module: Sib.A, aliases: []}
+      ast = {:__aliases__, [], [:B]}
+      assert ModuleResolver.resolve(ast, env) == {:ok, B}
+    end
+
+    test "unaliased multi-part ref stays fully-qualified even when first part matches own root" do
+      # Real Elixir: in `Rooty.Child`, unaliased `Rooty.Sibling` -> `Rooty.Sibling`.
+      # The old root-sharing heuristic happened to return the same answer, but for
+      # the wrong reason; the canonical path keeps the reference as written.
+      env = %{module: Rooty.Child, aliases: []}
+      ast = {:__aliases__, [], [:Rooty, :Sibling]}
+      assert ModuleResolver.resolve(ast, env) == {:ok, Rooty.Sibling}
+    end
+
+    test "unaliased multi-part ref whose first part matches own LAST segment stays as written" do
+      # Real Elixir: in `Zed.Child`, unaliased `Child.Deep` -> `Child.Deep`.
+      env = %{module: Zed.Child, aliases: []}
+      ast = {:__aliases__, [], [:Child, :Deep]}
+      assert ModuleResolver.resolve(ast, env) == {:ok, Child.Deep}
+    end
+  end
+
   describe "resolve/3 __MODULE__" do
     test "bare __MODULE__ resolves to current module" do
       env = %{module: My.Mod, aliases: []}
