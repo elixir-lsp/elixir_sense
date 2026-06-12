@@ -158,6 +158,18 @@ defmodule ElixirSense.Core.ElixirTypes do
     * `:head` — `Pattern.of_head/8` (1.20) or `/7` (1.18/1.19)
     * `:local_signature` — local handler on the stack (`Module.Types.stack/7`), 1.18+
     * `:previous` — cross-clause `Pattern.init_previous/0`, 1.20+
+
+  The map ALSO carries memoized internal-dispatch entries (not part of the
+  public boolean contract above, but cached in the same persistent_term to keep
+  one compute-once source):
+
+    * `:expr_api` / `:pattern_api` — the dispatch VARIANT atoms
+      (`:expected`/`:basic`/`:none`, resp. `:v18`/`:v19`/`:v20`/`:none`) read by
+      the version-dispatched `call_of_*` helpers.
+    * `:descr_gradual` / `:descr_disjoint` / `:descr_compatible` /
+      `:descr_only_gradual` / `:descr_bitstring` / `:descr_fun_1` — booleans for
+      the corresponding `Module.Types.Descr` private-API probes, read by the
+      `descr_*` mirrors and `bitstring_descr`/`fun_descr`.
   """
   def capabilities do
     cached_capabilities()
@@ -209,20 +221,47 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp compute_and_cache_capabilities do
+    expr_variant = expr_api()
+    pattern_variant = pattern_api()
+
     caps = %{
-      expr: expr_api() == :expected,
-      expr_basic: expr_api() != :none,
-      pattern_match: pattern_api() != :none,
+      expr: expr_variant == :expected,
+      expr_basic: expr_variant != :none,
+      pattern_match: pattern_variant != :none,
       head:
         loaded_exported?(Module.Types.Pattern, :of_head, 8) or
           loaded_exported?(Module.Types.Pattern, :of_head, 7),
       local_signature: loaded_exported?(Module.Types, :stack, 7),
-      previous: loaded_exported?(Module.Types.Pattern, :init_previous, 0)
+      previous: loaded_exported?(Module.Types.Pattern, :init_previous, 0),
+
+      # Memoized dispatch variants (not booleans). The per-dispatch helpers
+      # (call_of_expr/call_of_match/call_of_head/arg_types_from_head) read these
+      # instead of re-probing exports on every call. `expr_api/0` & `pattern_api/0`
+      # remain the compute-once source.
+      expr_api: expr_variant,
+      pattern_api: pattern_variant,
+
+      # Memoized boolean probes for the Descr private-API mirrors. The
+      # descr_* helpers and bitstring_descr/fun_descr read these instead of
+      # calling function_exported?/3 per invocation.
+      descr_gradual: function_exported?(Module.Types.Descr, :gradual?, 1),
+      descr_disjoint: function_exported?(Module.Types.Descr, :disjoint?, 2),
+      descr_compatible: function_exported?(Module.Types.Descr, :compatible?, 2),
+      descr_only_gradual: function_exported?(Module.Types.Descr, :only_gradual?, 1),
+      descr_bitstring: function_exported?(Module.Types.Descr, :bitstring, 0),
+      descr_fun_1: function_exported?(Module.Types.Descr, :fun, 1)
     }
 
     :persistent_term.put(@capabilities_pt_key, caps)
     caps
   end
+
+  # Memoized dispatch-variant / boolean-probe readers. First call computes and
+  # caches the full capabilities map; subsequent reads are a persistent_term
+  # lookup + map fetch (no export probing).
+  defp cached_expr_api, do: Map.fetch!(cached_capabilities(), :expr_api)
+  defp cached_pattern_api, do: Map.fetch!(cached_capabilities(), :pattern_api)
+  defp cached_cap(key), do: Map.fetch!(cached_capabilities(), key)
 
   # --- Version-dispatched Module.Types.Pattern calls --------------------------
   #
@@ -239,7 +278,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   # (no expected type). Both return `{type, context}`; on 1.18 the `expected`
   # and `expr` arguments are simply dropped.
   defp call_of_expr(ast, expected, expr, stack, context) do
-    case expr_api() do
+    case cached_expr_api() do
       # credo:disable-for-next-line Credo.Check.Refactor.Apply
       :expected -> apply(Module.Types.Expr, :of_expr, [ast, expected, expr, stack, context])
       # credo:disable-for-next-line Credo.Check.Refactor.Apply
@@ -257,7 +296,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   # descr. We build whichever the running version needs from `value_ast` +
   # `expected_descr`.
   defp call_of_match(pattern_ast, value_ast, expected_descr, full_match, stack, context) do
-    case pattern_api() do
+    case cached_pattern_api() do
       :v20 ->
         expected_fun = of_match_expected_fun(value_ast, expected_descr, full_match, stack)
 
@@ -314,7 +353,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   #   * 1.19 `of_head/7` -> {trees, ctx}; arg types via `of_domain(trees, expected, ctx)`
   #   * 1.18 `of_head/7` -> {types, ctx}; `types` ARE the arg types (no of_domain)
   defp call_of_head(args, guards, expected, meta, stack, context, fun_arity) do
-    case pattern_api() do
+    case cached_pattern_api() do
       :v20 ->
         # credo:disable-for-next-line Credo.Check.Refactor.Apply
         previous = apply(Module.Types.Pattern, :init_previous, [])
@@ -389,7 +428,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp arg_types_from_head(trees, :trees, expected, stack, clause_ctx) do
-    case pattern_api() do
+    case cached_pattern_api() do
       # credo:disable-for-next-line Credo.Check.Refactor.Apply
       :v20 -> apply(Module.Types.Pattern, :of_domain, [trees, stack, clause_ctx])
       # credo:disable-for-next-line Credo.Check.Refactor.Apply
@@ -773,19 +812,6 @@ defmodule ElixirSense.Core.ElixirTypes do
         mode \\ :dynamic,
         opts \\ []
       ) do
-    do_of_match(pattern_ast, expected_descr, match_ast, module, function, file, mode, opts)
-  end
-
-  defp do_of_match(
-         pattern_ast,
-         expected_descr,
-         match_ast,
-         module,
-         function,
-         file,
-         mode,
-         opts
-       ) do
     if available?() do
       targets = targets_from_opts(opts)
 
@@ -1450,20 +1476,17 @@ defmodule ElixirSense.Core.ElixirTypes do
 
       _ ->
         element_shapes = Enum.map(list, &shape_from_ast/1)
-        merged = merge_list_element_shapes(element_shapes)
+        merged = first_generalizable_shape(element_shapes)
         {:list, merged}
     end
   end
 
   defp shape_from_ast(_), do: nil
 
-  defp merge_list_element_shapes([]), do: nil
-
-  defp merge_list_element_shapes(shapes) do
-    shapes
-    |> Enum.map(&generalize_shape/1)
-    |> Enum.reject(&is_nil/1)
-    |> List.first()
+  # First-wins: the generalized shape of the first element that has one (skipping
+  # `nil`/un-generalizable elements). Returns nil when no element generalizes.
+  defp first_generalizable_shape(shapes) do
+    Enum.find_value(shapes, &generalize_shape/1)
   end
 
   defp generalize_shape(nil), do: nil
@@ -2100,33 +2123,12 @@ defmodule ElixirSense.Core.ElixirTypes do
   defp variables_to_context_vars(_), do: nil
 
   # Accept Module.Types.Descr, sentinel atoms, or ElixirSense minimal shapes
-  # and coerce into a Descr.t()
+  # and coerce into a Descr.t(). Closedness is NOT a parameter: it is carried by
+  # the shape's map tail (`:closed`/`nil`/`:open` — see Binding's "Shape
+  # vocabulary"), so a `:closed` tail coerces to a closed_map and `nil`/`:open`
+  # stay open. (The old `:closed_literals` opt / `/2` overload was a no-op and
+  # has been removed — there were no production callers.)
   def coerce_var_type_public(type_like), do: coerce_var_type(type_like)
-
-  @doc """
-  Like `coerce_var_type_public/1`. The `:closed_literals` option is DEPRECATED
-  and now a no-op.
-
-  Closed-map fidelity is driven by the shape's map tail itself (the three-marker
-  model — see `ElixirSense.Core.Binding`'s "Shape vocabulary"):
-
-    * `:closed` — literal-complete (map literal in EXPRESSION context, `Map.new/0`,
-      `Map.from_struct/1` of a known struct, or a closed descr round-tripped via
-      `to_shape/1`): coerced to a `Descr.closed_map/1` (dynamic-wrapped) BY DEFAULT,
-      so the descr round-trip is EXACT.
-    * `nil` (partial) — closedness unknown (guard facts such as `is_map_key/2`
-      narrowing): coerced to an `open_map`, since closing would wrongly assert
-      other keys absent.
-    * `:open` — additional unknown keys exist: coerced to an `open_map`.
-
-  Because closedness now lives in the tail, the old `:closed_literals` opt (which
-  blanket-closed `nil`-tail maps) is obsolete: `nil` now means PARTIAL and MUST
-  stay open. The option is accepted for source compatibility but ignored.
-  """
-  def coerce_var_type_public(type_like, opts) when is_list(opts) do
-    _ = opts
-    coerce_var_type(type_like)
-  end
 
   # task #10: Binding shapes are best-effort. Seeding them as *static* descrs
   # makes the typesystem treat them as certain, so intersections/matches collapse
@@ -2392,7 +2394,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   # task #21: real bitstring() descr when available, else binary().
   defp bitstring_descr do
-    if function_exported?(Module.Types.Descr, :bitstring, 0) do
+    if cached_cap(:descr_bitstring) do
       # credo:disable-for-next-line Credo.Check.Refactor.Apply
       apply(Module.Types.Descr, :bitstring, [])
     else
@@ -2403,7 +2405,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   # Descr.fun/1 (arity-specific function descr) is 1.20+. On 1.18/1.19 fall back
   # to the generic `fun/0`. `apply/3` avoids an undefined-function warning there.
   defp fun_descr(arity) do
-    if function_exported?(Module.Types.Descr, :fun, 1) do
+    if cached_cap(:descr_fun_1) do
       # credo:disable-for-next-line Credo.Check.Refactor.Apply
       apply(Module.Types.Descr, :fun, [arity])
     else
@@ -2774,7 +2776,11 @@ defmodule ElixirSense.Core.ElixirTypes do
       |> Enum.filter(fn {{mod, _fun, _arity}, _info} -> mod == module end)
       |> Enum.reduce(%{}, fn {{_mod, fun, arity}, info}, acc ->
         case info do
-          %{type: type} ->
+          %{
+            type: type,
+            elixir_types_sig: stored_sig,
+            elixir_types_sig_source: stored_source
+          } ->
             kind = get_def_kind_for_types(type)
 
             # Pick the most-trusted signature by EXPLICIT provenance rather than
@@ -2788,9 +2794,6 @@ defmodule ElixirSense.Core.ElixirTypes do
             # sigs are always `:infer`, so the old `{:strong, ...}`
             # spec-precedence clause was dead and a hypothetical :strong spec
             # must still NOT outrank a native-inferred sig.
-            stored_sig = Map.get(info, :elixir_types_sig)
-            stored_source = Map.get(info, :elixir_types_sig_source)
-
             spec_sig =
               case spec_signature_from_metadata(metadata, module, fun, arity) do
                 {:ok, s} -> s
@@ -3020,10 +3023,20 @@ defmodule ElixirSense.Core.ElixirTypes do
   # union of the matched clauses' returns, ALWAYS wrapped in dynamic()
   # (apply.ex:1827 wraps unconditionally — it does NOT consult `return/3`).
   defp apply_infer_mirror(clauses, arg_descrs) do
-    matched =
-      Enum.filter(clauses, fn clause ->
-        args_not_disjoint?(clause_arg_types(clause), arg_descrs)
-      end)
+    apply_mirror(
+      clauses,
+      &args_not_disjoint?(clause_arg_types(&1), arg_descrs),
+      &wrap_dynamic/1
+    )
+  end
+
+  # Shared clause-selection + return-resolution skeleton for apply_infer_mirror
+  # and apply_strong_mirror (apply.ex:1818-1848). They differ only in the
+  # per-clause `select?` predicate and the `wrap` applied to the unioned return.
+  # Zero matches ⇒ :error; > @max_clauses ⇒ bare dynamic(); otherwise the wrapped
+  # union of matched returns (bare dynamic() if no return could be extracted).
+  defp apply_mirror(clauses, select?, wrap) do
+    matched = Enum.filter(clauses, select?)
 
     cond do
       matched == [] ->
@@ -3034,7 +3047,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
       true ->
         case extract_return_type_from_clauses(matched) do
-          {:ok, return_type} -> {:ok, wrap_dynamic(return_type)}
+          {:ok, return_type} -> {:ok, wrap.(return_type)}
           :error -> {:ok, Descr.dynamic()}
         end
     end
@@ -3049,24 +3062,11 @@ defmodule ElixirSense.Core.ElixirTypes do
   # `return/3` (apply.ex:1834,1844 — wrapped in dynamic() only when an arg is
   # gradual), unlike apply_infer which always wraps.
   defp apply_strong_mirror(clauses, arg_descrs, gradual_args?) do
-    matched =
-      Enum.filter(clauses, fn clause ->
-        args_compatible?(clause_arg_types(clause), arg_descrs)
-      end)
-
-    cond do
-      matched == [] ->
-        :error
-
-      length(matched) > @max_clauses ->
-        {:ok, Descr.dynamic()}
-
-      true ->
-        case extract_return_type_from_clauses(matched) do
-          {:ok, return_type} -> {:ok, maybe_wrap_dynamic(return_type, gradual_args?)}
-          :error -> {:ok, Descr.dynamic()}
-        end
-    end
+    apply_mirror(
+      clauses,
+      &args_compatible?(clause_arg_types(&1), arg_descrs),
+      &maybe_wrap_dynamic(&1, gradual_args?)
+    )
   end
 
   # Mirror `Apply.return/3` (apply.ex:1732-1741): only wrap the matched return in
@@ -3095,7 +3095,7 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp descr_gradual?(descr) do
     cond do
-      function_exported?(Module.Types.Descr, :gradual?, 1) ->
+      cached_cap(:descr_gradual) ->
         # credo:disable-for-next-line Credo.Check.Refactor.Apply
         apply(Module.Types.Descr, :gradual?, [descr])
 
@@ -3177,7 +3177,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   # `Descr.disjoint?/2` mirror with a safe fallback (empty intersection) if the
   # private API is unavailable on the running Elixir.
   defp descr_disjoint?(left, right) do
-    if function_exported?(Module.Types.Descr, :disjoint?, 2) do
+    if cached_cap(:descr_disjoint) do
       # credo:disable-for-next-line Credo.Check.Refactor.Apply
       apply(Module.Types.Descr, :disjoint?, [left, right])
     else
@@ -3189,11 +3189,11 @@ defmodule ElixirSense.Core.ElixirTypes do
   # `Descr.compatible?/2`; falls back to a non-disjoint check.
   defp descr_arg_compatible?(arg, domain) do
     cond do
-      function_exported?(Module.Types.Descr, :only_gradual?, 1) and
+      cached_cap(:descr_only_gradual) and
           apply(Module.Types.Descr, :only_gradual?, [arg]) ->
         true
 
-      function_exported?(Module.Types.Descr, :compatible?, 2) ->
+      cached_cap(:descr_compatible) ->
         # credo:disable-for-next-line Credo.Check.Refactor.Apply
         apply(Module.Types.Descr, :compatible?, [arg, domain])
 

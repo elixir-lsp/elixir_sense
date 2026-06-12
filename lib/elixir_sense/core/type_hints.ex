@@ -253,17 +253,9 @@ defmodule ElixirSense.Core.TypeHints do
           :skip | {:ok, hint}
   def type_hint_at(%Context{} = ctx, position, var_name, opts \\ [])
       when is_atom(var_name) do
-    cache_key = {__MODULE__, ctx.ref, :hint_at, position, var_name}
-
-    case Process.get(cache_key, :__miss__) do
-      :__miss__ ->
-        result = compute_hint_at(ctx, position, var_name, opts)
-        Process.put(cache_key, result)
-        result
-
-      cached ->
-        cached
-    end
+    cached({__MODULE__, ctx.ref, :hint_at, position, var_name}, fn ->
+      compute_hint_at(ctx, position, var_name, opts)
+    end)
   end
 
   @doc """
@@ -318,33 +310,17 @@ defmodule ElixirSense.Core.TypeHints do
           {:ok, [param]} | :error
   def effective_params(%Context{} = ctx, module, fun, arity)
       when is_atom(module) and is_atom(fun) and is_integer(arity) and arity >= 0 do
-    cache_key = {__MODULE__, ctx.ref, :params, module, fun, arity}
-
-    case Process.get(cache_key, :__miss__) do
-      :__miss__ ->
-        result = compute_effective_params(ctx, module, fun, arity)
-        Process.put(cache_key, result)
-        result
-
-      cached ->
-        cached
-    end
+    cached({__MODULE__, ctx.ref, :params, module, fun, arity}, fn ->
+      compute_effective_params(ctx, module, fun, arity)
+    end)
   end
 
   # ── env + sigs caching ──────────────────────────────────────────────────────
 
   defp env_for(%Context{} = ctx, position) do
-    cache_key = {__MODULE__, ctx.ref, :env, position}
-
-    case Process.get(cache_key, :__miss__) do
-      :__miss__ ->
-        env = Metadata.get_env(ctx.metadata, position)
-        Process.put(cache_key, env)
-        env
-
-      cached ->
-        cached
-    end
+    cached({__MODULE__, ctx.ref, :env, position}, fn ->
+      Metadata.get_env(ctx.metadata, position)
+    end)
   end
 
   # Resolve the var from env.vars at the read position, then delegate to the
@@ -382,23 +358,13 @@ defmodule ElixirSense.Core.TypeHints do
   defp local_sigs_for(%Context{}, nil), do: %{}
 
   defp local_sigs_for(%Context{} = ctx, module) do
-    cache_key = {__MODULE__, ctx.ref, :local_sigs, module}
-
-    case Process.get(cache_key, :__miss__) do
-      :__miss__ ->
-        sigs =
-          if ElixirTypes.enabled?() do
-            ElixirTypes.build_local_sigs_map(ctx.metadata, module)
-          else
-            %{}
-          end
-
-        Process.put(cache_key, sigs)
-        sigs
-
-      cached ->
-        cached
-    end
+    cached({__MODULE__, ctx.ref, :local_sigs, module}, fn ->
+      if ElixirTypes.enabled?() do
+        ElixirTypes.build_local_sigs_map(ctx.metadata, module)
+      else
+        %{}
+      end
+    end)
   end
 
   # ── source provenance classification ─────────────────────────────────────────
@@ -457,15 +423,21 @@ defmodule ElixirSense.Core.TypeHints do
   # attributed to a single backing → `:shape` (see "Classification scope").
   defp attribute_thunk(_ctx, _module, _type), do: :shape
 
-  # Per-request memoised attribution keyed by {ref, mfa}, reusing the pdict
-  # caching discipline used elsewhere in this module.
+  # Per-request memoised attribution keyed by {ref, mfa}, reusing the shared
+  # pdict caching helper.
   defp cached_attr(%Context{} = ctx, mfa, fun) do
-    cache_key = {__MODULE__, ctx.ref, :source, mfa}
+    cached({__MODULE__, ctx.ref, :source, mfa}, fun)
+  end
 
-    case Process.get(cache_key, :__miss__) do
+  # Shared per-request process-dictionary get-or-compute. `compute_fun` is run
+  # once per distinct `key` and its result memoised for the lifetime of the
+  # request (keyed by `ctx.ref`). `:__miss__` is the sentinel for "not yet
+  # computed", so a legitimately-cached `:__miss__` value is impossible here.
+  defp cached(key, compute_fun) do
+    case Process.get(key, :__miss__) do
       :__miss__ ->
-        result = fun.()
-        Process.put(cache_key, result)
+        result = compute_fun.()
+        Process.put(key, result)
         result
 
       cached ->
@@ -518,22 +490,18 @@ defmodule ElixirSense.Core.TypeHints do
     |> Enum.find_value(fn
       {{^module, ^fun, key_arity}, %ModFunInfo{} = info}
       when not is_nil(key_arity) ->
-        params = info.params |> List.first() || []
-
-        defaults =
-          params
-          |> Enum.count(fn
-            {:\\, _, _} -> true
-            _ -> false
+        # `get_arities/1` iterates ALL clause variants (the old `List.first`
+        # only looked at the first, mis-windowing multi-clause defaults). Each
+        # entry is `{total_arity, default_count}`: a variant admits the call when
+        # `total - defaults <= call_arity <= total`.
+        admits? =
+          info
+          |> ModFunInfo.get_arities()
+          |> Enum.any?(fn {total, defaults} ->
+            call_arity >= total - defaults and call_arity <= total
           end)
 
-        mandatory = key_arity - defaults
-
-        if call_arity >= mandatory and call_arity <= key_arity do
-          info
-        else
-          nil
-        end
+        if admits?, do: info
 
       _ ->
         nil
@@ -565,20 +533,22 @@ defmodule ElixirSense.Core.TypeHints do
       end)
       |> Enum.flat_map(fn {_key, %ModFunInfo{params: params_variants}} -> params_variants end)
 
-    chosen =
-      Enum.find(clauses, fn clause ->
+    # Compute param_from_ast once per clause: find_value returns the chosen
+    # clause's already-parsed params (wrapped to distinguish from a `nil` "no
+    # match" result), so we don't re-map the AST after selection.
+    chosen_params =
+      Enum.find_value(clauses, fn clause ->
         params = Enum.map(clause, &param_from_ast/1)
         mandatory = Enum.count(params, &(not &1.has_default))
         total = length(params)
-        arity >= mandatory and arity <= total
+        if arity >= mandatory and arity <= total, do: {params}
       end)
 
-    case chosen do
+    case chosen_params do
       nil ->
         :error
 
-      clause ->
-        params = Enum.map(clause, &param_from_ast/1)
+      {params} ->
         {:ok, elide_defaults(params, arity)}
     end
   end
@@ -667,6 +637,12 @@ defmodule ElixirSense.Core.TypeHints do
   # The string form is already the printed param name (e.g. "options", "init_arg").
   # Anything that is not a bare identifier (contains punctuation/whitespace) is a
   # non-identifier pattern → nil.
+  #
+  # NOTE: the leading-`_` branch of the char class is DELIBERATE — this accepts
+  # underscore-prefixed param names (e.g. "_opts") as valid identifiers. The
+  # suppression of `_`-prefixed params is the elixir-ls DISPLAY-side filter's job
+  # (it intentionally hides them from hints); we keep them here so provenance and
+  # param structure stay complete and that suppression decision lives in one place.
   defp identifier_or_nil(str) do
     trimmed = String.trim(str)
 

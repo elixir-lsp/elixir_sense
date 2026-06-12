@@ -392,6 +392,44 @@ defmodule ElixirSense.Core.TypeHintsTest do
           :ok
       end
     end
+
+    @tag :requires_native_types
+    test "multi-clause defaults: a later clause variant's wider window is honored" do
+      # Two clauses are keyed under the SAME max arity (2). The FIRST variant has
+      # 0 defaults (window [2,2]); a LATER variant has a default (window [1,2]).
+      # The old `List.first(params)` inspected only the first variant and would
+      # mis-window a call at arity 1 to `:shape`. `get_arities/1` iterates ALL
+      # variants, so the wider [1,2] window admits the arity-1 call.
+      code = """
+      defmodule MultiClauseDefaults do
+        def f(a, a), do: {a, a}
+        def f(a, b \\\\ 1), do: {a, b}
+        def g do
+          x = f(7)
+          y = f(8)
+          {x, y}
+        end
+      end
+      """
+
+      pos = {6, 5}
+      md = metadata(code, pos)
+      var = find_var(md, pos, :x)
+      assert %VarInfo{} = var
+      ctx = TypeHints.request_context(md)
+      result = TypeHints.type_hint_for_var(ctx, pos, var, [])
+
+      case result do
+        {:ok, %{source: source}} ->
+          # Must not regress to :shape — a matching default-bearing clause exists.
+          assert source in [:native_inferred, :native_exck, :spec],
+                 "expected native/spec attribution for an arity-1 call admitted by a " <>
+                   "later multi-clause default variant, got :shape"
+
+        :skip ->
+          :ok
+      end
+    end
   end
 
   describe "discard/1 (Task 2)" do

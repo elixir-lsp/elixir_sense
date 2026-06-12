@@ -68,11 +68,7 @@ defmodule ElixirSense.Core.ExCkReader do
         {:hit, cached} ->
           cached
 
-        :miss ->
-          result = do_read_chunk(module, chunk_override)
-          cache_store(module, result)
-
-        :stale ->
+        miss when miss in [:miss, :stale] ->
           result = do_read_chunk(module, chunk_override)
           cache_store(module, result)
       end

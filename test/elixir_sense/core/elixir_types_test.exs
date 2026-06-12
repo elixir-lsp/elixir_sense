@@ -553,11 +553,11 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       refute Descr.subtype?(DescrCompat.upper_bound(with_other), DescrCompat.upper_bound(coerced))
     end
 
-    test "the deprecated :closed_literals opt is a no-op (nil-tail stays OPEN)" do
+    test "a nil-tail (partial) map coerces OPEN (closedness lives in the tail)" do
       shape = {:map, [a: {:integer, nil}], nil}
 
-      coerced = ElixirTypes.coerce_var_type_public(shape, closed_literals: true)
-      # nil is PARTIAL now; the opt must NOT close it.
+      coerced = ElixirTypes.coerce_var_type_public(shape)
+      # nil is PARTIAL; coercion must NOT close it.
       with_other = Descr.closed_map(a: Descr.integer(), b: Descr.binary())
       assert Descr.subtype?(DescrCompat.upper_bound(with_other), DescrCompat.upper_bound(coerced))
     end

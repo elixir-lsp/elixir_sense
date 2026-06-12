@@ -332,6 +332,19 @@ defmodule ElixirSense.Core.Binding do
             cursor_position: {1, 1},
             elixir_types_local_sigs: %{}
 
+  # Tail-algebra predicates (guard-safe; see merge_tails/2 & intersect_tails/2).
+  # `tail_top?` recognises a map tail that is the map TOP — `nil`
+  # (partial/closedness-unknown) or `:open` — i.e. a map that may carry
+  # additional unknown keys; used where a `%{}`/`map()` top subsumes anything.
+  # `tail_intersectable?` recognises a tail an intersection may proceed under —
+  # `nil` (partial) or `:closed` (key set pinned) — but NOT `:open`.
+  # Note: a third spelling, `tail in [nil, :open, :closed]` (used by `do_expand/3`
+  # for-comprehensions and `expand_map_base/3`), deliberately accepts ALL three
+  # tails ("any resolved map") and is neither predicate, so those sites are left
+  # inline.
+  defguardp tail_top?(tail) when tail in [nil, :open]
+  defguardp tail_intersectable?(tail) when tail in [nil, :closed]
+
   def from_env(%State.Env{} = env, %ElixirSense.Core.Metadata{} = metadata, cursor_position) do
     from_env(env, metadata, cursor_position, [])
   end
@@ -977,12 +990,17 @@ defmodule ElixirSense.Core.Binding do
   # same module merge their fields key-by-key (`%{a: 1} | %{a: 2}` -> `%{a:
   # 1 | 2}`). Other members are left untouched.
   defp coalesce_union(members) do
-    Enum.reduce(members, [], fn member, acc ->
+    # Accumulate in reverse (prepend) to avoid repeated O(n) appends, then
+    # reverse once at the end to restore first-occurrence order (pinned by the
+    # union-member-order golden tests).
+    members
+    |> Enum.reduce([], fn member, acc ->
       case Enum.find_index(acc, &mergeable?(&1, member)) do
-        nil -> acc ++ [member]
+        nil -> [member | acc]
         index -> List.update_at(acc, index, &merge_members(&1, member))
       end
     end)
+    |> Enum.reverse()
   end
 
   defp mergeable?({:list, _}, {:list, _}), do: true
@@ -1137,11 +1155,23 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp descr_backed_covers?(subsumer, member) do
-    if ElixirTypes.enabled?() and descr_exact?(subsumer) and descr_exact?(member) do
+    with_descr_backing(subsumer, member, fn descr_subsumer, descr_member ->
+      Descr.subtype?(descr_member, descr_subsumer)
+    end)
+  end
+
+  # Shared descr-first gate for the covers?/intersection dispatchers. Runs
+  # `descr_fun` on the dynamic-wrapped coercions of both operands ONLY when the
+  # native backend is enabled and both shapes are exact (round-trip without
+  # widening). Any backend drift (exception) or a non-exact/disabled operand
+  # yields the `:__fallthrough__` sentinel so the caller routes to its custom
+  # algebra. `descr_fun` may itself return `:__fallthrough__` to decline.
+  defp with_descr_backing(a, b, descr_fun) do
+    if ElixirTypes.enabled?() and descr_exact?(a) and descr_exact?(b) do
       try do
-        descr_member = ElixirTypes.coerce_var_type_public(member)
-        descr_subsumer = ElixirTypes.coerce_var_type_public(subsumer)
-        Descr.subtype?(descr_member, descr_subsumer)
+        descr_a = ElixirTypes.coerce_var_type_public(a)
+        descr_b = ElixirTypes.coerce_var_type_public(b)
+        descr_fun.(descr_a, descr_b)
       rescue
         _ -> :__fallthrough__
       catch
@@ -1213,8 +1243,8 @@ defmodule ElixirSense.Core.Binding do
 
   # Map top (`%{}` / `map()`) subsumes any concrete map or struct. An open empty
   # map (`%{...}`) is likewise the map top.
-  defp covers_custom?({:map, [], tail}, {:map, _, _}) when tail in [nil, :open], do: true
-  defp covers_custom?({:map, [], tail}, {:struct, _, _, _}) when tail in [nil, :open], do: true
+  defp covers_custom?({:map, [], tail}, {:map, _, _}) when tail_top?(tail), do: true
+  defp covers_custom?({:map, [], tail}, {:struct, _, _, _}) when tail_top?(tail), do: true
 
   defp covers_custom?({:tuple, n, sub_elems}, {:tuple, n, mem_elems}) do
     sub_elems
@@ -2959,29 +2989,19 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp descr_backed_intersection(a, b) do
-    if ElixirTypes.enabled?() and descr_exact?(a) and descr_exact?(b) do
-      try do
-        descr_a = ElixirTypes.coerce_var_type_public(a)
-        descr_b = ElixirTypes.coerce_var_type_public(b)
-        result = Descr.intersection(descr_a, descr_b)
+    with_descr_backing(a, b, fn descr_a, descr_b ->
+      result = Descr.intersection(descr_a, descr_b)
 
-        if Descr.empty?(result) do
-          :none
-        else
-          case ElixirTypes.to_shape(result) do
-            # Unconvertible result — don't lose the custom path's precision.
-            nil -> :__fallthrough__
-            shape -> shape
-          end
+      if Descr.empty?(result) do
+        :none
+      else
+        case ElixirTypes.to_shape(result) do
+          # Unconvertible result — don't lose the custom path's precision.
+          nil -> :__fallthrough__
+          shape -> shape
         end
-      rescue
-        _ -> :__fallthrough__
-      catch
-        _, _ -> :__fallthrough__
       end
-    else
-      :__fallthrough__
-    end
+    end)
   end
 
   # Conservative syntactic whitelist of shape kinds whose *static* coercion to a
@@ -3062,7 +3082,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp combine_intersection_custom({:map, fields_1, tail_1}, {:map, fields_2, tail_2})
-       when tail_1 in [nil, :closed] and tail_2 in [nil, :closed] do
+       when tail_intersectable?(tail_1) and tail_intersectable?(tail_2) do
     keys = (safe_keys(fields_1) ++ safe_keys(fields_2)) |> Enum.uniq()
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
 
@@ -3074,7 +3094,7 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp combine_intersection_custom({:struct, fields_1, type, nil}, {:map, fields_2, tail_2})
-       when tail_2 in [nil, :closed] do
+       when tail_intersectable?(tail_2) do
     keys =
       if type != nil,
         do: safe_keys(fields_1),
@@ -3093,7 +3113,7 @@ defmodule ElixirSense.Core.Binding do
          {:map, _fields_1, tail} = map,
          {:struct, _fields_2, _type, nil} = str
        )
-       when tail in [nil, :closed] do
+       when tail_intersectable?(tail) do
     combine_intersection(str, map)
   end
 

@@ -40,7 +40,25 @@ defmodule ElixirSense.Core.ElixirTypesFailureModeTest do
       caps = ElixirTypes.capabilities()
 
       expected_keys =
-        MapSet.new([:expr, :expr_basic, :pattern_match, :head, :local_signature, :previous])
+        MapSet.new([
+          # Public boolean capabilities (queried via available?/1).
+          :expr,
+          :expr_basic,
+          :pattern_match,
+          :head,
+          :local_signature,
+          :previous,
+          # Memoized internal dispatch variants (atoms, not booleans).
+          :expr_api,
+          :pattern_api,
+          # Memoized Descr private-API probe booleans.
+          :descr_gradual,
+          :descr_disjoint,
+          :descr_compatible,
+          :descr_only_gradual,
+          :descr_bitstring,
+          :descr_fun_1
+        ])
 
       actual_keys = MapSet.new(Map.keys(caps))
 
