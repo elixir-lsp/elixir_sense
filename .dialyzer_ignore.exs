@@ -19,6 +19,13 @@
 #      (`:pattern_match_cov`) but they stay on purpose.
 #   3. Pre-existing peripheral logic in the vendored tokenizer/parser and the
 #      normalized Macro.Env / Binding helpers.
+#   4. ETS opaque-type boundary: `:ets.tid()` is an opaque reference, but
+#      `Process.put/get` erases its opaqueness (the round-trip types the value as
+#      `reference() | integer()`, not `:ets.tid()`). A liveness guard
+#      (`is_reference/is_integer`) then narrows it to a non-opaque type, and
+#      `:ets.info/1` reports `call_without_opaque`. The code is correct at
+#      runtime and is wrapped in `rescue _ -> false` for safety; the opaqueness
+#      loss is unavoidable through the process-dictionary boundary.
 [
   # 1. Version/capability gating
   {"lib/elixir_sense/core/compiler.ex", :pattern_match},
@@ -37,5 +44,8 @@
   {"lib/elixir_sense/core/normalized/macro/env.ex", :pattern_match},
   {"lib/elixir_sense/core/normalized/tokenizer.ex", :contract_supertype},
   {"lib/elixir_sense/core/normalized/tokenizer.ex", :pattern_match},
-  {"lib/elixir_sense/core/parser.ex", :guard_fail}
+  {"lib/elixir_sense/core/parser.ex", :guard_fail},
+
+  # 4. ETS opaque-type boundary (see note above)
+  {"lib/elixir_sense/core/elixir_types.ex", :call_without_opaque}
 ]

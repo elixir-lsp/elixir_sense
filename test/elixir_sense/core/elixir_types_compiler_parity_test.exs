@@ -21,6 +21,7 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
 
   alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.ExCkReader
+  alias ElixirSense.Test.DescrCompat
 
   # Conditionally alias these — available only when the backend is present.
   # We guard every test with `requires_native_types` instead of a module-level
@@ -54,6 +55,26 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
 
     uri_fields = [{:__struct__, Descr.atom([URI])} | uri_field_pairs]
 
+    # `Descr.bitstring/0` is 1.20-only; on 1.18/1.19 there is no public
+    # constructor for the bare bitstring() type, so that corpus entry is added
+    # only when the function exists.
+    bitstring_entries =
+      if function_exported?(Descr, :bitstring, 0) do
+        [{"bitstring()", Descr.bitstring()}]
+      else
+        []
+      end
+
+    # The fun() type and its `to_quoted` rendering are 1.20-only: 1.18 has no
+    # `Descr.fun/1` and no `to_quoted(:fun, ...)` clause (it raises). Probe the
+    # arity-1 constructor (the fun BDD landed with it) before exercising funs.
+    fun_entries =
+      if function_exported?(Descr, :fun, 1) do
+        [{"fun()", Descr.fun()}, {"fun/1", Descr.fun(1)}]
+      else
+        []
+      end
+
     [
       {"atom singleton :ok", Descr.atom([:ok])},
       {"atom singleton :error", Descr.atom([:error])},
@@ -61,7 +82,6 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
       {"integer()", Descr.integer()},
       {"float()", Descr.float()},
       {"binary()", Descr.binary()},
-      {"bitstring()", Descr.bitstring()},
       {"pid()", Descr.pid()},
       {"port()", Descr.port()},
       {"reference()", Descr.reference()},
@@ -79,13 +99,11 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
       {"Date struct", Descr.closed_map(date_fields)},
       {"MapSet struct", Descr.closed_map(mapset_fields)},
       {"URI struct", Descr.closed_map(uri_fields)},
-      {"fun()", Descr.fun()},
-      {"fun/1", Descr.fun(1)},
       {"dynamic()", Descr.dynamic()},
       {"dynamic(integer())", Descr.dynamic(Descr.integer())},
       {"dynamic(:ok)", Descr.dynamic(Descr.atom([:ok]))},
       {"negation atom() and not :a", Descr.difference(Descr.atom(), Descr.atom([:a]))}
-    ]
+    ] ++ bitstring_entries ++ fun_entries
   end
 
   # ---------------------------------------------------------------------------
@@ -165,8 +183,8 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
 
             shape ->
               coerced = ElixirTypes.coerce_var_type_public(shape)
-              ub_orig = Descr.upper_bound(descr)
-              ub_coerced = Descr.upper_bound(coerced)
+              ub_orig = DescrCompat.upper_bound(descr)
+              ub_coerced = DescrCompat.upper_bound(coerced)
 
               if Descr.subtype?(ub_orig, ub_coerced) do
                 {:ok, label}
@@ -253,7 +271,10 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
       coerced = ElixirTypes.coerce_var_type_public(shape)
       with_other = Descr.closed_map(a: Descr.integer(), b: Descr.binary())
 
-      assert Descr.subtype?(Descr.upper_bound(with_other), Descr.upper_bound(coerced)),
+      assert Descr.subtype?(
+               DescrCompat.upper_bound(with_other),
+               DescrCompat.upper_bound(coerced)
+             ),
              "coercion wrongly closed an :open-tail map"
     end
 

@@ -2855,11 +2855,16 @@ defmodule ElixirSense.Core.Binding do
 
   defp resolve_type_module(_env, module) when is_atom(module), do: module
 
-  defp resolve_type_module(%Binding{} = env, {:__MODULE__, _, _} = ast) do
-    # Pure AST->module resolution delegated to ModuleResolver. Preserve the
-    # prior behavior of yielding `nil` (not an error) when there is no current
-    # module by mapping `:error` -> `nil`.
-    case ModuleResolver.resolve(ast, env) do
+  defp resolve_type_module(
+         %Binding{module: mod, aliases: aliases} = _env,
+         {:__MODULE__, _, _} = ast
+       ) do
+    # Pure AST->module resolution delegated to ModuleResolver. Extract only the
+    # two fields ModuleResolver needs into a plain map so dialyzer's success
+    # typing (which expects %{:aliases => [...], :module => atom()}, not a
+    # struct) does not flag this call as a type mismatch.
+    # credo:disable-for-next-line Credo.Check.Refactor.Nesting
+    case ModuleResolver.resolve(ast, %{module: mod, aliases: aliases}) do
       {:ok, module} -> module
       :error -> nil
     end
@@ -2887,7 +2892,10 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  defp resolve_type_module(%Binding{} = env, {:__aliases__, _, _list} = ast) do
+  defp resolve_type_module(
+         %Binding{module: mod, aliases: aliases} = _env,
+         {:__aliases__, _, _list} = ast
+       ) do
     # Alias resolution (incl. the no-alias fallback) is delegated to the single
     # canonical path in `ModuleResolver`. Binding previously carried a divergent
     # `resolve_same_root_alias`/`resolve_parent_alias` heuristic that disagreed
@@ -2896,7 +2904,10 @@ defmodule ElixirSense.Core.Binding do
     # heuristic has been removed. `ModuleResolver.resolve` already falls back to
     # `Module.concat(parts)` when no alias applies, so `nil`/`:error` here only
     # arises for genuinely unresolvable forms.
-    case ModuleResolver.resolve(ast, env) do
+    # Extract only the two fields ModuleResolver needs into a plain map so
+    # dialyzer's success typing (struct vs plain-map mismatch) is satisfied.
+    # credo:disable-for-next-line Credo.Check.Refactor.Nesting
+    case ModuleResolver.resolve(ast, %{module: mod, aliases: aliases}) do
       {:ok, module} -> module
       :error -> nil
     end
@@ -2905,7 +2916,10 @@ defmodule ElixirSense.Core.Binding do
   defp resolve_type_module(%Binding{} = env, {{:., _, [base, nested]}, _, []})
        when is_atom(nested) do
     case resolve_type_module(env, base) do
-      module when is_atom(module) -> Module.concat(module, nested)
+      # Exclude nil so the fallback branch is reachable (resolve_type_module
+      # always returns atom() | nil; without `and not is_nil`, the `_ -> nil`
+      # branch would be dead and dialyzer would emit pattern_match_cov).
+      module when is_atom(module) and not is_nil(module) -> Module.concat(module, nested)
       _ -> nil
     end
   end

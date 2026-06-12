@@ -115,6 +115,7 @@ defmodule ElixirSense.Core.TypeHintsTest do
       {ctx, var, TypeHints.type_hint_for_var(ctx, pos, var, [])}
     end
 
+    @tag :requires_native_types
     test "remote call to an ExCk-backed stdlib function → :native_exck" do
       # Sanity: File.read/1 must actually have an ExCk :sig in this build.
       assert match?(
@@ -142,6 +143,7 @@ defmodule ElixirSense.Core.TypeHintsTest do
       assert {:ok, %{source: :native_exck}} = result
     end
 
+    @tag :requires_native_types
     test "local call to a function with only a @spec (no native sig) → :spec" do
       # `defdelegate` produces no natively-inferred sig (sig_source nil), but the
       # @spec is reachable via spec_signature_from_metadata. Local-call thunks are
@@ -162,6 +164,7 @@ defmodule ElixirSense.Core.TypeHintsTest do
       assert {:ok, %{source: :spec}} = result
     end
 
+    @tag :requires_native_types
     test "local call with a native-inferred sig → :native_inferred" do
       code = """
       defmodule M do
@@ -256,6 +259,7 @@ defmodule ElixirSense.Core.TypeHintsTest do
       end
     end
 
+    @tag :requires_native_types
     test "attribution is cached per {ref, mfa} in the process dictionary" do
       code = """
       defmodule M do

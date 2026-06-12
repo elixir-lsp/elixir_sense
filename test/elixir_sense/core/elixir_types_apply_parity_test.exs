@@ -153,11 +153,28 @@ defmodule ElixirSense.Core.ElixirTypesApplyParityTest do
         end
         """)
 
-      # A statically-known atom arg is disjoint from the integer-only domain:
-      # apply_signature reports :error (an ill-typed call), consistent with the
-      # compiler treating it as a domain violation rather than inventing a type.
-      assert :error =
-               ElixirTypes.apply_signature(Map.fetch!(sigs, {:only_int, 1}), [Descr.atom([:nope])])
+      # A statically-known atom arg is disjoint from the integer-only domain.
+      # On 1.20 the compiler refines the clause's recorded argument type via the
+      # `is_integer/1` guard, so the disjoint atom is rejected and
+      # apply_signature reports :error (an ill-typed call). On 1.18/1.19 the
+      # recorded clause argument type is the unrefined gradual `dynamic()`
+      # (`{[dynamic()], ...}` — see the ExCk chunk), so every argument is
+      # compatible and the call widens to the dynamic-wrapped return instead.
+      # Assert the version-appropriate outcome rather than baking in 1.20-only
+      # guard refinement.
+      only_int_sig = Map.fetch!(sigs, {:only_int, 1})
+
+      case ElixirTypes.apply_signature(only_int_sig, [Descr.atom([:nope])]) do
+        :error ->
+          :ok
+
+        {:ok, descr} ->
+          # No domain refinement recorded: the clause arg type must itself be
+          # gradual (otherwise this would be a real selection bug).
+          {:infer, _domain, [{[arg_type], _ret}]} = only_int_sig
+          assert Descr.gradual?(arg_type)
+          assert Descr.gradual?(descr)
+      end
 
       # And the well-typed call reproduces the recorded return.
       assert Descr.equal?(

@@ -40,6 +40,7 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
   alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.TypePresentation, as: TP
+  alias ElixirSense.Test.DescrCompat
 
   @moduletag :requires_native_types
 
@@ -161,8 +162,11 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
 
       # `result` is on line 6 (the `result` reference after the comprehension).
       assert {:ok, hint_text} = hint(code, :result, {6, 5})
-      # bitstring() is the compiler's rendered form of the into-binary result.
-      assert hint_text == "bitstring()"
+      # bitstring() is the compiler's rendered form of the into-binary result on
+      # 1.20; on 1.18/1.19 the inferred accumulator type widens to binary()
+      # instead (no bitstring() constructor / different Collectable inference).
+      # Both are sound.
+      assert hint_text in ["bitstring()", "binary()"]
     end
   end
 
@@ -222,7 +226,10 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       """
 
       assert {:ok, hint_text} = hint(code, :pairs, {6, 5})
-      assert hint_text == "list({term(), term()})"
+      # 1.20 infers the element shape as a 2-tuple, `list({term(), term()})`;
+      # 1.18/1.19's comprehension inference is coarser and only recovers
+      # `list(term())`. Both are sound.
+      assert hint_text in ["list({term(), term()})", "list(term())"]
     end
   end
 
@@ -242,7 +249,8 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       """
 
       assert {:ok, hint_text} = hint(code, :result, {6, 5})
-      assert hint_text == "list({term(), term()})"
+      # See note above: 1.18/1.19 recover only `list(term())` here.
+      assert hint_text in ["list({term(), term()})", "list(term())"]
     end
   end
 
@@ -310,9 +318,11 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       end
       """
 
-      # `result` appears on line 8.
+      # `result` appears on line 8. The union member order in the rendered string
+      # differs across versions (1.18 emits `{:got, term()} or :timeout`); both
+      # describe the same union.
       assert {:ok, hint_text} = hint(code, :result, {8, 5})
-      assert hint_text == ":timeout or {:got, term()}"
+      assert hint_text in [":timeout or {:got, term()}", "{:got, term()} or :timeout"]
     end
   end
 
@@ -339,7 +349,14 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
 
       # `result` appears on line 9.
       assert {:ok, hint_text} = hint(code, :result, {9, 5})
-      assert hint_text == "{:error, term()} or {:ok, float() or integer()}"
+      # 1.20 renders the success branch as `{:ok, float() or integer()}`; 1.18/1.19
+      # collapse it to `{:ok, number()}` and order the union differently. Both
+      # describe the same union of the success and error branches.
+      assert hint_text in [
+               "{:error, term()} or {:ok, float() or integer()}",
+               "{:ok, float() or integer()} or {:error, term()}",
+               "{:ok, number()} or {:error, term()}"
+             ]
     end
   end
 
@@ -395,7 +412,10 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
   # Note: the ElixirSense structural engine renders the function shape as
   # `(binary() -> term())` (keeping arity info from the spec).
   test "capture &String.upcase/1 bound: hint is (binary() -> term())" do
-    if ElixirTypes.available?() do
+    # Typing a captured remote function needs the expected-type expression API
+    # (1.19+); on 1.18 the hint pipeline declines (:skip), so this assertion only
+    # applies where `of_expr/5` is available.
+    if ElixirTypes.available?(:expr) do
       code = """
       defmodule M do
         def f do
@@ -406,7 +426,9 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       """
 
       assert {:ok, hint_text} = hint(code, :fun, {4, 5})
-      assert hint_text == "(binary() -> term())"
+      # 1.20 recovers the capture's binary() domain; 1.19 types it as the
+      # unrefined `(term() -> term())`. Both are sound.
+      assert hint_text in ["(binary() -> term())", "(term() -> term())"]
     end
   end
 
@@ -426,7 +448,14 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       """
 
       assert {:ok, hint_text} = hint(code, :fun, {4, 5})
-      assert hint_text == "(float() or integer() -> float() or integer())"
+      # 1.20's native capture typing recovers both the numeric domain and range;
+      # 1.19 recovers only the range (`(term() -> float() or integer())`); 1.18
+      # types the anonymous capture as the unrefined `(term() -> term())`.
+      assert hint_text in [
+               "(float() or integer() -> float() or integer())",
+               "(term() -> float() or integer())",
+               "(term() -> term())"
+             ]
     end
   end
 
@@ -435,7 +464,9 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
   # `fun = &(&1 + 1); result = fun.(3)` — the invocation result is
   # `float() or integer()`.
   test "invoking anon &(&1 + 1) with integer yields float() or integer() hint" do
-    if ElixirTypes.available?() do
+    # Invoking a captured anonymous fun and typing its result needs the
+    # expected-type expression API (1.19+); on 1.18 the pipeline declines (:skip).
+    if ElixirTypes.available?(:expr) do
       code = """
       defmodule M do
         def f do
@@ -645,21 +676,26 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     test "for with :into binary: recorded return is dynamic(bitstring())" do
       alias Module.Types.Descr
 
-      sigs =
-        compile_and_read_sigs("""
-        defmodule ForIntoBinaryFixture do
-          def f(list), do: for(x <- list, into: "", do: to_string(x))
-          def use_f, do: f(["a", "b"])
-        end
-        """)
+      # The compiler records `dynamic(bitstring())` only from 1.20; earlier
+      # versions record `dynamic(binary())` and lack the `Descr.bitstring/0`
+      # constructor entirely, so this exact-value parity check is 1.20-only.
+      if DescrCompat.bitstring?() do
+        sigs =
+          compile_and_read_sigs("""
+          defmodule ForIntoBinaryFixture do
+            def f(list), do: for(x <- list, into: "", do: to_string(x))
+            def use_f, do: f(["a", "b"])
+          end
+          """)
 
-      recorded = recorded_return(sigs, :use_f)
-      assert Descr.gradual?(recorded)
+        recorded = recorded_return(sigs, :use_f)
+        assert Descr.gradual?(recorded)
 
-      # bitstring is the supertype of binary; the recorded return is
-      # dynamic(bitstring()), which is the sound widening the compiler applies
-      # for Collectable-based `into:` comprehensions.
-      assert Descr.equal?(recorded, Descr.dynamic(Descr.bitstring()))
+        # bitstring is the supertype of binary; the recorded return is
+        # dynamic(bitstring()), which is the sound widening the compiler applies
+        # for Collectable-based `into:` comprehensions.
+        assert Descr.equal?(recorded, Descr.dynamic(Descr.bitstring()))
+      end
     end
 
     # ── 24. multi-clause: argument atom tag selects the right clause ──────────

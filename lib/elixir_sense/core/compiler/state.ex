@@ -918,7 +918,13 @@ defmodule ElixirSense.Core.Compiler.State do
          {kind1, _domain1, clauses1},
          {kind2, _domain2, clauses2}
        ) do
-    merged_kind = if kind1 == :strong or kind2 == :strong, do: :strong, else: :infer
+    # Use pattern-match clauses rather than `==` comparison so dialyzer does not
+    # emit :exact_compare ("'infer' == 'strong' can never be true") when it has
+    # proven kind1/kind2 are always :infer at the current call sites.  The
+    # :strong branch is reachable in principle (ExCk chunks can carry :strong
+    # sigs) and is kept intentionally; the pattern-match form makes the intent
+    # clear to both humans and dialyzer.
+    merged_kind = merge_sig_kind(kind1, kind2)
     merged_clauses = clauses1 ++ clauses2
 
     # Recompute domain as union of all clause arg types
@@ -938,6 +944,14 @@ defmodule ElixirSense.Core.Compiler.State do
 
     {merged_kind, merged_domain, merged_clauses}
   end
+
+  # Promote to :strong if either operand is :strong; otherwise keep :infer.
+  # Expressed as separate clauses (rather than `==` guards) so dialyzer does not
+  # emit :exact_compare when it has proven that the only current callers pass
+  # :infer — the :strong branches are intentionally kept for future callers.
+  defp merge_sig_kind(:strong, _), do: :strong
+  defp merge_sig_kind(_, :strong), do: :strong
+  defp merge_sig_kind(_, _), do: :infer
 
   def add_spec(
         %__MODULE__{} = state,
@@ -1013,8 +1027,25 @@ defmodule ElixirSense.Core.Compiler.State do
   # alias/remote-type expansion the compiler already performed). The unwrapped
   # AST is either `{:when, _, [{:"::", ...}, guards]}` or `{:"::", _, [...]}`,
   # which is exactly what extract_spec_parts/1 matches.
+  #
+  # Building a native (Descr-valued) sig requires the Module.Types backend; on
+  # Elixir < 1.18 (no `Module.Types.Descr` at all) there is nothing to build, so
+  # bail out early. Without this guard, `spec_return_to_descr/3` would invoke
+  # `ElixirTypes.coerce_var_type_public/1` -> `Descr.*` and raise (and even the
+  # rescue clause's `Descr.dynamic()` fallback would itself crash), leaving the
+  # spec unstored.
   defp build_elixir_types_spec_sig(%{module: module}, name, spec_ast, _kind)
        when is_atom(module) and is_atom(name) and is_tuple(spec_ast) do
+    if ElixirTypes.available?() do
+      build_elixir_types_spec_sig_native(module, name, spec_ast)
+    else
+      nil
+    end
+  end
+
+  defp build_elixir_types_spec_sig(_, _, _, _), do: nil
+
+  defp build_elixir_types_spec_sig_native(module, name, spec_ast) do
     with {:ok, {fun_ast, return_ast, guards}} <- extract_spec_parts(spec_ast),
          {^name, _, args} <- fun_ast,
          true <- is_list(args) do
@@ -1031,8 +1062,6 @@ defmodule ElixirSense.Core.Compiler.State do
       _ -> nil
     end
   end
-
-  defp build_elixir_types_spec_sig(_, _, _, _), do: nil
 
   defp extract_spec_parts({:when, _, [{:"::", _, [fun_ast, return_ast]}, guards]}) do
     {:ok, {fun_ast, return_ast, guards}}

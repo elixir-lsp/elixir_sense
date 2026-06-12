@@ -172,6 +172,7 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert TP.render_var(@env, var) == {:ok, ":ok"}
     end
 
+    @tag :requires_native_types
     test "uses the native descriptor only when the structural type is uninformative" do
       # render_descr now gates on enabled?() — requires config set.
       Application.put_env(:elixir_sense, :use_elixir_types, true)
@@ -188,6 +189,7 @@ defmodule ElixirSense.Core.TypePresentationTest do
       end
     end
 
+    @tag :requires_native_types
     test "without use_elixir_types config, native descriptor is skipped" do
       # Without the config flag, render_descr returns :unknown regardless of availability.
       descr = Descr.integer()
@@ -196,6 +198,7 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert TP.render_var(@env, var) == :unknown
     end
 
+    @tag :requires_native_types
     test "structural branch refinement wins over a broader/stale descriptor" do
       # y : binary() | nil; x is `y` with nil subtracted (a later clause).
       y = %VarInfo{version: 2, name: :y, type: {:union, [{:binary, nil}, {:atom, nil}]}}
@@ -322,6 +325,7 @@ defmodule ElixirSense.Core.TypePresentationTest do
     # `use_elixir_types` flag, so it lives in the async: false
     # TypePresentationNativeTest to avoid cross-test interference.
 
+    @tag :requires_native_types
     test "structural narrowing wins over descriptor and is attributed :shape" do
       y = %VarInfo{version: 2, name: :y, type: {:binary, nil}}
 

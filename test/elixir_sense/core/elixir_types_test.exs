@@ -2,6 +2,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
   use ExUnit.Case, async: false
 
   alias ElixirSense.Core.ElixirTypes
+  alias ElixirSense.Test.DescrCompat
 
   describe "availability" do
     test "available?/0 returns boolean" do
@@ -270,9 +271,14 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "handles open map" do
-      # open_map() is the top open map (any map): quotes as `map()`
-      # (`{:map, [], []}`), which carries no open-marker, so its tail is nil.
-      assert ElixirTypes.to_shape(Module.Types.Descr.open_map()) == {:map, [], nil}
+      # open_map() is the top open map (any map). On 1.20 it quotes as `map()`
+      # (`{:map, [], []}`), which carries no open-marker, so its tail is nil; on
+      # 1.18/1.19 the same descr quotes with the `{:..., [], nil}` open marker, so
+      # the tail comes back `:open`. Both are sound representations of "any map".
+      assert ElixirTypes.to_shape(Module.Types.Descr.open_map()) in [
+               {:map, [], nil},
+               {:map, [], :open}
+             ]
 
       # open_map with atom key fields: known fields are extracted AND the open
       # tail is preserved (`:open`) — the quoted form carries the `{:..., [], nil}`
@@ -302,14 +308,18 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       # a `nil` (PARTIAL) tail, never `:closed`. The `:closed` coercion path
       # (maybe_closed_map_descr) refuses to close a map with domain keys, and a
       # `nil`-partial tail coerces OPEN anyway, so this is not a soundness hazard.
-      descr =
-        Module.Types.Descr.open_map([
-          {Module.Types.Descr.to_domain_keys(Module.Types.Descr.integer()),
-           Module.Types.Descr.binary()}
-        ])
+      # `Descr.to_domain_keys/1` (and the domain-key map representation it feeds)
+      # is 1.20-only; on 1.18/1.19 there is no domain-keyed map form to exercise.
+      if DescrCompat.to_domain_keys?() do
+        descr =
+          Module.Types.Descr.open_map([
+            {Module.Types.Descr.to_domain_keys(Module.Types.Descr.integer()),
+             Module.Types.Descr.binary()}
+          ])
 
-      assert {:map, fields, nil} = ElixirTypes.to_shape(descr)
-      assert {{:domain, {:integer, nil}}, {:binary, nil}} in fields
+        assert {:map, fields, nil} = ElixirTypes.to_shape(descr)
+        assert {{:domain, {:integer, nil}}, {:binary, nil}} in fields
+      end
     end
 
     test "handles open tuple" do
@@ -519,13 +529,13 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       # open: the upper bound admits maps with OTHER keys, so it is a supertype of
       # the closed map %{a: integer()}.
       assert Descr.subtype?(
-               Descr.upper_bound(Descr.closed_map(a: Descr.integer())),
-               Descr.upper_bound(coerced)
+               DescrCompat.upper_bound(Descr.closed_map(a: Descr.integer())),
+               DescrCompat.upper_bound(coerced)
              )
 
       # ...and STRICTLY a supertype: an open map with another key is admitted.
       with_other = Descr.closed_map(a: Descr.integer(), b: Descr.binary())
-      assert Descr.subtype?(Descr.upper_bound(with_other), Descr.upper_bound(coerced))
+      assert Descr.subtype?(DescrCompat.upper_bound(with_other), DescrCompat.upper_bound(coerced))
     end
 
     test "a :closed-tail map coerces to a CLOSED map BY DEFAULT" do
@@ -534,13 +544,13 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       coerced = ElixirTypes.coerce_var_type_public(shape)
       # closed: still a (dynamic-wrapped) supertype of the closed original...
       assert Descr.subtype?(
-               Descr.upper_bound(Descr.closed_map(a: Descr.integer())),
-               Descr.upper_bound(coerced)
+               DescrCompat.upper_bound(Descr.closed_map(a: Descr.integer())),
+               DescrCompat.upper_bound(coerced)
              )
 
       # ...but NOT of an open map / a map with another key (it excludes them).
       with_other = Descr.closed_map(a: Descr.integer(), b: Descr.binary())
-      refute Descr.subtype?(Descr.upper_bound(with_other), Descr.upper_bound(coerced))
+      refute Descr.subtype?(DescrCompat.upper_bound(with_other), DescrCompat.upper_bound(coerced))
     end
 
     test "the deprecated :closed_literals opt is a no-op (nil-tail stays OPEN)" do
@@ -549,7 +559,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       coerced = ElixirTypes.coerce_var_type_public(shape, closed_literals: true)
       # nil is PARTIAL now; the opt must NOT close it.
       with_other = Descr.closed_map(a: Descr.integer(), b: Descr.binary())
-      assert Descr.subtype?(Descr.upper_bound(with_other), Descr.upper_bound(coerced))
+      assert Descr.subtype?(DescrCompat.upper_bound(with_other), DescrCompat.upper_bound(coerced))
     end
 
     test "an :open-tail map coerces OPEN" do
@@ -557,7 +567,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
       coerced = ElixirTypes.coerce_var_type_public(shape)
       with_other = Descr.closed_map(a: Descr.integer(), b: Descr.binary())
-      assert Descr.subtype?(Descr.upper_bound(with_other), Descr.upper_bound(coerced))
+      assert Descr.subtype?(DescrCompat.upper_bound(with_other), DescrCompat.upper_bound(coerced))
     end
 
     test "an empty :closed map coerces to the empty closed map %{}" do
@@ -567,11 +577,14 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       # The empty closed map admits ONLY %{}, so it is NOT a supertype of a
       # non-empty map.
       refute Descr.subtype?(
-               Descr.upper_bound(Descr.closed_map(a: Descr.integer())),
-               Descr.upper_bound(coerced)
+               DescrCompat.upper_bound(Descr.closed_map(a: Descr.integer())),
+               DescrCompat.upper_bound(coerced)
              )
 
-      assert Descr.subtype?(Descr.upper_bound(Descr.empty_map()), Descr.upper_bound(coerced))
+      assert Descr.subtype?(
+               DescrCompat.upper_bound(Descr.empty_map()),
+               DescrCompat.upper_bound(coerced)
+             )
     end
 
     test "a domain-keyed map round-trips to a nil (partial) tail and coerces OPEN" do
@@ -583,8 +596,8 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       # Domain keys are dropped by coercion, so the closed variant would be the
       # empty map; staying OPEN means a non-empty map is still admitted.
       assert Descr.subtype?(
-               Descr.upper_bound(Descr.closed_map(a: Descr.integer())),
-               Descr.upper_bound(coerced)
+               DescrCompat.upper_bound(Descr.closed_map(a: Descr.integer())),
+               DescrCompat.upper_bound(coerced)
              )
     end
 
@@ -744,10 +757,22 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       result = ElixirTypes.of_expr(map_ast)
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
-      assert {:map, fields, nil} = shape
-      # the string key is generalized to a binary() domain key, now preserved
-      # alongside the atom key (previously the domain key was dropped)
-      assert fields == [{{:domain, {:binary, nil}}, {:binary, nil}}, {:key, {:atom, :value}}]
+
+      # 1.20 models the string key as a `binary() => binary()` DOMAIN key,
+      # preserved alongside the atom key with a `nil` (partial) tail. 1.19 has no
+      # domain-key map representation, so it surfaces only the atom key and an
+      # `:open` tail (the string key widens openness). Accept the
+      # version-appropriate form via the `to_domain_keys/1` capability probe.
+      if DescrCompat.to_domain_keys?() do
+        assert {:map, fields, nil} = shape
+
+        assert fields == [
+                 {{:domain, {:binary, nil}}, {:binary, nil}},
+                 {:key, {:atom, :value}}
+               ]
+      else
+        assert {:map, [key: {:atom, :value}], :open} = shape
+      end
     end
 
     test "types struct AST" do
@@ -1009,6 +1034,9 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       end
     end
 
+    # `of_expr` public typing needs the expected-type API (1.19+); on 1.18 it
+    # returns :error by design (expression typing stays on the custom engine).
+    @tag :requires_expected_type_native
     test "task #11: distinct unversioned named vars in a body don't alias" do
       # `foo + bar` — two distinct unversioned names. Before the fix both were
       # stamped version 0 and collapsed into one context slot. With the fix they

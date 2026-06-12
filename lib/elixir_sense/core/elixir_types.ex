@@ -2289,7 +2289,16 @@ defmodule ElixirSense.Core.ElixirTypes do
   # Map-field values preserve optionality: an {:optional, inner} shape coerces
   # to if_set(inner) so maps lacking the key stay included in the descr (the
   # compiler-parity round-trip caught the unwrapping as a soundness loss).
-  defp coerce_field_value({:optional, inner}), do: Descr.if_set(coerce_var_type(inner))
+  #
+  # IMPORTANT: apply `if_set/1` to the *static* inner descr, NOT to the
+  # `dynamic()`-wrapped one. On Elixir 1.18 `if_set(dynamic(t))` silently DROPS
+  # the optional marker (renders `foo: t` instead of `foo: if_set(t)`), losing
+  # soundness — only `dynamic(if_set(t))` / `if_set(static_t)` keeps it. The map
+  # itself is `dynamic()`-wrapped as a whole (`coerce_var_type/1` on the map
+  # shape), so gradualness is already represented at the map level; the per-field
+  # value only needs the static type under `if_set`. 1.19/1.20 are unaffected
+  # (their `if_set(dynamic(t))` preserves the marker), so this is uniformly safe.
+  defp coerce_field_value({:optional, inner}), do: Descr.if_set(coerce_static_descr(inner))
   defp coerce_field_value(v), do: coerce_var_type(v)
 
   # Build a struct descriptor. task #10: when the struct module is loaded we can

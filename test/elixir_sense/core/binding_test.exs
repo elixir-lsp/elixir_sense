@@ -1918,6 +1918,7 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    @tag :requires_native_types
     test "local call metadata fun with default args returning struct" do
       env =
         @env
@@ -3342,6 +3343,7 @@ defmodule ElixirSense.Core.BindingTest do
   end
 
   describe "descr-backed intersection (native on, exact shapes)" do
+    @describetag :requires_native_types
     # Consolidated backlog P2 2.2 / GPT P1: when native typing is enabled AND both
     # operands are `descr_exact?` shape kinds, intersection delegates to the real
     # `Module.Types.Descr.intersection/2`, which is strictly more faithful than the
@@ -4193,6 +4195,7 @@ defmodule ElixirSense.Core.BindingTest do
   end
 
   describe "descr-backed covers?/disjointness/union dedup (native on, exact shapes)" do
+    @describetag :requires_native_types
     # GPT round-5 P1 items 1-3: when native typing is enabled AND both operands
     # are `descr_exact?` shapes, subsumption (`covers?`) delegates to the faithful
     # `Descr.subtype?/2`, the intersection conservative fallback uses

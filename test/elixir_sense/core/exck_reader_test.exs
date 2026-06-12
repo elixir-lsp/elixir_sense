@@ -81,8 +81,9 @@ defmodule ElixirSense.Core.ExCkReaderTest do
     end
 
     test "accepts a chunk whose version tag matches the running runtime" do
-      # Get the real running tag so we can build a matching chunk.
-      real_tag = :elixir_erl.checker_version()
+      # Get the real running tag so we can build a matching chunk. Use the
+      # reader's portable detection (1.18 doesn't export :elixir_erl.checker_version/0).
+      real_tag = ExCkReader.runtime_checker_version()
 
       # Build a minimal valid chunk with no exports.
       contents = %{exports: []}
@@ -128,7 +129,7 @@ defmodule ElixirSense.Core.ExCkReaderTest do
     test "correctly skips a chunk whose size is ≡ 2 (mod 4)" do
       # size 6 ≡ 2 (mod 4) — old rem(size, 2)=0 code would NOT pad, leaving
       # the scanner misaligned into the middle of the data.
-      tag = :elixir_erl.checker_version()
+      tag = ExCkReader.runtime_checker_version()
       beam = build_beam_binary("FAKE", 6, tag)
 
       assert {:ok, payload} =

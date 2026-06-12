@@ -2026,14 +2026,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      # Regression: reduce comprehensions were mistyped as {:list, nil}.
-      assert Enum.find(get_line_vars(state, 8), &(&1.name == :x)).type ==
-               {:union,
-                [
-                  {:map, [], :closed},
-                  {:call, {:atom, Map}, :put,
-                   [{:variable, :acc, 2}, {:variable, :i, 1}, {:integer, 1}]}
-                ]}
+      # Regression: reduce comprehensions were mistyped as {:list, nil}. The
+      # result is the union of the seed (`%{}` -> closed map) and the clause body
+      # (a `Map.put` call). The exact rendering of the body call differs by
+      # Elixir version: 1.20 keeps `Map.put(acc, i, 1)`, while 1.18 expands the
+      # `Map.put/3` macro to `:maps.put(i, 1, acc)`. Assert the union shape
+      # robustly — the seed element plus a `:put` call — rather than the
+      # version-specific call form.
+      x_type = Enum.find(get_line_vars(state, 8), &(&1.name == :x)).type
+
+      assert {:union, [{:map, [], :closed}, {:call, {:atom, mod}, :put, _args}]} = x_type
+      assert mod in [Map, :maps]
     end
 
     test "for filter narrows tested generator vars in the body" do

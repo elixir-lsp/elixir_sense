@@ -223,8 +223,18 @@ defmodule ElixirSense.Core.ExCkReader do
   # once per VM lifetime, without depending on the ETS table being available.
   @persistent_term_key {__MODULE__, :checker_version}
 
-  @spec runtime_checker_version() :: atom()
-  defp runtime_checker_version do
+  @doc """
+  Returns the running runtime's ExCk checker version tag (e.g.
+  `:elixir_checker_v2`), or `nil` if it cannot be determined.
+
+  Detected once and memoized in `:persistent_term`. Prefers
+  `:elixir_erl.checker_version/0` when exported (older Elixir, e.g. 1.18, does
+  not export it), otherwise probes by compiling a tiny module and reading its
+  ExCk tag. Exposed so callers/tests can build version-matching chunks without
+  depending on the private `:elixir_erl` API directly.
+  """
+  @spec runtime_checker_version() :: atom() | nil
+  def runtime_checker_version do
     case :persistent_term.get(@persistent_term_key, :not_set) do
       :not_set ->
         version = detect_checker_version()
@@ -238,23 +248,33 @@ defmodule ElixirSense.Core.ExCkReader do
     end
   end
 
-  @spec detect_checker_version() :: atom()
+  @spec detect_checker_version() :: atom() | nil
   defp detect_checker_version do
+    # `:elixir_erl.checker_version/0` is an internal Elixir API that does not
+    # exist before ~1.19, so a literal call would emit an undefined-function
+    # compile warning on 1.16/1.17/1.18. Dispatch via `apply/3` so the call is
+    # resolved at runtime only when `function_exported?/3` confirms it; otherwise
+    # fall back to compiling a probe module and reading its ExCk tag.
     if :erlang.function_exported(:elixir_erl, :checker_version, 0) do
-      :elixir_erl.checker_version()
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
+      apply(:elixir_erl, :checker_version, [])
     else
       probe_checker_version()
     end
   end
 
   # Fallback: compile a minimal module and extract its ExCk tag.
+  #
+  # NOTE: `defmodule Foo` defines the module `Elixir.Foo`, so the compiled
+  # module name is NOT the bare `:"ExCkProbe_<n>"` atom we interpolate — it is
+  # `:"Elixir.ExCkProbe_<n>"`. We therefore must NOT pin the probe atom against
+  # the compiled module name (that match never succeeds and silently disables
+  # detection); we take whatever single module `Code.compile_string/1` returns.
   defp probe_checker_version do
-    unique = :"ExCkProbe_#{:erlang.unique_integer([:positive])}"
-
-    src = "defmodule #{unique} do end"
+    src = "defmodule ExCkProbe_#{:erlang.unique_integer([:positive])} do end"
 
     case Code.compile_string(src) do
-      [{^unique, beam}] ->
+      [{_module, beam} | _] ->
         case :beam_lib.chunks(beam, [@chunk_id]) do
           {:ok, {_, [{@chunk_id, chunk}]}} ->
             case :erlang.binary_to_term(chunk) do
@@ -303,7 +323,7 @@ defmodule ElixirSense.Core.ExCkReader do
         {{fun, arity}, info}, acc when is_atom(fun) and is_integer(arity) and is_map(info) ->
           case Map.get(info, :sig) do
             nil -> acc
-            _ -> Map.put(acc, {fun, arity}, info)
+            sig -> Map.put(acc, {fun, arity}, %{info | sig: normalize_sig(sig)})
           end
 
         _, acc ->
@@ -314,6 +334,24 @@ defmodule ElixirSense.Core.ExCkReader do
   end
 
   defp do_extract_signatures(_), do: {:error, :invalid_payload}
+
+  # Normalize the ExCk `:sig` field to the 3-tuple `{kind, domain, clauses}`
+  # shape the rest of ElixirSense consumes.
+  #
+  # Elixir 1.18 records inferred signatures as 2-TUPLES — `{:infer, clauses}` /
+  # `{:strong, clauses}` (Module.Types `inferred = {:infer, clauses}`, types.ex)
+  # — with NO domain element. Elixir 1.19/1.20 added the leading domain element,
+  # giving `{kind, domain, clauses}`. We canonicalize the 2-tuple form to
+  # `{kind, nil, clauses}` (domain `nil` = "unknown"); `apply_signature/2`
+  # tolerates a `nil` domain (it never inspects the domain on the `:infer` path,
+  # and treats a `nil`-domained `:strong` sig as having no static domain to
+  # violate). This is the single boundary where 1.18 chunks are made to look like
+  # 1.19/1.20 chunks, so downstream code stays version-agnostic.
+  defp normalize_sig({kind, clauses}) when kind in [:infer, :strong] and is_list(clauses) do
+    {kind, nil, clauses}
+  end
+
+  defp normalize_sig(sig), do: sig
 
   # --- Cache --------------------------------------------------------------------
 
@@ -450,7 +488,10 @@ defmodule ElixirSense.Core.ExCkReader do
   end
 
   defp create_table(retries) do
-    :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
+    # Bind the return value to silence dialyzer's unmatched_return warning.
+    # With :named_table the table is looked up by the atom name; the tid is not
+    # needed but must be consumed so dialyzer does not flag it.
+    _tid = :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
     :ok
   rescue
     ArgumentError ->

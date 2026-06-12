@@ -546,9 +546,9 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
 
     if ElixirTypes.available?() do
       # The native seed types `acc` from the `reduce:` initial value `%{}`,
-      # which is the closed empty map — rendered with the compiler's
-      # `empty_map()` spelling (previously conflated with `map()`).
-      assert hint(code, :acc, {4, 9}) == {:ok, "empty_map()"}
+      # which is the closed empty map — 1.20 renders it with the dedicated
+      # `empty_map()` spelling; 1.18/1.19 render the same type as `map()`.
+      assert hint(code, :acc, {4, 9}) in [{:ok, "empty_map()"}, {:ok, "map()"}]
     end
   end
 
@@ -582,13 +582,21 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     end
     """
 
-    assert hint(code, :x, {4, 5}) == {:ok, "non_empty_list(integer(), :a)"}
+    # 1.20 widens the head element to `integer()`; 1.18/1.19's native typing
+    # keeps the literal `1` in the rendered improper-list element. Both are sound
+    # (the literal is a subtype of integer()).
+    assert hint(code, :x, {4, 5}) in [
+             {:ok, "non_empty_list(integer(), :a)"},
+             {:ok, "non_empty_list(1, :a)"}
+           ]
   end
 
   test "native-on: `[proper] ++ non_list` renders an improper non_empty_list" do
     # The ++ thunk resolves end-to-end: a non-empty proper LHS appended with a
     # non-list RHS is a non-empty improper list (3-tuple), rendered with the
-    # compiler's `non_empty_list(elem, tail)` spelling.
+    # compiler's `non_empty_list(elem, tail)` spelling. Resolving the `++`
+    # application return needs the expected-type expression API (1.19+); on 1.18
+    # the hint pipeline declines (:skip), so this assertion is gated on `:expr`.
     code = """
     defmodule M do
       def f do
@@ -598,6 +606,11 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     end
     """
 
-    assert hint(code, :x, {4, 5}) == {:ok, "non_empty_list(integer(), :a)"}
+    if ElixirTypes.available?(:expr) do
+      assert hint(code, :x, {4, 5}) in [
+               {:ok, "non_empty_list(integer(), :a)"},
+               {:ok, "non_empty_list(1, :a)"}
+             ]
+    end
   end
 end
