@@ -1105,10 +1105,12 @@ defmodule ElixirSense.Core.Compiler.State do
     # re-traverses substituted output: a (directly or transitively) recursive guard
     # such as `when opt: [term :: opt]` would expand `opt` forever, building an
     # ever-growing AST until the process OOMs. We instead walk the AST manually and
-    # track the set of guard vars currently being expanded; a var already on the
-    # expansion path is left as-is, which breaks self-referential and mutually
-    # recursive guards while still expanding every other guard var.
-    do_substitute_spec_vars(type_ast, guard_map, MapSet.new())
+    # track the set of guard vars currently being expanded (a plain map used as a
+    # set — MapSet is dialyzer-opaque and trips call_without_opaque downstream);
+    # a var already on the expansion path is left as-is, which breaks
+    # self-referential and mutually recursive guards while still expanding every
+    # other guard var.
+    do_substitute_spec_vars(type_ast, guard_map, %{})
   end
 
   defp substitute_spec_vars(type_ast, _guards), do: type_ast
@@ -1117,11 +1119,11 @@ defmodule ElixirSense.Core.Compiler.State do
        when is_atom(name) do
     case guard_map do
       %{^name => replacement} ->
-        if MapSet.member?(in_progress, name) do
+        if Map.has_key?(in_progress, name) do
           # recursive guard reference — stop expanding to avoid infinite growth
           ast
         else
-          do_substitute_spec_vars(replacement, guard_map, MapSet.put(in_progress, name))
+          do_substitute_spec_vars(replacement, guard_map, Map.put(in_progress, name, true))
         end
 
       _ ->
