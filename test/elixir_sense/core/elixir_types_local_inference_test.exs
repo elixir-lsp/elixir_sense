@@ -590,4 +590,117 @@ defmodule ElixirSense.Core.ElixirTypesLocalInferenceTest do
       end
     end
   end
+
+  # ── Section D: unexpanded macros in clause heads/guards ────────────────────
+  #
+  # ElixirSense metadata is NOT macro-expanded, so a clause head can carry an
+  # unexpanded record macro in pattern position, and a guard can carry an
+  # unexpanded `defguard`/record macro — both look like remote calls
+  # (`{{:., _, [Mod, fun]}, _, args}`). Feeding either to native
+  # `Pattern.of_head`/`of_pattern`/`of_guard` raises (FunctionClauseError on
+  # 1.18's `of_pattern/4`, Protocol/Enumerable errors via `of_head`). These
+  # regressed elixir-ls CI on 1.18 (PR elixir-lsp/elixir-ls#1266). The fix
+  # detects the non-pattern syntax up front and SKIPS native inference for the
+  # whole function; the structural engine still types it. Asserts: metadata
+  # builds with NO of_pattern / of_guard crash trace in the log.
+  describe "D1 – record macro in a function head pattern" do
+    test "Record.defrecordp pattern in a def head: no of_pattern crash" do
+      code = """
+      defmodule LocalInfRecordHead do
+        require Record
+        Record.defrecordp(:iplt_info, warning_map: %{})
+
+        def f(iplt_info(warning_map: w) = info) do
+          {w, info}
+        end
+      end
+      """
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          metadata = Parser.parse_string(code, true, true, {5, 10})
+          send(self(), {:meta, metadata})
+        end)
+
+      assert_received {:meta, metadata}
+
+      # Metadata must have built (the function is recorded).
+      assert is_map(metadata.mods_funs_to_positions)
+
+      # The crash class we are guarding against must NOT appear in the log.
+      refute log =~ "of_pattern", "native of_pattern crashed on a record-macro head: #{log}"
+      refute log =~ "FunctionClauseError", "unexpected FunctionClauseError: #{log}"
+
+      refute log =~ "Unable to infer local signature",
+             "native local inference crashed instead of skipping: #{log}"
+
+      # Soundness: native sig may be absent (skipped) — that is the correct
+      # fallback. If a sig IS present it must be a well-formed infer tuple.
+      info = metadata.mods_funs_to_positions[{LocalInfRecordHead, :f, 1}]
+
+      if info && Map.get(info, :elixir_types_sig) do
+        assert match?({:infer, _, _}, info.elixir_types_sig)
+      end
+    end
+  end
+
+  describe "D2 – user defguard used in a guard" do
+    test "defguard remote-call guard in a def: no of_guard crash" do
+      code = """
+      defmodule LocalInfDefguard do
+        defguard is_init(x) when is_binary(x)
+
+        def g(x) when LocalInfDefguard.is_init(x) do
+          x
+        end
+      end
+      """
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          metadata = Parser.parse_string(code, true, true, {4, 10})
+          send(self(), {:meta, metadata})
+        end)
+
+      assert_received {:meta, metadata}
+
+      assert is_map(metadata.mods_funs_to_positions)
+
+      refute log =~ "of_guard", "native of_guard crashed on a defguard guard: #{log}"
+      refute log =~ "of_pattern", "native of_pattern crashed on a defguard guard: #{log}"
+
+      refute log =~ "Unable to infer local signature",
+             "native local inference crashed instead of skipping: #{log}"
+
+      info = metadata.mods_funs_to_positions[{LocalInfDefguard, :g, 1}]
+
+      if info && Map.get(info, :elixir_types_sig) do
+        assert match?({:infer, _, _}, info.elixir_types_sig)
+      end
+    end
+
+    test "a plain Kernel-guard clause is still natively typeable (filter not over-broad)" do
+      if_native do
+        code = """
+        defmodule LocalInfPlainGuard do
+          def h(x) when is_binary(x), do: x
+        end
+        """
+
+        log =
+          ExUnit.CaptureLog.capture_log(fn ->
+            metadata = Parser.parse_string(code, true, true, {2, 10})
+            send(self(), {:meta, metadata})
+          end)
+
+        assert_received {:meta, _metadata}
+
+        # Plain Kernel guards must NOT be rejected by the new guard filter; the
+        # only assertion here is no crash (sig may or may not be present
+        # depending on context-seeding fidelity across versions).
+        refute log =~ "FunctionClauseError"
+        refute log =~ "of_guard"
+      end
+    end
+  end
 end

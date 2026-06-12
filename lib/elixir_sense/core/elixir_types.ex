@@ -909,6 +909,51 @@ defmodule ElixirSense.Core.ElixirTypes do
 
   defp pattern_node_ok?(_node), do: true
 
+  # True if every node of a guard expression is something native `of_guard` can
+  # type. The metadata expander rewrites Kernel guard BIFs (`is_integer`,
+  # `is_binary`, …) to `:erlang`-qualified remote calls
+  # (`{{:., _, [:erlang, :is_integer]}, _, args}`) — those are the ONLY remote
+  # calls a real compiled guard contains and native `of_guard` handles them.
+  #
+  # A guard that references a user `defguard` or an Erlang record macro is NOT
+  # macro-expanded by ElixirSense (records/defguards stay as written), so it
+  # reaches us as an UNEXPANDED remote call to a user MODULE — e.g.
+  # `not Server.is_initialized(x)` →
+  # `{:not, _, [{{:., _, [Server, :is_initialized]}, _, [x]}]}`. Native
+  # `Pattern.of_guard`/`of_head` raises on those (FunctionClauseError /
+  # Protocol/Enumerable errors). Unlike patterns, guards LEGITIMATELY contain
+  # local calls/operators (`not`, `and`, `>`, …) and `:erlang` remotes, so we
+  # reject only the crash classes: non-`:erlang` remote calls and typespec
+  # operators.
+  defp native_typeable_guard?(ast) do
+    {_ast, safe?} =
+      Macro.prewalk(ast, true, fn node, acc -> {node, acc and guard_node_ok?(node)} end)
+
+    safe?
+  end
+
+  # `:erlang`-qualified guard BIFs are the expanded form of Kernel guards and are
+  # safe.
+  defp guard_node_ok?({{:., _, [:erlang, _fun]}, _, _}), do: true
+
+  # any other remote call `Mod.fun(...)` — an unexpanded record/defguard macro;
+  # of_guard can't type it.
+  defp guard_node_ok?({{:., _, _}, _, _}), do: false
+
+  # typespec operators are never valid in a real guard either.
+  defp guard_node_ok?({form, _meta, args}) when is_list(args) and form in [:"::", :|], do: false
+
+  defp guard_node_ok?(_node), do: true
+
+  # A clause is native-typeable only when every argument pattern AND every guard
+  # expression is native-typeable. Guards are stored as a list (one entry per
+  # `when … when …` branch, see Utils.extract_guards/1); `nil`/`[]` means no
+  # guard.
+  defp native_typeable_clause?(args, guards) do
+    Enum.all?(args, &native_typeable_pattern?/1) and
+      Enum.all?(List.wrap(guards), &native_typeable_guard?/1)
+  end
+
   # Enhanced pattern matching with better variable type refinement
   defp perform_enhanced_match(
          pattern_ast,
@@ -2508,6 +2553,32 @@ defmodule ElixirSense.Core.ElixirTypes do
   end
 
   defp do_infer_local_signature(stack, context, clauses, expected, fun_arity) do
+    # ElixirSense metadata is NOT macro-expanded, so a clause head can contain an
+    # unexpanded record macro in pattern position (`iplt_info(warning_map: w) =
+    # info`) or an unexpanded `defguard`/record-macro in a guard
+    # (`not Server.is_initialized(x)`). Feeding either to native
+    # `Pattern.of_head`/`of_pattern`/`of_guard` raises (FunctionClauseError /
+    # Protocol.UndefinedError). We detect these SYNTACTICALLY and bail out.
+    #
+    # Skip granularity: when ANY clause is untypeable we skip the WHOLE function's
+    # native signature (return [] → infer_local_signature/5 yields :error and the
+    # structural engine handles the function). Skipping only the offending clause
+    # would silently drop it from build_domain / the clause-types union, producing
+    # a signature with a MISSING clause that is unsound for overload selection —
+    # worse than no native signature at all.
+    if Enum.all?(clauses, &clause_native_typeable?/1) do
+      reduce_local_clauses(stack, context, clauses, expected, fun_arity)
+    else
+      []
+    end
+  end
+
+  defp clause_native_typeable?(clause) do
+    %{args: args, guards: guards} = normalise_clause(clause)
+    native_typeable_clause?(args, guards)
+  end
+
+  defp reduce_local_clauses(stack, context, clauses, expected, fun_arity) do
     Enum.reduce_while(clauses, [], fn clause, acc ->
       %{meta: meta, args: args, guards: guards, body: body} = normalise_clause(clause)
       body = body |> ensure_body_var_versions() |> replace_module_attributes()
