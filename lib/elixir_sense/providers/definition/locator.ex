@@ -321,25 +321,20 @@ defmodule ElixirSense.Providers.Definition.Locator do
     end
   end
 
-  # When a function's recorded definition sits on a `use SomeModule` line, the
-  # function was injected by `SomeModule.__using__/1`. In that case we try to
-  # locate the real definition (def/defmacro/defdelegate/defguard) inside that
-  # macro body and point there.
+  # When a function was injected by a `__using__/1` macro, try to locate the
+  # real definition (def/defmacro/defdelegate/defguard) inside that macro body.
   #
-  # Two guards keep this from misfiring:
+  # The search is bounded to `__using__/1` bodies, so an unrelated `def` of
+  # the same name elsewhere in the used module's file is never matched — and a
+  # locally overridden function won't be found inside `__using__` either, so
+  # the fallback `|| location` in the caller preserves the local definition.
   #
-  #   * the `use`-site check (`use_site?/3`) — a genuine local or remote `def`
-  #     has its position on its own definition line, which is not a `use`
-  #     statement, so we leave it untouched (this is what makes a locally
-  #     overridden function resolve to the local definition, not the injected
-  #     one);
-  #   * the search is bounded to the `__using__/1` body, so an unrelated `def`
-  #     of the same name elsewhere in the used module's file is never matched.
-  #
-  # The set of used modules comes from the tracked `uses` (resolved at macro
-  # expansion time, so aliases and `Kernel.use/1` are handled correctly).
+  # `use_site?/3` is a cheap regex gate that rejects the vast majority of
+  # ordinary definitions (whose recorded line is a `def`, not a `use`),
+  # keeping the expensive source parse in `used_modules/3` off the hot path.
   defp redirect_into_using_macro(location, mod, fun, metadata) do
-    with [_ | _] = used_modules <- used_modules(location, mod, metadata) do
+    with true <- use_site?(location, metadata),
+         [_ | _] = used_modules <- used_modules(location, mod, metadata) do
       Enum.find_value(used_modules, fn mod ->
         with %Location{file: file, line: l, end_line: el} when not is_nil(file) <-
                Location.find_mod_fun_source(mod, :__using__, :any) do
@@ -351,8 +346,32 @@ defmodule ElixirSense.Providers.Definition.Locator do
     end
   end
 
+  # Does the function's recorded definition line look like a `use` statement?
+  @use_line_detector ~r/^\s*(?:Kernel\s*\.\s*)?use[\s(]/
+
+  defp use_site?(%Location{line: line} = location, metadata) do
+    source =
+      case location.file do
+        nil ->
+          metadata.source
+
+        file ->
+          case File.read(file) do
+            {:ok, content} -> content
+            _ -> nil
+          end
+      end
+
+    with text when is_binary(text) <- source && Enum.at(Source.split_lines(source), line - 1) do
+      Regex.match?(@use_line_detector, text)
+    else
+      _ -> false
+    end
+  end
+
   # Modules `mod` uses, resolved at expansion time. For the current buffer they
-  # are in `metadata.uses`; for an external module we parse its source.
+  # are in `metadata.uses` (cheap map lookup); for an external module we must
+  # parse its source (expensive — guarded by `use_site?` in the caller).
   defp used_modules(%Location{file: nil}, mod, metadata) do
     Map.get(metadata.uses, mod, [])
   end
