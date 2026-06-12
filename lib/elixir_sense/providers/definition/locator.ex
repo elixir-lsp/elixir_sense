@@ -321,24 +321,34 @@ defmodule ElixirSense.Providers.Definition.Locator do
     end
   end
 
-  # When a function was injected by a `__using__/1` macro, try to locate the
-  # real definition (def/defmacro/defdelegate/defguard) inside that macro body.
+  # When a function's recorded definition sits on a `use SomeModule` line, the
+  # function was injected by `SomeModule.__using__/1`. In that case we try to
+  # locate the real definition (def/defmacro/defdelegate/defguard) inside that
+  # macro body and point there.
   #
-  # The search is bounded to `__using__/1` bodies, so an unrelated `def` of
-  # the same name elsewhere in the used module's file is never matched — and a
-  # locally overridden function won't be found inside `__using__` either, so
-  # the fallback `|| location` in the caller preserves the local definition.
+  # Two guards keep this from misfiring:
   #
-  # `use_site?/3` is a cheap regex gate that rejects the vast majority of
-  # ordinary definitions (whose recorded line is a `def`, not a `use`),
-  # keeping the expensive source parse in `used_modules/3` off the hot path.
-  defp redirect_into_using_macro(location, mod, fun, metadata) do
-    with true <- use_site?(location, metadata),
+  #   * the `use`-site check (`use_site?/3`) — a genuine local or remote `def`
+  #     has its position on its own definition line, which is not a `use`
+  #     statement, so we leave it untouched (this is what makes a locally
+  #     overridden function resolve to the local definition, not the injected
+  #     one);
+  #   * the search is bounded to the `__using__/1` body, so an unrelated `def`
+  #     of the same name elsewhere in the used module's file is never matched.
+  #
+  # The set of used modules comes from the tracked `uses` (resolved at macro
+  # expansion time, so aliases and `Kernel.use/1` are handled correctly).
+  defp redirect_into_using_macro(%Location{line: line} = location, mod, fun, metadata) do
+    with true <- use_site?(location, metadata, line),
          [_ | _] = used_modules <- used_modules(location, mod, metadata) do
-      Enum.find_value(used_modules, fn mod ->
-        with %Location{file: file, line: l, end_line: el} when not is_nil(file) <-
-               Location.find_mod_fun_source(mod, :__using__, :any) do
-          search_using_body(file, l, el, fun)
+      Enum.find_value(used_modules, fn used_module ->
+        case Location.find_mod_fun_source(used_module, :__using__, :any) do
+          %Location{file: file, line: using_line, end_line: using_end_line}
+          when not is_nil(file) ->
+            find_def_in_using_body(file, using_line, using_end_line, fun)
+
+          _ ->
+            nil
         end
       end)
     else
@@ -346,23 +356,16 @@ defmodule ElixirSense.Providers.Definition.Locator do
     end
   end
 
-  # Does the function's recorded definition line look like a `use` statement?
+  defp redirect_into_using_macro(_location, _mod, _fun, _metadata), do: nil
+
+  # Does the recorded definition sit on a `use Foo` / `Kernel.use(Foo)` line?
+  # We match with a regex rather than `Code.string_to_quoted` because a `use`
+  # may span multiple lines (`use Foo,\n  opt: 1`), making the first line
+  # unparseable on its own.
   @use_line_detector ~r/^\s*(?:Kernel\s*\.\s*)?use[\s(]/
-
-  defp use_site?(%Location{line: line} = location, metadata) do
-    source =
-      case location.file do
-        nil ->
-          metadata.source
-
-        file ->
-          case File.read(file) do
-            {:ok, content} -> content
-            _ -> nil
-          end
-      end
-
-    with text when is_binary(text) <- source && Enum.at(Source.split_lines(source), line - 1) do
+  defp use_site?(location, metadata, line) do
+    with source when is_binary(source) <- location_source(location, metadata),
+         text when is_binary(text) <- Enum.at(Source.split_lines(source), line - 1) do
       Regex.match?(@use_line_detector, text)
     else
       _ -> false
@@ -370,8 +373,9 @@ defmodule ElixirSense.Providers.Definition.Locator do
   end
 
   # Modules `mod` uses, resolved at expansion time. For the current buffer they
-  # are in `metadata.uses` (cheap map lookup); for an external module we must
-  # parse its source (expensive — guarded by `use_site?` in the caller).
+  # are in `metadata.uses`; for an external module we parse its source (only
+  # reached once we already know the position is a `use` site, so this is not
+  # on the hot path of ordinary remote lookups).
   defp used_modules(%Location{file: nil}, mod, metadata) do
     Map.get(metadata.uses, mod, [])
   end
@@ -387,54 +391,53 @@ defmodule ElixirSense.Providers.Definition.Locator do
     end
   end
 
-  defp body_lines(file, using_line, using_end_line) do
-    case File.read(file) do
-      {:ok, content} ->
-        content
-        |> Source.split_lines()
-        |> Enum.slice((using_line - 1)..(using_end_line - 1)//1)
+  # Source text backing the location: the in-memory buffer for the current
+  # module (file == nil), or the file contents for an external module.
+  defp location_source(%Location{file: nil}, metadata), do: metadata.source
 
-      _ ->
-        []
+  defp location_source(%Location{file: file}, _metadata) do
+    case File.read(file) do
+      {:ok, content} -> content
+      _ -> nil
     end
   end
-
-  defp comment_line?(line_text), do: String.match?(String.trim_leading(line_text), ~r/^#/)
 
   # Search only within the `__using__/1` macro body (between its def line and
   # end line) for the injected definition. Bounding the search to the macro
   # body avoids matching unrelated defs elsewhere in the same file.
-  defp search_using_body(file, using_line, using_end_line, fun) do
-    # Matches public definition forms: def, defmacro, defdelegate, defguard.
-    # The mandatory whitespace after the keyword excludes private variants
-    # (defp/defmacrop/defguardp) and defmodule.
-    regex = ~r/\bdef(?:macro|delegate|guard)?\s+(#{Regex.escape(Atom.to_string(fun))})\b/
+  defp find_def_in_using_body(file, using_line, using_end_line, fun) do
+    case File.read(file) do
+      {:ok, content} ->
+        # Matches public definition forms: def, defmacro, defdelegate, defguard.
+        # The mandatory whitespace after the keyword excludes private variants
+        # (defp/defmacrop/defguardp) and defmodule.
+        regex = ~r/\bdef(?:macro|delegate|guard)?\s+(#{Regex.escape(Atom.to_string(fun))})\b/
 
-    lines = body_lines(file, using_line, using_end_line)
+        content
+        |> Source.split_lines()
+        |> Enum.slice((using_line - 1)..(using_end_line - 1)//1)
+        |> Enum.with_index()
+        |> Enum.find_value(fn {line_text, idx} ->
+          case Regex.run(regex, line_text, return: :index) do
+            [_whole, {name_offset, name_len}] ->
+              target_line = using_line + idx
 
-    lines
-    |> Enum.with_index()
-    |> Enum.find_value(fn {line_text, idx} ->
-      if comment_line?(line_text) do
+              %Location{
+                type: :function,
+                file: file,
+                line: target_line,
+                column: name_offset + 1,
+                end_line: target_line,
+                end_column: name_offset + 1 + name_len
+              }
+
+            _ ->
+              nil
+          end
+        end)
+
+      _ ->
         nil
-      else
-        case Regex.run(regex, line_text, return: :index) do
-          [_whole, {name_offset, name_len}] ->
-            target_line = using_line + idx
-
-            %Location{
-              type: :function,
-              file: file,
-              line: target_line,
-              column: name_offset + 1,
-              end_line: target_line,
-              end_column: name_offset + 1 + name_len
-            }
-
-          _ ->
-            nil
-        end
-      end
-    end)
+    end
   end
 end
