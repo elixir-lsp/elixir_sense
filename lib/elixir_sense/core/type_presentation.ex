@@ -93,24 +93,17 @@ defmodule ElixirSense.Core.TypePresentation do
     end
   end
 
-  # Like `render_var/2` but also reports *which* path produced the displayed
-  # text and (when available) the resolved shape behind it.
+  # Like `render_var/2` but also reports which path produced the text and (when
+  # available) the resolved shape behind it.
   #
-  #   * `:shape`  — the structural engine produced the string (it was
-  #     informative, so it wins over the native descriptor). The resolved shape
-  #     is returned so the hint path can post-process it (literal widening).
+  #   * `:shape`  — the structural engine produced the (informative) string,
+  #     winning over the native descriptor. The resolved shape is returned so the
+  #     hint path can post-process it (literal widening).
   #   * `:native` — the structural type was uninformative and the native
-  #     `Module.Types` descriptor produced the string. The shape is `nil` when
-  #     the exact compiler string (`descr_to_string`) was used (no shape), or the
-  #     `to_shape`-derived shape when that fallback fired.
+  #     descriptor produced the string. The shape is `nil` for the exact compiler
+  #     string path, or the `to_shape`-derived shape when that fallback fired.
   #
-  # `:spec`-derived flows are not cheaply distinguishable from inferred shapes
-  # here (a spec signature is lowered to the same `{:fun_clauses, ...}` /
-  # structural shapes as inference), so they currently surface as `:shape` or
-  # `:native`. `:spec` is reserved and not emitted.
-  #
-  # Returns `{:ok, text, source}` or `:unknown`. (The shape is threaded
-  # separately via `render_var_for_hint/2`.)
+  # Returns `{:ok, text, source}` or `:unknown`.
   defp render_var_sourced(%Binding{} = binding, %VarInfo{
          elixir_types_descr: descr,
          type: type
@@ -178,11 +171,6 @@ defmodule ElixirSense.Core.TypePresentation do
 
     * `:shape`  — text produced by the structural engine.
     * `:native` — text produced by the native `Module.Types` descriptor path.
-
-  Spec-derived signatures are lowered to the same structural shapes as inferred
-  types, so they are not separately attributable here; they surface as `:shape`
-  or `:native`. The `:spec` value is reserved for a future cheaply-detectable
-  signal and is not currently emitted.
   """
   def render_hint(%Binding{} = binding, %VarInfo{} = var_info, opts) when is_list(opts) do
     case render_var_sourced(binding, var_info) do
@@ -195,8 +183,7 @@ defmodule ElixirSense.Core.TypePresentation do
         full_raw =
           if widen? and not is_nil(shape) do
             # Re-render from the widened shape so widening reaches every leaf,
-            # including inside containers/unions. Falls back to the original
-            # text if rendering the widened shape somehow fails.
+            # falling back to the original text if that rendering fails.
             case render(widen_literals(shape)) do
               {:ok, widened} -> widened
               :unknown -> text
@@ -217,13 +204,10 @@ defmodule ElixirSense.Core.TypePresentation do
     end
   end
 
-  # ── Literal widening for inlay hints (task: hints only) ─────────────────────
-  #
-  # The compiler never prints integer/float/binary literals *as types*, so a
-  # hint must not show `5`/`1.0`/`"x"`; widen them to `integer()`/`float()`/
-  # `binary()`. Atom literals stay (`:ok`, `nil`, module atoms are printed by
-  # the compiler). Recurse through every container so `%{a: 1}` widens to
-  # `%{a: integer()}`.
+  # Literal widening for inlay hints. The compiler never prints integer/float/
+  # binary literals *as types*, so widen `5`/`1.0`/`"x"` to
+  # `integer()`/`float()`/`binary()`. Atom literals stay (the compiler prints
+  # them). Recurse through every container so `%{a: 1}` widens to `%{a: integer()}`.
   defp widen_literals({:integer, _}), do: {:integer, nil}
   defp widen_literals({:float, _}), do: {:float, nil}
   defp widen_literals({:binary, _}), do: {:binary, nil}
@@ -304,10 +288,8 @@ defmodule ElixirSense.Core.TypePresentation do
     structural = fields_from_shape(binding, type)
     descr_fields = fields_from_descr(descr)
 
-    # Structural wins on conflict when it carries real information (not just the
-    # uninformative "term()" placeholder that Binding.expand fills in for struct
-    # fields it has no data about). Descr-derived values fill in any key that is
-    # absent from the structural map OR where structural only knows "term()".
+    # Structural wins on conflict unless it only knows the uninformative "term()"
+    # placeholder; descr-derived values fill in absent or term()-only keys.
     Map.merge(structural, descr_fields, fn _key, s_val, d_val ->
       if s_val == "term()", do: d_val, else: s_val
     end)
@@ -361,11 +343,9 @@ defmodule ElixirSense.Core.TypePresentation do
     end
   end
 
-  # `term()` is "unknown/top" — prefer the native descriptor if it's more
-  # specific. Bare `dynamic()` is the gradual top (no information either).
-  # `none()` is *definitive* (the value never exists, e.g. a `case`
-  # whose every clause is dead), so it is informative and must NOT be overridden
-  # by a stale/optimistic descriptor.
+  # `term()` and bare `dynamic()` are the top type (no information) — prefer the
+  # native descriptor. `none()` is definitive (the value never exists), so it is
+  # informative and must NOT be overridden by a stale descriptor.
   defp informative?({:ok, "term()"}), do: false
   defp informative?({:ok, "dynamic()"}), do: false
   defp informative?({:ok, _text}), do: true
@@ -383,16 +363,13 @@ defmodule ElixirSense.Core.TypePresentation do
   def render(nil), do: :unknown
   def render(shape), do: {:ok, segment(shape)}
 
-  # Prefer the native descriptor: first try ElixirTypes.descr_to_string/1 which
-  # returns the exact compiler text (task #17), then fall back to to_shape +
-  # render. Both paths are guarded by enabled?() so the config flag is respected
-  # (task #37).
-  # Native rendering with the originating shape threaded back.
+  # Native rendering with the originating shape threaded back. Tries the exact
+  # compiler string (`descr_to_string`) first, then falls back to `to_shape` +
+  # render; both guarded by `enabled?()`.
   #
-  #   * exact compiler string path (`descr_to_string`) → `{:ok, text, nil}`
-  #     (there is no intermediate shape; the string is the compiler's own).
-  #   * `to_shape` fallback → `{:ok, text, shape}` (shape available for the hint
-  #     path's literal widening).
+  #   * exact compiler string path → `{:ok, text, nil}` (no intermediate shape).
+  #   * `to_shape` fallback → `{:ok, text, shape}` (shape available for literal
+  #     widening in the hint path).
   defp render_descr_sourced(nil), do: :unknown
 
   defp render_descr_sourced(descr) do
@@ -403,14 +380,13 @@ defmodule ElixirSense.Core.TypePresentation do
           {:ok, text, nil}
 
         :error ->
-          # Fall back to shape-based rendering.
           case ElixirTypes.to_shape(descr) do
             nil ->
               :unknown
 
             shape ->
-              # `render/1` only yields `:unknown` for a `nil` shape; here the
-              # shape is non-nil so we always get `{:ok, _}`.
+              # `render/1` only yields `:unknown` for a `nil` shape; here it is
+              # non-nil so we always get `{:ok, _}`.
               {:ok, text} = render(shape)
               {:ok, text, shape}
           end
@@ -424,8 +400,7 @@ defmodule ElixirSense.Core.TypePresentation do
     _, _ -> :unknown
   end
 
-  # Calls ElixirTypes.descr_to_string/1 when the function exists (the other
-  # agent may not have landed it yet). Returns {:ok, str} or :error.
+  # Calls ElixirTypes.descr_to_string/1 when it exists. Returns {:ok, str} or :error.
   defp safe_descr_to_string(descr) do
     if function_exported?(ElixirTypes, :descr_to_string, 1) do
       case ElixirTypes.descr_to_string(descr) do
@@ -464,7 +439,6 @@ defmodule ElixirSense.Core.TypePresentation do
   defp segment(:fun), do: "fun()"
   defp segment(:tuple), do: "tuple()"
 
-  # dynamic() / dynamic(inner) (task #20 / policy C)
   defp segment({:dynamic, nil}), do: "dynamic()"
   defp segment({:dynamic, inner}), do: "dynamic(" <> segment(inner) <> ")"
 
@@ -480,10 +454,7 @@ defmodule ElixirSense.Core.TypePresentation do
   defp segment({:binary, value}) when is_binary(value), do: inspect(value)
   defp segment({:binary, _}), do: "binary()"
 
-  # List spellings — compiler dialect (tasks #22/#23):
-  #   empty list        → empty_list()
-  #   list(t)           → list(t)
-  #   non_empty_list(t) → non_empty_list(t)
+  # List spellings — compiler dialect: empty_list(), list(t), non_empty_list(t).
   defp segment({:list, :empty}), do: "empty_list()"
   defp segment({:list, elem}), do: "list(" <> segment(elem) <> ")"
   defp segment({:nonempty_list, elem}), do: "non_empty_list(" <> segment(elem) <> ")"
@@ -496,7 +467,7 @@ defmodule ElixirSense.Core.TypePresentation do
   defp segment({:tuple, _size, elems}) when is_list(elems),
     do: "{" <> Enum.map_join(elems, ", ", &segment/1) <> "}"
 
-  # Open tuple: {s1, s2, ..., ...} — the trailing `...` is the open marker (task #7 / policy C)
+  # Open tuple: the trailing `...` is the open marker.
   defp segment({:tuple_open, elems}) when is_list(elems) do
     case elems do
       [] -> "{...}"
@@ -504,7 +475,7 @@ defmodule ElixirSense.Core.TypePresentation do
     end
   end
 
-  # Optional map field (task #8) — must NOT be dropped by uninformative_field?
+  # Optional map field — must NOT be dropped by uninformative_field?
   defp segment({:optional, inner}), do: "if_set(" <> segment(inner) <> ")"
 
   # Open map (`:open` tail): additional unknown keys exist beyond `fields`.
@@ -513,21 +484,14 @@ defmodule ElixirSense.Core.TypePresentation do
   defp segment({:map, fields, :open}) when is_list(fields), do: "%{..., " <> fields(fields) <> "}"
 
   # `:closed` (literal-complete) and `nil` (partial) tails BOTH render without an
-  # open marker. This is a DELIBERATE display compromise (three-marker model, see
-  # `ElixirSense.Core.Binding`): surfacing the partial-vs-closed distinction in the
-  # rendered string (e.g. a `...` for partial) would churn every guard-fact display
-  # expectation for no user-facing benefit, so partial maps render exactly as
-  # closed ones do. Only `:open` carries the `...` marker (handled above).
-  # An empty-field `:closed`/`nil` map renders as `map()` for the same reason
-  # (the empty closed map `%{}` round-trips through the distinct `:empty_map` shape).
+  # open marker — a deliberate display compromise (only `:open` carries `...`).
+  # An empty-field `:closed`/`nil` map renders as `map()` for the same reason.
   defp segment({:map, [], _updated}), do: "map()"
   defp segment({:map, fields, _updated}) when is_list(fields), do: "%{" <> fields(fields) <> "}"
 
   defp segment({:struct, fields, {:atom, module}, _updated}) when is_atom(module) do
-    # Drop fields we have no information about (`term()`): a struct typed only by
-    # its module (e.g. a `defimpl for:` arg) renders as `%URI{}`, not
-    # `%URI{a: term(), b: term(), …}`. Informative fields are still shown.
-    # Note: {:optional, _} renders as if_set(...) — not "term()" — so it IS kept.
+    # Drop `term()` fields: a struct typed only by its module renders as `%URI{}`,
+    # not `%URI{a: term(), …}`. `{:optional, _}` renders as if_set(...), so it stays.
     case fields |> Keyword.delete(:__struct__) |> Enum.reject(&uninformative_field?/1) do
       [] -> "%" <> inspect(module) <> "{}"
       kept -> "%" <> inspect(module) <> "{" <> fields(kept) <> "}"
@@ -544,7 +508,6 @@ defmodule ElixirSense.Core.TypePresentation do
     if "term()" in rendered do
       "term()"
     else
-      # Compiler dialect: join with " or " (task #18)
       Enum.join(rendered, " or ")
     end
   end
@@ -567,7 +530,6 @@ defmodule ElixirSense.Core.TypePresentation do
     clauses
     |> Enum.map(fn {args, return} -> arrow(Enum.map(args, &segment/1), segment(return)) end)
     |> Enum.uniq()
-    # Compiler dialect: join with " or " (task #18)
     |> Enum.join(" or ")
   end
 
@@ -585,9 +547,8 @@ defmodule ElixirSense.Core.TypePresentation do
     end)
   end
 
-  # Render an atom map key in compiler style (task #24).
-  # Macro.inspect_atom(:key, key) produces "key:" for identifiers and
-  # ~s("foo bar":) for atoms requiring quoting — we append a space.
+  # Render an atom map key in compiler style. Macro.inspect_atom(:key, key)
+  # produces "key:" (or a quoted form); we append a space.
   defp render_map_key(key) when is_atom(key) do
     Macro.inspect_atom(:key, key) <> " "
   end
@@ -625,7 +586,7 @@ defmodule ElixirSense.Core.TypePresentation do
   defp struct_or_map?("%" <> _), do: true
   defp struct_or_map?(_), do: false
 
-  # ── Elision for render_hint/3 (task #25) ────────────────────────────────────
+  # Elision for render_hint/3.
 
   # No limit: return as-is.
   defp elide(text, nil), do: text

@@ -119,8 +119,7 @@ defmodule ElixirSense.Core.ExCkReader do
   defp fetch_from_path(module) do
     case :code.which(module) do
       path when is_list(path) ->
-        # `:beam_lib.chunks/2` returns `{:error, :beam_lib, reason}` (a 3-tuple),
-        # not `{:error, reason}`.
+        # `:beam_lib.chunks/2` returns a `{:error, :beam_lib, reason}` 3-tuple.
         case :beam_lib.chunks(path, [@chunk_id]) do
           {:ok, {_path, [{@chunk_id, chunk}]}} ->
             {:ok, chunk}
@@ -148,8 +147,8 @@ defmodule ElixirSense.Core.ExCkReader do
   end
 
   defp fetch_from_beam_binary(beam) do
-    # `beam` is already the BEAM binary; pass it directly (not wrapped) and
-    # match `:beam_lib`'s `{:error, :beam_lib, reason}` 3-tuple.
+    # `beam` is the BEAM binary; `:beam_lib.chunks/2` returns a
+    # `{:error, :beam_lib, reason}` 3-tuple.
     case :beam_lib.chunks(beam, [@chunk_id]) do
       {:ok, {_mod, [{@chunk_id, chunk}]}} -> {:ok, chunk}
       {:ok, {_mod, []}} -> extract_chunk_from_binary(beam)
@@ -176,10 +175,8 @@ defmodule ElixirSense.Core.ExCkReader do
   defp scan_chunks(
          <<id::binary-size(4), size::unsigned-big-32, chunk::binary-size(size), rest::binary>>
        ) do
-    # IFF (BEAM) chunks are 4-byte aligned; each chunk's data is followed by
-    # enough zero-padding bytes to align the next chunk header to a 4-byte
-    # boundary. The formula is: pad = rem(4 - rem(size, 4), 4), which is 0
-    # when size is already a multiple of 4.
+    # IFF (BEAM) chunks are 4-byte aligned: each chunk's data is followed by
+    # zero-padding to align the next chunk header to a 4-byte boundary.
     padding = rem(4 - rem(size, 4), 4)
 
     if byte_size(rest) < padding do
@@ -213,10 +210,8 @@ defmodule ElixirSense.Core.ExCkReader do
 
   # --- Version checking ---------------------------------------------------------
 
-  # The running runtime's checker version is a compile-time constant in the
-  # Elixir standard library (`:elixir_erl.checker_version/0` returns a literal
-  # atom). We cache it in `:persistent_term` so we pay for the detection only
-  # once per VM lifetime, without depending on the ETS table being available.
+  # Cache the detected checker version in `:persistent_term` so detection runs
+  # once per VM lifetime, independent of the ETS table.
   @persistent_term_key {__MODULE__, :checker_version}
 
   @doc """
@@ -234,8 +229,7 @@ defmodule ElixirSense.Core.ExCkReader do
     case :persistent_term.get(@persistent_term_key, :not_set) do
       :not_set ->
         version = detect_checker_version()
-        # Store for future calls; harmless if two processes race here — they
-        # both write the same value.
+        # Racing writers both store the same value, so the race is harmless.
         :persistent_term.put(@persistent_term_key, version)
         version
 
@@ -246,11 +240,10 @@ defmodule ElixirSense.Core.ExCkReader do
 
   @spec detect_checker_version() :: atom() | nil
   defp detect_checker_version do
-    # `:elixir_erl.checker_version/0` is an internal Elixir API that does not
-    # exist before ~1.19, so a literal call would emit an undefined-function
-    # compile warning on 1.16/1.17/1.18. Dispatch via `apply/3` so the call is
-    # resolved at runtime only when `function_exported?/3` confirms it; otherwise
-    # fall back to compiling a probe module and reading its ExCk tag.
+    # `:elixir_erl.checker_version/0` is an internal API that does not exist
+    # before ~1.19; a literal call would emit an undefined-function warning on
+    # 1.16/1.17/1.18. Dispatch via `apply/3` so it resolves at runtime only when
+    # exported; otherwise fall back to compiling a probe module.
     if :erlang.function_exported(:elixir_erl, :checker_version, 0) do
       # credo:disable-for-next-line Credo.Check.Refactor.Apply
       apply(:elixir_erl, :checker_version, [])
@@ -260,12 +253,9 @@ defmodule ElixirSense.Core.ExCkReader do
   end
 
   # Fallback: compile a minimal module and extract its ExCk tag.
-  #
-  # NOTE: `defmodule Foo` defines the module `Elixir.Foo`, so the compiled
-  # module name is NOT the bare `:"ExCkProbe_<n>"` atom we interpolate — it is
-  # `:"Elixir.ExCkProbe_<n>"`. We therefore must NOT pin the probe atom against
-  # the compiled module name (that match never succeeds and silently disables
-  # detection); we take whatever single module `Code.compile_string/1` returns.
+  # `defmodule Foo` defines `Elixir.Foo`, not the bare `:"ExCkProbe_<n>"` atom,
+  # so we must NOT pin the probe atom against the compiled module name (the match
+  # never succeeds); take whatever single module `Code.compile_string/1` returns.
   defp probe_checker_version do
     src = "defmodule ExCkProbe_#{:erlang.unique_integer([:positive])} do end"
 
@@ -334,15 +324,12 @@ defmodule ElixirSense.Core.ExCkReader do
   # Normalize the ExCk `:sig` field to the 3-tuple `{kind, domain, clauses}`
   # shape the rest of ElixirSense consumes.
   #
-  # Elixir 1.18 records inferred signatures as 2-TUPLES — `{:infer, clauses}` /
-  # `{:strong, clauses}` (Module.Types `inferred = {:infer, clauses}`, types.ex)
-  # — with NO domain element. Elixir 1.19/1.20 added the leading domain element,
-  # giving `{kind, domain, clauses}`. We canonicalize the 2-tuple form to
+  # Elixir 1.18 records inferred signatures as 2-tuples (`{:infer, clauses}` /
+  # `{:strong, clauses}`, Module.Types types.ex) with NO domain element; 1.19/1.20
+  # added a leading domain element. We canonicalize the 2-tuple form to
   # `{kind, nil, clauses}` (domain `nil` = "unknown"); `apply_signature/2`
-  # tolerates a `nil` domain (it never inspects the domain on the `:infer` path,
-  # and treats a `nil`-domained `:strong` sig as having no static domain to
-  # violate). This is the single boundary where 1.18 chunks are made to look like
-  # 1.19/1.20 chunks, so downstream code stays version-agnostic.
+  # tolerates a `nil` domain. This is the single boundary where 1.18 chunks are
+  # made to look like 1.19/1.20 chunks, keeping downstream code version-agnostic.
   defp normalize_sig({kind, clauses}) when kind in [:infer, :strong] and is_list(clauses) do
     {kind, nil, clauses}
   end
@@ -369,8 +356,7 @@ defmodule ElixirSense.Core.ExCkReader do
       end
     rescue
       _ ->
-        # Table disappeared mid-operation; treat as a miss so the caller
-        # re-fetches and re-stores into a fresh table.
+        # Table disappeared mid-operation; treat as a miss.
         :miss
     end
   end
@@ -382,8 +368,7 @@ defmodule ElixirSense.Core.ExCkReader do
       :ets.insert(@table, {module, result, current_time()})
     rescue
       _ ->
-        # Table disappeared between ensure and insert; not fatal — the value
-        # will be re-fetched and stored on the next call.
+        # Table disappeared between ensure and insert; not fatal.
         :ok
     end
 
@@ -407,18 +392,12 @@ defmodule ElixirSense.Core.ExCkReader do
   # --- ETS owner process --------------------------------------------------------
 
   # All ETS state is owned by a dedicated long-lived process registered under
-  # `@owner_name`. This means the table survives individual request process
-  # deaths. The process simply sleeps forever; Erlang will garbage-collect it
-  # and the table only when the VM shuts down (or the owner is explicitly killed
-  # and a new one takes over via `ensure_owner/0`).
+  # `@owner_name`, so the table survives individual request process deaths.
   #
-  # Startup race: two concurrent callers both find no registered process and
-  # both spawn an owner candidate. Each candidate first tries to register
-  # itself under `@owner_name` — `Process.register/2` is the mutual exclusion:
-  # exactly one wins. Only the WINNER creates the table, so the table's owner
-  # is always the registered process and killing a losing candidate can never
-  # take the table down with it. Callers spin briefly until the table is
-  # visible (covers the winner still being mid-setup).
+  # Startup race: concurrent callers may both spawn an owner candidate. Each
+  # candidate first tries `Process.register/2` under `@owner_name` (the mutual
+  # exclusion); only the winner creates the table, so the table's owner is always
+  # the registered process and killing a loser can never take the table down.
 
   defp ensure_table(attempts \\ 5)
 
@@ -431,9 +410,8 @@ defmodule ElixirSense.Core.ExCkReader do
         wait_for_table(20)
 
         if :ets.whereis(@table) == :undefined do
-          # A dying owner can briefly stay name-registered, making
-          # ensure_owner/0 a no-op while the table is already gone. Give the
-          # VM a beat to unregister the dead pid and retry the whole ensure.
+          # A dying owner can briefly stay name-registered while the table is
+          # already gone; give the VM a beat to unregister it, then retry.
           Process.sleep(5)
           ensure_table(attempts - 1)
         else
@@ -448,10 +426,9 @@ defmodule ElixirSense.Core.ExCkReader do
   defp ensure_owner do
     case Process.whereis(@owner_name) do
       pid when is_pid(pid) ->
-        # Owner already running, but the table may have been deleted out from
-        # under it (anyone can delete a public named table). Ask the owner to
-        # (re)create it — creation must happen IN the owner so table ownership
-        # stays tied to the registered process.
+        # Owner running, but the public named table may have been deleted out
+        # from under it. Ask the owner to (re)create it — creation must happen
+        # in the owner so table ownership stays tied to the registered process.
         send(pid, :ensure_table)
         :ok
 
@@ -465,8 +442,7 @@ defmodule ElixirSense.Core.ExCkReader do
       try do
         Process.register(self(), @owner_name)
       rescue
-        # Another candidate won the race; this spare just exits. It never
-        # created the table, so nothing is lost.
+        # Another candidate won the race; this spare exits without touching ETS.
         ArgumentError -> exit(:normal)
       end
 
@@ -474,9 +450,8 @@ defmodule ElixirSense.Core.ExCkReader do
       # mid-death with the named table not yet released — retry briefly.
       create_table(50)
 
-      # Hold the table open until the VM stops (or this process is killed,
-      # in which case the next cache operation starts a fresh owner).
-      # Recreate the table on demand if it was deleted externally.
+      # Hold the table open until the VM stops; recreate it on demand if it was
+      # deleted externally.
       owner_loop()
     end)
 
@@ -484,9 +459,8 @@ defmodule ElixirSense.Core.ExCkReader do
   end
 
   defp create_table(retries) do
-    # Bind the return value to silence dialyzer's unmatched_return warning.
-    # With :named_table the table is looked up by the atom name; the tid is not
-    # needed but must be consumed so dialyzer does not flag it.
+    # Bind the tid to silence dialyzer's unmatched_return; with :named_table the
+    # table is looked up by name and the tid is unused.
     _tid = :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
     :ok
   rescue

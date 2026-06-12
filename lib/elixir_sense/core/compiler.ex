@@ -153,7 +153,6 @@ defmodule ElixirSense.Core.Compiler do
 
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, :match)
 
-    # Augment with ElixirTypes pattern refinement if available
     {vars_with_inferred_types, var_descrs} =
       merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, se)
 
@@ -172,7 +171,6 @@ defmodule ElixirSense.Core.Compiler do
 
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, el.context)
 
-    # Augment with ElixirTypes pattern refinement if available
     {vars_with_inferred_types, var_descrs} =
       merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, sl)
 
@@ -1840,9 +1838,9 @@ defmodule ElixirSense.Core.Compiler do
 
     {_result, state, e_env} = expand(block, state, %{env | module: full})
 
-    # The module body is fully expanded, so every clause of every local function
-    # has been accumulated. Run ElixirTypes local inference exactly once per
-    # function now, then prune the stored clause ASTs.
+    # Module body fully expanded: every clause of every local function is now
+    # accumulated. Run ElixirTypes local inference once per function, then prune
+    # the stored clause ASTs.
     state = infer_module_local_signatures(state, %{env | module: full})
 
     # here we handle module callbacks. Only before_compile macro callbacks are expanded as they

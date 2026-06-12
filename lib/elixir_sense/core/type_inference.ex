@@ -49,9 +49,8 @@ defmodule ElixirSense.Core.TypeInference do
       ) do
     {fields, updated_struct} =
       case type_of(ast, context) do
-        # A `:closed` map tail means "literal-complete with no update base"; for a
-        # struct the closedness is derived from the loaded defstruct, not the map
-        # tail, so normalise it back to `nil` (no base) here.
+        # Struct closedness derives from the loaded defstruct, not the map tail, so
+        # normalise a `:closed` tail back to `nil` (no base).
         {:map, fields, :closed} -> {fields, nil}
         {:map, fields, updated_map} -> {fields, updated_map}
         {:struct, fields, _, updated_struct} -> {fields, updated_struct}
@@ -65,9 +64,7 @@ defmodule ElixirSense.Core.TypeInference do
 
   def type_of({{:., _, [target, fun]}, _meta, args} = ast, context)
       when is_atom(fun) and is_list(args) do
-    # Native typing only narrows calls it understands; when it returns nil
-    # (unsupported call/signature, or 1.18) keep the `{:call, ...}` shape Binding
-    # relies on.
+    # When native typing returns nil keep the `{:call, ...}` shape Binding relies on.
     with true <- ElixirTypes.expr_typing_enabled?(),
          native when not is_nil(native) <- type_of_with_elixir_types(ast, context) do
       native
@@ -82,10 +79,9 @@ defmodule ElixirSense.Core.TypeInference do
   def type_of({:^, _, [pinned]}, :match), do: type_of(pinned, nil)
   def type_of({:^, _, [_pinned]}, _context), do: :none
 
-  # underscore: matches anything, has no useful standalone type. Handle every
-  # context so it never falls through to native of_expr (which raises on a bare
-  # `_`). In :match it is `nil` (unknown — neutral in intersect, so `_ = expr`
-  # keeps expr's type); elsewhere `:none` (not a valid standalone value).
+  # underscore: in :match it is `nil` (neutral in intersect, so `_ = expr` keeps
+  # expr's type); elsewhere `:none` (not a valid standalone value). Handled in
+  # every context so it never reaches native of_expr (which raises on bare `_`).
   def type_of({:_, _meta, var_context}, :match) when is_atom(var_context), do: nil
   def type_of({:_, _meta, var_context}, _context) when is_atom(var_context), do: :none
 
@@ -124,12 +120,9 @@ defmodule ElixirSense.Core.TypeInference do
           {type_of(left, context), right}
 
         list ->
-          # No update base. The tail records map-literal completeness:
-          #   * `:closed` in EXPRESSION context — `%{a: 1}` CONSTRUCTS a map with
-          #     EXACTLY key `:a`; all keys are known (literal-complete).
-          #   * `nil` (partial) in `:match` context — `%{a: 1}` as a PATTERN
-          #     matches ANY map that HAS `:a` (other keys may exist), so
-          #     closedness is unknown. `nil` is the conservative partial tail.
+          # No update base. The tail records map-literal completeness: `:closed` in
+          # expression context (`%{a: 1}` constructs a map with exactly key `:a`),
+          # `nil` (partial) in `:match` (a pattern matches any map having `:a`).
           tail = if context == :match, do: nil, else: :closed
           {tail, list}
       end
@@ -138,9 +131,8 @@ defmodule ElixirSense.Core.TypeInference do
 
     case field_types |> Keyword.fetch(:__struct__) do
       {:ok, type} ->
-        # A struct derives closed/open from its loaded defstruct, not the map
-        # tail, so a `:closed` tail (literal in expression context) collapses back
-        # to `nil` (no update base) in the struct's 4th slot.
+        # Struct closedness derives from the loaded defstruct, so a `:closed` tail
+        # collapses back to `nil` (no update base) in the struct's 4th slot.
         updated_struct = if updated_map == :closed, do: nil, else: updated_map
 
         {:struct, field_types |> Keyword.delete(:__struct__), type |> known_struct_type(),
@@ -220,11 +212,9 @@ defmodule ElixirSense.Core.TypeInference do
           {:list, :empty}
 
         [{:|, _, [head, tail]}] ->
-          # `[a | b]`: if the tail is itself a list, fold its element type in
-          # (proper list `a ∪ tail_elems`). If the tail resolves to a KNOWN
-          # NON-LIST shape, the result is an IMPROPER non-empty list — the
-          # `{:nonempty_list, elem, tail}` 3-tuple. An unknown (`nil`) tail stays
-          # conservative (proper list of the head's type).
+          # `[a | b]`: a list tail folds its element type in (proper list); a known
+          # non-list tail makes an improper `{:nonempty_list, elem, tail}` 3-tuple;
+          # an unknown (`nil`) tail stays a conservative proper list.
           head_type = type_of(head, context)
 
           case type_of(tail, context) do
@@ -243,15 +233,11 @@ defmodule ElixirSense.Core.TypeInference do
               {:nonempty_list, union_element([head_type, tail_elem]), tail_tail}
 
             tail_shape ->
-              # A CONCRETE, RESOLVED non-list shape proves the cons is improper —
-              # in EXPRESSION context, emit the `{:nonempty_list, elem, tail}`
-              # 3-tuple. PATTERN (`:match`) context keeps the conservative
-              # under-approximation (`{:list, head_type}`): the cross-clause
-              # subtraction machinery (`precise_pattern_type`) reasons over
-              # proper-list shapes and must not see an improper 3-tuple here.
-              # Anything else (unknown `nil`, or a DEFERRED reference like
-              # `{:attribute, _}` / `{:variable, _, _}` / `{:call, ...}` that may
-              # yet resolve to a list) also stays the conservative proper list.
+              # A concrete resolved non-list tail proves the cons improper; emit the
+              # 3-tuple only in expression context. `:match` keeps the conservative
+              # proper-list under-approximation because `precise_pattern_type`'s
+              # cross-clause subtraction must not see an improper 3-tuple. Unknown
+              # or deferred tails also stay the conservative proper list.
               if context != :match and improper_tail?(tail_shape) do
                 {:nonempty_list, head_type, tail_shape}
               else
@@ -260,11 +246,8 @@ defmodule ElixirSense.Core.TypeInference do
           end
 
         elements ->
-          # The element type is the union of every element's type (a trailing
-          # cons `[a, b | t]` contributes its head `b`; the tail var is
-          # unknown). Single-type lists collapse back to that one type; an
-          # unknown element widens to `nil` via `Binding.normalize_union/1`
-          # when the stored shape is later expanded.
+          # Element type is the union of every element's type (a trailing cons
+          # `[a, b | t]` contributes its head `b`; the tail var is unknown).
           type =
             elements
             |> Enum.map(fn
@@ -282,8 +265,7 @@ defmodule ElixirSense.Core.TypeInference do
     if ElixirTypes.expr_typing_enabled?() do
       type_of_with_elixir_types(ast, context)
     else
-      # Without native expression typing (disabled, or 1.18) at least extract
-      # arity from the first clause — more precise than the native :fun on 1.18.
+      # Without native expression typing, extract arity from the first clause.
       case clauses do
         [{:->, _, [args, _body]} | _] when is_list(args) ->
           arity = length(args)
@@ -309,12 +291,10 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   # `case` over a *call* scrutinee: a `{:case_result, …}` thunk so `Binding` can
-  # drop clauses whose pattern can't match the scrutinee's (resolved) return type
-  # — the case raises instead of returning that body. We scope this to call
-  # scrutinees (`case some() do …`), where the return type is known from inferred
-  # signatures and a dead clause is most likely; var/literal scrutinees keep the
-  # plain branch-union (and avoid deferring the many conditionals that expand to
-  # `case`). Resolving the scrutinee needs the binding env, hence the deferral.
+  # drop clauses whose pattern can't match the scrutinee's resolved return type.
+  # Scoped to call scrutinees (return type known from inferred signatures);
+  # var/literal scrutinees keep the plain branch-union. Resolving the scrutinee
+  # needs the binding env, hence the deferral.
   def type_of({:case, _meta, [scrutinee, [{:do, clauses} | _]]} = ast, context)
       when is_list(clauses) do
     scrutinee_type = type_of(scrutinee, context)
@@ -339,18 +319,14 @@ defmodule ElixirSense.Core.TypeInference do
 
   def type_of({form, _meta, _clauses} = ast, context)
       when form in [:cond, :try, :receive, :with, :if, :unless] do
-    # Prefer native precision; otherwise (native off, or 1.18) fall back to a
-    # conservative union of the construct's branch result types. Any branch we
-    # can't type poisons the union to `nil` (unknown) in `Binding`, so we never
-    # over-promise.
+    # Prefer native precision; otherwise fall back to a conservative union of the
+    # construct's branch result types (an untypable branch widens it to `nil`).
     type_of_with_elixir_types(ast, context) || clause_result_type(ast, context)
   end
 
   # A `for` produces a list, the `:into` target, or — with `:reduce` — the union
-  # of the seed value and every reduce-clause body (upstream seeds the result
-  # with `reduce:` and unions the clause returns). The opts keyword list is the
-  # last clause; `:do` is emitted first, so we must look options up by key
-  # rather than matching the head.
+  # of the seed value and every reduce-clause body. The opts keyword list is the
+  # last clause; look options up by key rather than matching the head.
   def type_of({:for, _meta, clauses} = ast, context) when is_list(clauses) do
     type_of_with_elixir_types(ast, context) || for_result_type(List.last(clauses), context)
   end
@@ -396,8 +372,8 @@ defmodule ElixirSense.Core.TypeInference do
   end
 
   def type_of({var, meta, args} = ast, context) when is_atom(var) and is_list(args) do
-    # As with remote calls: fall back to the `{:local_call, ...}` shape Binding
-    # relies on when native typing returns nil for this local call (or on 1.18).
+    # As with remote calls, fall back to the `{:local_call, ...}` shape Binding
+    # relies on when native typing returns nil for this local call.
     with true <- ElixirTypes.expr_typing_enabled?(),
          native when not is_nil(native) <- type_of_with_elixir_types(ast, context) do
       native
@@ -428,16 +404,13 @@ defmodule ElixirSense.Core.TypeInference do
   def type_of(ast, context), do: type_of_with_elixir_types(ast, context)
 
   # Conservative result type of a clause construct (`case`/`cond`/`with`/`try`/
-  # `receive`/`if`/`unless`): the union of each branch's body type. Used native-
-  # off and on 1.18, where the engine doesn't compute these.
+  # `receive`/`if`/`unless`): the union of each branch's body type, used when the
+  # native engine doesn't compute these.
   #
-  # Branches are `{head_or_nil, body}`. A body whose type is itself a variable
-  # bound by its own `head` (`{:ok, v} -> v`, or a `with` body over its
-  # generators) is widened to `nil`: that var is out of scope at the construct's
-  # result site, so storing it would leak a dangling thunk. Structured bodies
-  # (`{:wrapped, v}`, `process(v)`) keep their shape — any head-local leaf inside
-  # resolves harmlessly to unknown via `Binding`. Any `nil` branch collapses the
-  # whole result to `nil` (the value could be that unknown branch).
+  # Branches are `{head_or_nil, body}`. A body whose type is a variable bound by
+  # its own `head` (`{:ok, v} -> v`) is widened to `nil`: that var is out of scope
+  # at the result site, so storing it would leak a dangling thunk. Any `nil`
+  # branch collapses the whole result to `nil`.
   defp clause_result_type(ast, context) do
     case clause_result_branches(ast) do
       [] ->
@@ -460,11 +433,10 @@ defmodule ElixirSense.Core.TypeInference do
   defp strip_when_guard({:when, _, [pattern | _]}), do: pattern
   defp strip_when_guard(other), do: other
 
-  # A branch is normally `{head, body}` (body's type, var-leaks widened). A `with`
-  # failure branch is `{:failure, pattern, rhs}`: the value that reaches the
-  # implicit `else` is the RHS minus the matched pattern, but only when the
-  # pattern (no guard) is precise (an under-approximation); otherwise the whole
-  # RHS may fail to match. Mirrors `expr.ex:883`.
+  # A branch is normally `{head, body}`. A `with` failure branch is
+  # `{:failure, pattern, rhs}`: the value reaching the implicit `else` is the RHS
+  # minus the matched pattern, but only when the pattern is precise; otherwise the
+  # whole RHS may fail to match. Mirrors `expr.ex:883`.
   defp branch_type({:failure, pattern, rhs}, context) do
     rhs_type = type_of(rhs, context)
 
@@ -483,17 +455,14 @@ defmodule ElixirSense.Core.TypeInference do
   Subtracting an earlier clause's pattern from a later clause's scrutinee is only
   sound when the contributed type is an *under*-approximation of the value set the
   pattern actually matches. `type_of/2` over-approximates several patterns
-  (`[h|t]` and `[x]` both become `{:list, _}` which includes `[]`; `<<c, rest>>`
-  becomes `{:binary, nil}` which includes `""`), so using it directly removes
-  values that can still reach the catch-all.
+  (`[h|t]` and `[x]` both become `{:list, _}`; `<<c, rest>>` becomes
+  `{:binary, nil}`), so it cannot be used directly.
 
-  This mirrors the compiler's `pattern_precise? and guard_precise?` gate
-  (`Module.Types.Pattern`): a clause contributes to the subtracted set only when
-  its pattern is exact for the matched value set.
+  Mirrors the compiler's `pattern_precise? and guard_precise?` gate
+  (`Module.Types.Pattern`): a clause contributes only when its pattern is exact.
 
-  Returns `{:ok, type}` when the clause may safely contribute `type` to the
-  subtraction, or `:imprecise` when the clause must be skipped (the catch-all then
-  keeps the wider type — the conservative, sound choice).
+  Returns `{:ok, type}` when the clause may safely contribute `type`, or
+  `:imprecise` when it must be skipped (the catch-all keeps the wider type).
 
   Rules (mirroring the compiler):
 
@@ -638,9 +607,8 @@ defmodule ElixirSense.Core.TypeInference do
     do: clause_branches(blocks[:do]) ++ clause_branches(blocks[:after])
 
   defp clause_result_branches({:try, _, [blocks]}) when is_list(blocks) do
-    # On success the value is the `do` body, unless `else` is present (then the
-    # value is an `else` clause body). `rescue`/`catch` bodies are also possible
-    # results; `after` does not contribute. The `do` body has no clause head.
+    # On success the value is the `do` body, or an `else` clause body when `else`
+    # is present. `rescue`/`catch` bodies also contribute; `after` does not.
     main = if blocks[:else], do: clause_branches(blocks[:else]), else: [{nil, blocks[:do]}]
     main ++ clause_branches(blocks[:rescue]) ++ clause_branches(blocks[:catch])
   end
@@ -658,14 +626,13 @@ defmodule ElixirSense.Core.TypeInference do
 
       Keyword.has_key?(opts, :else) ->
         # `else` clauses handle the failure space; the `do` body is typed against
-        # the generators' bound vars (so a body over them widens out).
+        # the generators' bound vars.
         [{with_patterns(generators), opts[:do]} | clause_branches(opts[:else])]
 
       true ->
-        # Without `else`, a failed `<-` returns its unmatched right-hand value, so
-        # the result is `do_body | each <- (RHS minus the matched pattern)`. The
-        # pattern is subtracted only when precise (`{:failure, ...}` handles the
-        # gate); the `do` body is typed against the generators' bound vars.
+        # Without `else`, a failed `<-` returns its unmatched RHS, so the result is
+        # `do_body | each <- (RHS minus the matched pattern)`; the pattern is
+        # subtracted only when precise (`{:failure, ...}` gates this).
         bound = with_patterns(generators)
 
         [
@@ -695,9 +662,8 @@ defmodule ElixirSense.Core.TypeInference do
 
   defp clause_branches(_other), do: []
 
-  # Variable names introduced by a clause head (pattern + guard vars). Pinned
-  # variables (`^x`) reference outer scope, so they are not collected (the pin
-  # subtree is replaced with an atom so prewalk does not descend into it).
+  # Variable names introduced by a clause head. Pinned variables (`^x`) reference
+  # outer scope, so the pin subtree is replaced with an atom so prewalk skips it.
   defp head_var_names(head) do
     {_ast, names} =
       Macro.prewalk(head, MapSet.new(), fn
@@ -726,11 +692,9 @@ defmodule ElixirSense.Core.TypeInference do
     end
   end
 
-  # Is this shape a CONCRETE, RESOLVED non-list value that, as a cons tail, makes
-  # the list improper? Only scalars and structural shapes count — NOT list shapes
-  # (`{:list, _}`/`{:nonempty_list, _}`/`:list`/`:empty`), NOT `nil`/`:none`, and
-  # NOT deferred reference forms (`{:attribute, _}`, `{:variable, _, _}`,
-  # `{:call, ...}`, `{:tuple_nth, ...}`, etc.) which may still resolve to a list.
+  # Is this shape a concrete, resolved non-list value that, as a cons tail, makes
+  # the list improper? Only scalars and structural shapes count — not list shapes,
+  # `nil`/`:none`, or deferred reference forms which may still resolve to a list.
   defp improper_tail?(:atom), do: true
   defp improper_tail?(:boolean), do: true
   defp improper_tail?({:atom, _}), do: true
@@ -755,10 +719,9 @@ defmodule ElixirSense.Core.TypeInference do
   defp improper_tail?({:fun, _, _}), do: true
   defp improper_tail?(_other), do: false
 
-  # A binary segment is sub-byte (makes the whole `<<>>` a bitstring) only when
-  # it is an explicit `::bitstring`/`::bits`, or an integer/bit segment with a
-  # size not divisible by 8. A `binary`/`bytes`/`utf*`/`float` part keeps it
-  # byte-aligned (e.g. `binary-size(4)` is 4 *bytes*).
+  # A binary segment is sub-byte (makes the whole `<<>>` a bitstring) only when it
+  # is an explicit `::bitstring`/`::bits`, or an integer/bit segment with a size
+  # not divisible by 8. `binary`/`bytes`/`utf*`/`float` parts stay byte-aligned.
   defp sub_byte_segment?({:"::", _, [_value, spec]}) do
     parts = flatten_segment_spec(spec)
 
@@ -825,9 +788,8 @@ defmodule ElixirSense.Core.TypeInference do
   `type_of/2` when native typing is disabled or returns nil.
   """
   # A `case` over a *call* scrutinee is typed by our feasibility-aware
-  # `{:case_result, …}` thunk (type_of/2) rather than native — native types the
-  # result as the clause body even when a clause can't match the scrutinee.
-  # Other cases (and everything else) prefer native precision.
+  # `{:case_result, …}` thunk rather than native (native types the result as the
+  # clause body even when a clause can't match). Everything else prefers native.
   def type_of({:case, _, [scrutinee | _]} = ast, context, state, env) do
     if call_shape?(type_of(scrutinee, context)) do
       type_of(ast, context)
@@ -885,8 +847,8 @@ defmodule ElixirSense.Core.TypeInference do
         metadata \\ nil,
         env_context \\ %{}
       ) do
-    # General expression typing requires the expected-type API (1.19+). On 1.18
-    # the custom engine handles expressions; see ElixirTypes.expr_typing_enabled?/0.
+    # General expression typing requires the expected-type API (1.19+); see
+    # ElixirTypes.expr_typing_enabled?/0.
     if ElixirTypes.expr_typing_enabled?() do
       case type_expr_with_local_sigs(ast, local_sigs_map, metadata, env_context) do
         {:ok, descr} -> ElixirTypes.to_shape(descr)

@@ -454,7 +454,6 @@ defmodule ElixirSense.Core.Compiler.State do
       meta: meta,
       generated: [Keyword.get(options, :generated, false) | current_info.generated],
       overridable: overridable,
-      # Preserve ElixirTypes fields from existing info
       elixir_types_clauses: current_info.elixir_types_clauses || [],
       elixir_types_sig: current_info.elixir_types_sig,
       elixir_types_sig_source: current_info.elixir_types_sig_source,
@@ -918,12 +917,9 @@ defmodule ElixirSense.Core.Compiler.State do
          {kind1, _domain1, clauses1},
          {kind2, _domain2, clauses2}
        ) do
-    # Use pattern-match clauses rather than `==` comparison so dialyzer does not
-    # emit :exact_compare ("'infer' == 'strong' can never be true") when it has
-    # proven kind1/kind2 are always :infer at the current call sites.  The
-    # :strong branch is reachable in principle (ExCk chunks can carry :strong
-    # sigs) and is kept intentionally; the pattern-match form makes the intent
-    # clear to both humans and dialyzer.
+    # Use pattern-match clauses rather than `==` so dialyzer does not emit
+    # :exact_compare; the :strong branch is reachable (ExCk chunks can carry
+    # :strong sigs) and kept intentionally.
     merged_kind = merge_sig_kind(kind1, kind2)
     merged_clauses = clauses1 ++ clauses2
 
@@ -946,9 +942,8 @@ defmodule ElixirSense.Core.Compiler.State do
   end
 
   # Promote to :strong if either operand is :strong; otherwise keep :infer.
-  # Expressed as separate clauses (rather than `==` guards) so dialyzer does not
-  # emit :exact_compare when it has proven that the only current callers pass
-  # :infer — the :strong branches are intentionally kept for future callers.
+  # Separate clauses (not `==` guards) avoid dialyzer :exact_compare; the
+  # :strong branches are intentionally kept for future callers.
   defp merge_sig_kind(:strong, _), do: :strong
   defp merge_sig_kind(_, :strong), do: :strong
   defp merge_sig_kind(_, _), do: :infer
@@ -990,11 +985,9 @@ defmodule ElixirSense.Core.Compiler.State do
       args: [arg_names],
       specs: [spec],
       elixir_types_sig: built_sig,
-      # Record that this sig was derived from a user @spec, @callback, or
-      # @macrocallback annotation (not compiler-verified). Readers that need to
-      # distinguish spec-derived sigs from natively-inferred ones should check
-      # this field rather than the tuple tag, because all sig tuples use the same
-      # 3-element shape and readers pattern-match on the tag only for filtering.
+      # Marks the sig as derived from a user @spec/@callback/@macrocallback (not
+      # compiler-verified). All sig tuples share the same 3-element shape, so
+      # readers distinguish spec-derived sigs via this field, not the tuple tag.
       elixir_types_sig_source: if(built_sig != nil, do: :spec, else: nil),
       kind: kind,
       generated: [Keyword.get(options, :generated, false)],
@@ -1021,19 +1014,15 @@ defmodule ElixirSense.Core.Compiler.State do
        do: nil
 
   # `spec_ast` is the already-expanded quoted spec AST captured at the @spec
-  # expansion site (Compiler.Typespec.expand_spec/3). We convert it directly
-  # instead of re-parsing the stringified spec, which avoids a round-trip through
-  # Code.string_to_quoted and the drift that introduces (re-parsing loses the
-  # alias/remote-type expansion the compiler already performed). The unwrapped
-  # AST is either `{:when, _, [{:"::", ...}, guards]}` or `{:"::", _, [...]}`,
-  # which is exactly what extract_spec_parts/1 matches.
+  # expansion site (Compiler.Typespec.expand_spec/3). Converting it directly
+  # (rather than re-parsing the stringified spec) preserves the alias/remote-type
+  # expansion the compiler already performed. The unwrapped AST is either
+  # `{:when, _, [{:"::", ...}, guards]}` or `{:"::", _, [...]}`, which is exactly
+  # what extract_spec_parts/1 matches.
   #
   # Building a native (Descr-valued) sig requires the Module.Types backend; on
-  # Elixir < 1.18 (no `Module.Types.Descr` at all) there is nothing to build, so
-  # bail out early. Without this guard, `spec_return_to_descr/3` would invoke
-  # `ElixirTypes.coerce_var_type_public/1` -> `Descr.*` and raise (and even the
-  # rescue clause's `Descr.dynamic()` fallback would itself crash), leaving the
-  # spec unstored.
+  # Elixir < 1.18 (no `Module.Types.Descr`) bail out early, since
+  # `spec_return_to_descr/3` would otherwise invoke `Descr.*` and raise.
   defp build_elixir_types_spec_sig(%{module: module}, name, spec_ast, _kind)
        when is_atom(module) and is_atom(name) and is_tuple(spec_ast) do
     if ElixirTypes.available?() do
@@ -1051,12 +1040,11 @@ defmodule ElixirSense.Core.Compiler.State do
          true <- is_list(args) do
       arg_descrs = Enum.map(args, &spec_arg_to_descr(&1, module, guards))
       return_descr = spec_return_to_descr(return_ast, module, guards)
-      # Domain is the arg types for the single clause — enables arg-domain filtering.
-      # Label as :infer (not :strong): user @spec annotations are claims, not
-      # compiler-verified constraints. Using :strong would let domain filtering
-      # prune overloads with untrusted domains and treat returns as static facts.
-      # Returns are already dynamic-wrapped by coerce_var_type_public (called from
-      # spec_return_to_descr), so no additional wrapping is needed here.
+      # Domain is the single clause's arg types (enables arg-domain filtering).
+      # Label :infer (not :strong): user @spec annotations are claims, not
+      # compiler-verified constraints, so domain filtering must not prune
+      # overloads or treat returns as static facts. Returns are already
+      # dynamic-wrapped by coerce_var_type_public (via spec_return_to_descr).
       {:infer, arg_descrs, [{arg_descrs, return_descr}]}
     else
       _ -> nil
@@ -1101,15 +1089,12 @@ defmodule ElixirSense.Core.Compiler.State do
           into: %{},
           do: {var, type}
 
-    # Substitute `when` guard vars. We must NOT use Macro.prewalk here because it
-    # re-traverses substituted output: a (directly or transitively) recursive guard
-    # such as `when opt: [term :: opt]` would expand `opt` forever, building an
-    # ever-growing AST until the process OOMs. We instead walk the AST manually and
-    # track the set of guard vars currently being expanded (a plain map used as a
-    # set — MapSet is dialyzer-opaque and trips call_without_opaque downstream);
-    # a var already on the expansion path is left as-is, which breaks
-    # self-referential and mutually recursive guards while still expanding every
-    # other guard var.
+    # Substitute `when` guard vars. We must NOT use Macro.prewalk: it re-traverses
+    # substituted output, so a recursive guard (`when opt: [term :: opt]`) would
+    # expand forever and OOM. We walk manually and track the set of vars currently
+    # being expanded (a plain map as a set — MapSet is dialyzer-opaque and trips
+    # call_without_opaque downstream); a var already on the expansion path is left
+    # as-is, breaking recursive guards while still expanding every other var.
     do_substitute_spec_vars(type_ast, guard_map, %{})
   end
 
@@ -1170,9 +1155,9 @@ defmodule ElixirSense.Core.Compiler.State do
     {:tuple, length(fields), Enum.map(fields, &spec_ast_to_shape(&1, module))}
   end
 
-  # 2-element tuples are represented as bare {a, b} in Elixir AST (no :{} wrapper)
-  # The {:|, _} case is already handled above. All other 2-element tuples in spec
-  # context are tuple types (AST nodes are always 3-element tuples).
+  # 2-element tuples are bare {a, b} in Elixir AST (no :{} wrapper); the {:|, _}
+  # case is handled above, so any other 2-element tuple here is a tuple type
+  # (real AST nodes are always 3-element tuples).
   defp spec_ast_to_shape({a, b}, module) do
     {:tuple, 2, [spec_ast_to_shape(a, module), spec_ast_to_shape(b, module)]}
   end
@@ -1355,29 +1340,16 @@ defmodule ElixirSense.Core.Compiler.State do
     resolved_remote = resolve_spec_module(remote, module)
 
     if is_atom(resolved_remote) and is_atom(type) and is_list(args) do
-      # Well-known remote-type table.
+      # Well-known remote-type table. Remote types (`String.t()`, `Range.t()`,
+      # ...) cannot be converted structurally, so we hand-map a small set of
+      # high-value stdlib remote types to shapes for arg-domain filtering and
+      # return-type binding.
       #
-      # Remote type references (`String.t()`, `Range.t()`, ...) cannot be
-      # converted structurally — the generic conversion above only sees built-in
-      # types and literal AST. We hand-map a small set of high-value stdlib remote
-      # types to shapes so that arg-domain filtering and return-type binding work
-      # for the common cases.
-      #
-      # This table is INTENTIONALLY INCOMPLETE. Anything not listed falls through
-      # to the `_ -> nil` clause (treated as `dynamic()`), which is always sound —
-      # it just gives up precision. Notable things deliberately NOT covered:
-      #   * Opaque/abstract protocol and behaviour types (e.g. Enumerable.t,
-      #     Collectable.t, Inspect.Algebra.t) — no useful structural shape.
-      #   * Generic "any value" aliases (Enum.t/element/acc/default, Map.key/value,
-      #     Keyword.value, Access.key/value, Macro.t/input/output, Registry.key/
-      #     value) — these collapse to `nil` (dynamic), identical to the fallback,
-      #     so they are NOT listed to keep the table small.
-      #   * Third-party / app-defined remote types — out of scope here; those are
-      #     resolved via metadata/introspection elsewhere, not this fast path.
-      #   * Parametrized container precision (e.g. exact element types of nested
-      #     remote generics) — we keep only shallow shapes.
-      # When a listed entry would map to `nil`, prefer deleting it and relying on
-      # the fallback rather than adding a redundant clause.
+      # INTENTIONALLY INCOMPLETE: anything not listed falls through to `_ -> nil`
+      # (treated as `dynamic()`), which is always sound and only gives up
+      # precision. Opaque protocol/behaviour types and generic "any value"
+      # aliases are deliberately omitted (they would collapse to the fallback);
+      # prefer deleting an entry that maps to `nil` over adding a redundant clause.
       case {resolved_remote, type, args} do
         {String, :t, []} ->
           {:binary, nil}
@@ -1543,10 +1515,9 @@ defmodule ElixirSense.Core.Compiler.State do
 
   def add_var_write(%__MODULE__{} = state, {name, meta, context}) when name != :_ do
     if generated_var?(meta, context) do
-      # Compiler-generated bindings (e.g. the `x` in the `case` an `if`/`unless`/
-      # `&&`/`||` expands to: `x when x in [false, nil] -> …`) are not source
-      # variables. Skipping them keeps them out of the var list so consumers like
-      # inlay hints don't render a type on the `if` keyword.
+      # Compiler-generated bindings (e.g. the `x` in the `case` that `if`/`unless`/
+      # `&&`/`||` expands to) are not source variables; skipping them keeps inlay
+      # hints from rendering a type on the `if` keyword.
       state
     else
       version = meta[:version]

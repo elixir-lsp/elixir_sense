@@ -217,12 +217,8 @@ defmodule ElixirSense.Core.TypeHints do
   clause, `env.vars` contains a `VarInfo` for `x` with `type: :integer`,
   whereas at the binding site `x` may only be typed as `nil` / `term()`.
 
-  This empirically-verified fact holds for:
-    - `cond` clause guards (`is_integer/1`, `is_binary/1`, etc.)
-    - `case` clause guards
-    - Rebindings (a new version of the var replaces the old one in `env.vars`)
-
-  **Scope-narrowed `VarInfo` DOES surface in `env.vars` at read positions.**
+  This holds for `cond`/`case` clause guards (`is_integer/1`, `is_binary/1`, etc.)
+  and rebindings (a new version replaces the old one in `env.vars`).
 
   ## Selection rule for `env.vars`
 
@@ -282,25 +278,17 @@ defmodule ElixirSense.Core.TypeHints do
   pattern is not an identifier (literals, struct-only patterns) yield `name: nil`;
   the caller is expected to skip those.
 
-  ## Default-elision rule (verified empirically)
+  ## Default-elision rule
 
   Elixir fills positional arguments left-to-right and elides default-bearing
-  params from the **right** among the defaults. Concretely, given a clause with
-  `M` mandatory params and `D` default params (total `M + D`), calling at concrete
-  `arity` keeps all `M` mandatory params plus the **leftmost `arity - M`** default
-  params, in original order, dropping the rest.
+  params from the **right** among the defaults. Given `M` mandatory and `D`
+  default params, calling at concrete `arity` keeps all `M` mandatory params plus
+  the **leftmost `arity - M`** default params, in original order.
 
-  Experiment (Elixir 1.20.1):
-
-      def f(a, b \\\\ 1, c), do: {a, b, c}
-      f(:x, :y) #=> {:x, 1, :y}     # arity 2 → keeps [a, c], drops default b
+  Example (Elixir 1.20.1):
 
       def g(a \\\\ 1, b \\\\ 2, c), do: {a, b, c}
-      g(:x)     #=> {1, 2, :x}      # arity 1 → keeps [c], drops a and b
       g(:x, :y) #=> {:x, 2, :y}     # arity 2 → keeps [a, c], drops default b
-
-  i.e. for g/2 the mandatory `c` is kept and the leftmost default `a` is kept,
-  while the rightmost default `b` is elided.
 
   ## Caching
 
@@ -323,12 +311,9 @@ defmodule ElixirSense.Core.TypeHints do
     end)
   end
 
-  # Resolve the var from env.vars at the read position, then delegate to the
-  # existing hint path with that flow-sensitive VarInfo.
-  #
-  # Selection rule: env.vars at a given position holds at most one VarInfo per
-  # name (the in-scope, possibly flow-narrowed version). A plain name match is
-  # sufficient — no version comparison is required.
+  # Resolve the var from env.vars at the read position (a plain name match: at most
+  # one VarInfo per name, already the in-scope/narrowed version), then delegate to
+  # the existing hint path.
   defp compute_hint_at(%Context{} = ctx, position, var_name, opts) do
     case env_for(ctx, position) do
       nil ->
@@ -367,19 +352,16 @@ defmodule ElixirSense.Core.TypeHints do
     end)
   end
 
-  # ── source provenance classification ─────────────────────────────────────────
-  #
-  # `TypePresentation.render_hint/3` reports only `:native | :shape`. We refine
-  # that into `:native_exck | :native_inferred | :spec | :shape` by attributing
-  # the strongest backing of the displayed type. See the moduledoc "Hint
+  # Source provenance classification. `TypePresentation.render_hint/3` reports only
+  # `:native | :shape`; refine into `:native_exck | :native_inferred | :spec |
+  # :shape` by attributing the strongest backing. See the moduledoc "Hint
   # provenance" for the contract and scoping rules.
 
-  # `:native` always means the native engine produced the text from the var's own
-  # descriptor (`of_match`/`of_expr` on the current file).
+  # `:native` means the native engine produced the text from the var's own descriptor.
   defp classify_source(_ctx, _module, :native, _type), do: :native_inferred
 
   # `:shape` means the structural engine produced the text. Attribute it from the
-  # TOP-LEVEL thunk of the var's structural type. Containers/literals → `:shape`.
+  # top-level thunk of the var's structural type; containers/literals → `:shape`.
   defp classify_source(ctx, module, :shape, type) do
     attribute_thunk(ctx, module, type)
   rescue
@@ -402,10 +384,9 @@ defmodule ElixirSense.Core.TypeHints do
     end)
   end
 
-  # Local/imported call: the provenance is NOT carried in the local-sigs map
-  # values (they are `{kind, sig}`), so consult `ModFunInfo.elixir_types_sig_source`
-  # for the MFA directly, then fall back to a spec in metadata. The local-call
-  # thunk does not carry the module, so resolve it against the current `module`.
+  # Local/imported call: provenance is not carried in the local-sigs map values, so
+  # consult `ModFunInfo.elixir_types_sig_source` for the MFA, then fall back to a
+  # spec. The local-call thunk lacks the module, so resolve against `module`.
   defp attribute_thunk(ctx, module, {:local_call, fun, _position, args})
        when is_atom(fun) and is_list(args) and is_atom(module) do
     arity = length(args)
@@ -429,10 +410,8 @@ defmodule ElixirSense.Core.TypeHints do
     cached({__MODULE__, ctx.ref, :source, mfa}, fun)
   end
 
-  # Shared per-request process-dictionary get-or-compute. `compute_fun` is run
-  # once per distinct `key` and its result memoised for the lifetime of the
-  # request (keyed by `ctx.ref`). `:__miss__` is the sentinel for "not yet
-  # computed", so a legitimately-cached `:__miss__` value is impossible here.
+  # Shared per-request process-dictionary get-or-compute, memoised per distinct
+  # `key`. `:__miss__` is the "not yet computed" sentinel (never a cached value).
   defp cached(key, compute_fun) do
     case Process.get(key, :__miss__) do
       :__miss__ ->
@@ -461,10 +440,9 @@ defmodule ElixirSense.Core.TypeHints do
   end
 
   defp local_sig_source(metadata, module, fun, call_arity) do
-    # Default-arg functions are keyed ONLY under max arity in mods_funs_to_positions.
-    # A call `f(x)` for `def f(a, b \\ 1)` has call_arity=1 but the entry is keyed
-    # under arity 2. We therefore scan all {module, fun, *} entries and pick the
-    # first whose defaults window admits the call arity.
+    # Default-arg functions are keyed only under max arity, so scan all
+    # {module, fun, *} entries and pick the first whose defaults window admits the
+    # call arity.
     find_mod_fun_info(metadata, module, fun, call_arity)
     |> case do
       %ModFunInfo{elixir_types_sig_source: source} -> source
@@ -480,19 +458,16 @@ defmodule ElixirSense.Core.TypeHints do
     _ -> false
   end
 
-  # Shared helper: find the ModFunInfo entry for {module, fun} whose defaults
-  # window admits `call_arity`. The metadata key is the *max* arity (all params,
-  # defaults included). A call at a lower arity is valid when
-  #   max_arity - default_count <= call_arity <= max_arity.
-  # This mirrors the scan already used by `metadata_params/4`.
+  # Find the ModFunInfo entry for {module, fun} whose defaults window admits
+  # `call_arity`. The metadata key is the max arity; a lower-arity call is valid
+  # when `max_arity - default_count <= call_arity <= max_arity`.
   defp find_mod_fun_info(%Metadata{} = metadata, module, fun, call_arity) do
     metadata.mods_funs_to_positions
     |> Enum.find_value(fn
       {{^module, ^fun, key_arity}, %ModFunInfo{} = info}
       when not is_nil(key_arity) ->
-        # `get_arities/1` iterates ALL clause variants (the old `List.first`
-        # only looked at the first, mis-windowing multi-clause defaults). Each
-        # entry is `{total_arity, default_count}`: a variant admits the call when
+        # `get_arities/1` iterates all clause variants; each is
+        # `{total_arity, default_count}` and admits the call when
         # `total - defaults <= call_arity <= total`.
         admits? =
           info
@@ -519,11 +494,9 @@ defmodule ElixirSense.Core.TypeHints do
     end
   end
 
-  # Metadata (source) modules: ModFunInfo.params is a list of clause param ASTs
-  # (list(list(ast))). The metadata key is the *maximum* arity (all params,
-  # defaults included). We pick the clause whose [mandatory_count, total] window
-  # admits the requested arity, extract per-param info from the AST, then apply
-  # the default-elision rule for the concrete arity.
+  # Metadata (source) modules: ModFunInfo.params is a list of clause param ASTs.
+  # Pick the clause whose [mandatory_count, total] window admits the requested
+  # arity, extract per-param info, then apply the default-elision rule.
   defp metadata_params(%Metadata{} = metadata, module, fun, arity) do
     clauses =
       metadata.mods_funs_to_positions
@@ -533,9 +506,8 @@ defmodule ElixirSense.Core.TypeHints do
       end)
       |> Enum.flat_map(fn {_key, %ModFunInfo{params: params_variants}} -> params_variants end)
 
-    # Compute param_from_ast once per clause: find_value returns the chosen
-    # clause's already-parsed params (wrapped to distinguish from a `nil` "no
-    # match" result), so we don't re-map the AST after selection.
+    # find_value returns the chosen clause's already-parsed params (wrapped to
+    # distinguish from a `nil` "no match"), so we don't re-map the AST afterwards.
     chosen_params =
       Enum.find_value(clauses, fn clause ->
         params = Enum.map(clause, &param_from_ast/1)
@@ -600,12 +572,9 @@ defmodule ElixirSense.Core.TypeHints do
     |> Enum.map(fn p -> %{name: p.name, has_default: p.has_default} end)
   end
 
-  # ── remote / compiled modules ─────────────────────────────────────────────────
-  #
-  # `Introspection.get_signatures/2` returns one entry per documented arity, with
-  # `params` a list of strings; defaults are marked by a " \\ " infix
-  # (e.g. "options \\ []"). The string-level default policy lives HERE so the LSP
-  # consumes the same structured list as for metadata modules.
+  # Remote / compiled modules. `Introspection.get_signatures/2` returns one entry
+  # per documented arity, with `params` a list of strings; defaults are marked by
+  # a " \\ " infix. The string-level default policy lives here.
   defp remote_params(module, fun, arity) do
     signatures = Introspection.get_signatures(module, fun)
 
@@ -634,15 +603,10 @@ defmodule ElixirSense.Core.TypeHints do
     end
   end
 
-  # The string form is already the printed param name (e.g. "options", "init_arg").
-  # Anything that is not a bare identifier (contains punctuation/whitespace) is a
-  # non-identifier pattern → nil.
-  #
-  # NOTE: the leading-`_` branch of the char class is DELIBERATE — this accepts
-  # underscore-prefixed param names (e.g. "_opts") as valid identifiers. The
-  # suppression of `_`-prefixed params is the elixir-ls DISPLAY-side filter's job
-  # (it intentionally hides them from hints); we keep them here so provenance and
-  # param structure stay complete and that suppression decision lives in one place.
+  # The string form is the printed param name; anything not a bare identifier
+  # (punctuation/whitespace) → nil. The leading-`_` in the char class is
+  # deliberate — underscore-prefixed names are accepted; suppressing them is the
+  # elixir-ls display-side filter's job.
   defp identifier_or_nil(str) do
     trimmed = String.trim(str)
 
