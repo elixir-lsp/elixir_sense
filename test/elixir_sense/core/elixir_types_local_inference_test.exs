@@ -25,8 +25,10 @@ defmodule ElixirSense.Core.ElixirTypesLocalInferenceTest do
 
   alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.Metadata
+  alias ElixirSense.Core.MetadataBuilder
   alias ElixirSense.Core.Parser
   alias ElixirSense.Core.Binding
+  alias ElixirSense.Core.TypeInference
 
   # ── helpers ────────────────────────────────────────────────────────────────
 
@@ -701,6 +703,297 @@ defmodule ElixirSense.Core.ElixirTypesLocalInferenceTest do
         refute log =~ "FunctionClauseError"
         refute log =~ "of_guard"
       end
+    end
+  end
+
+  describe "MetadataBuilder-level inference (from m2)" do
+    # Local signature inference feeds the native expression typer, which is the
+    # expected-type backend (1.19+). Excluded on 1.18 via test_helper.
+    # The file-level setup already enables use_elixir_types.
+    @describetag :requires_expected_type_native
+
+    test "captures clause AST during compilation" do
+      code = """
+      defmodule TestModule do
+        def add(x, y) do
+          x + y
+        end
+
+        def factorial(0), do: 1
+        def factorial(n) when n > 0 do
+          n * factorial(n - 1)
+        end
+      end
+      """
+
+      state =
+        code
+        |> Code.string_to_quoted(columns: true, token_metadata: true)
+        |> elem(1)
+        |> MetadataBuilder.build()
+
+      # Clauses are captured during the module body and PRUNED once the
+      # module-level inference pass computes the signature (O(n) rework) —
+      # the signature itself is the evidence the clauses were captured.
+      add_key = {TestModule, :add, 2}
+
+      assert %{elixir_types_clauses: [], elixir_types_sig: {:infer, _, _}} =
+               state.mods_funs_to_positions[add_key]
+
+      # Check that clauses were captured for factorial/1
+      factorial_key = {TestModule, :factorial, 1}
+
+      # Recursive functions deliberately skip inference (local handler
+      # disabled); clauses are pruned after the module pass either way.
+      assert %{elixir_types_clauses: []} = state.mods_funs_to_positions[factorial_key]
+    end
+
+    test "infers signatures from captured clauses" do
+      code = """
+      defmodule TestModule do
+        def simple_add(x, y) do
+          x + y
+        end
+
+        def identity(x), do: x
+      end
+      """
+
+      state =
+        code
+        |> Code.string_to_quoted(columns: true, token_metadata: true)
+        |> elem(1)
+        |> MetadataBuilder.build()
+
+      # Check that signatures were inferred
+      add_key = {TestModule, :simple_add, 2}
+
+      assert %{elixir_types_sig: add_sig, elixir_types_status: add_status} =
+               state.mods_funs_to_positions[add_key]
+
+      identity_key = {TestModule, :identity, 1}
+
+      assert %{elixir_types_sig: identity_sig, elixir_types_status: identity_status} =
+               state.mods_funs_to_positions[identity_key]
+
+      # Signatures should either be inferred successfully
+      assert add_status == :ok
+      assert identity_status == :ok
+
+      assert {:infer, _domain, _clauses} = add_sig
+      assert {:infer, _domain, _clauses} = identity_sig
+    end
+
+    test "handles functions with guards" do
+      code = """
+      defmodule TestModule do
+        def guarded_fun(x) when is_integer(x), do: x * 2
+        def guarded_fun(x) when is_binary(x), do: String.length(x)
+      end
+      """
+
+      state =
+        code
+        |> Code.string_to_quoted(columns: true, token_metadata: true)
+        |> elem(1)
+        |> MetadataBuilder.build()
+
+      key = {TestModule, :guarded_fun, 1}
+
+      assert %{
+               elixir_types_clauses: clauses,
+               elixir_types_sig: sig,
+               elixir_types_status: status
+             } = state.mods_funs_to_positions[key]
+
+      # Clauses pruned post-inference; the two-clause sig proves capture.
+      assert clauses == []
+      assert {:infer, _domain, sig_clauses} = sig
+      assert length(sig_clauses) == 2
+
+      # Status should be ok or skipped
+      assert status == :ok
+
+      assert {:infer, _domain, clause_types} = sig
+      # Note: String.length return type is dynamic() since remote handler
+      # doesn't have ExCk data during local inference
+      assert length(clause_types) == 2
+    end
+
+    test "skips functions with unquotes" do
+      code = """
+      defmodule TestModule do
+        name = :dynamic_name
+        def unquote(name)(x), do: x
+      end
+      """
+
+      state =
+        code
+        |> Code.string_to_quoted(columns: true, token_metadata: true)
+        |> elem(1)
+        |> MetadataBuilder.build()
+
+      # Should not have captured clauses for functions with unquotes
+      unknown_key = {TestModule, :__unknown__, 1}
+
+      assert %{elixir_types_clauses: []} = state.mods_funs_to_positions[unknown_key]
+    end
+
+    test "handles private functions" do
+      code = """
+      defmodule TestModule do
+        def public_fun(x), do: private_fun(x)
+
+        defp private_fun(x), do: x * 2
+      end
+      """
+
+      state =
+        code
+        |> Code.string_to_quoted(columns: true, token_metadata: true)
+        |> elem(1)
+        |> MetadataBuilder.build()
+
+      # Both public and private functions should be captured
+      public_key = {TestModule, :public_fun, 1}
+      private_key = {TestModule, :private_fun, 1}
+
+      assert %{elixir_types_clauses: [], elixir_types_sig: {:infer, _, _}} =
+               state.mods_funs_to_positions[public_key]
+
+      assert %{elixir_types_clauses: [], elixir_types_sig: {:infer, _, _}} =
+               state.mods_funs_to_positions[private_key]
+    end
+
+    test "local handler integration works" do
+      code = """
+      defmodule TestModule do
+        def simple_add(x, y), do: x + y
+        # def simple_add(x, y) do
+          # if x do
+          #   %{ispies: 1}
+          # else
+          #   %{fo: 1}
+          # end
+          # try do
+          #   %{ispies: :ok}
+          # else
+          #   a -> %{a | ispies: :ok}
+          # rescue
+          #   _ -> %{foj: 1}
+          # end
+          # cond do
+          #   x -> %{ispies: :ok}
+          #   true -> 1
+          # end
+          # n = receive do
+          #   a -> %{ispies: :ok}
+          # after
+          #   2 -> %{foj: 1}
+          # end
+          # for _ <- 1..10 do
+          #   %{ispies: :ok}
+          # end
+        # end
+        def identity(x), do: x
+      end
+      """
+
+      state =
+        code
+        |> Code.string_to_quoted(columns: true, token_metadata: true)
+        |> elem(1)
+        |> MetadataBuilder.build()
+
+      # Build local signatures map
+      local_sigs_map = ElixirTypes.build_local_sigs_map(state, TestModule)
+
+      # Should have captured signatures for both functions
+      assert Map.has_key?(local_sigs_map, {:simple_add, 2})
+      assert Map.has_key?(local_sigs_map, {:identity, 1})
+
+      # Test that we can use the local handler
+      assert {:def, {:infer, _domain, _clause_types}} = Map.get(local_sigs_map, {:simple_add, 2})
+    end
+
+    test "TypeInference integration with local signatures" do
+      code = """
+      defmodule TestModule do
+        def add(x, y), do: %{foo: x, bar: y}
+      end
+      """
+
+      state =
+        code
+        |> Code.string_to_quoted(columns: true, token_metadata: true)
+        |> elem(1)
+        |> MetadataBuilder.build()
+
+      # Build local signatures map
+      local_sigs_map = ElixirTypes.build_local_sigs_map(state, TestModule)
+
+      # Test typing a local call with the signatures map
+      call_ast = {:add, [], [1, 2]}
+      result = TypeInference.type_of_with_elixir_types(call_ast, :none, local_sigs_map)
+
+      # add/2 body is %{foo: x, bar: y}, which returns a map. task #20: native
+      # dynamic-mode inference yields a dynamic-wrapped descr, so to_shape now
+      # surfaces a {:dynamic, {:map, ...}} marker — unwrap it for the assertion.
+      {:map, fields, :closed} =
+        case result do
+          {:dynamic, inner} -> inner
+          inner -> inner
+        end
+
+      assert Keyword.has_key?(fields, :foo)
+      assert Keyword.has_key?(fields, :bar)
+    end
+
+    test "Binding uses inferred local signatures for local calls" do
+      code = """
+      defmodule LocalExample do
+        def helper(), do: 1
+        def caller() do
+          helper()
+        end
+      end
+      """
+
+      {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+      state = MetadataBuilder.build(ast)
+      metadata = Metadata.fill(code, state)
+
+      call_line = 4
+      env = state.lines_to_env[call_line]
+      refute is_nil(env)
+
+      binding = Binding.from_env(env, metadata, {call_line, 5})
+
+      result = Binding.expand(binding, {:local_call, :helper, {call_line, 5}, []})
+
+      assert result == {:integer, nil}
+    end
+
+    test "build_local_sigs_map includes native signatures derived from declared specs" do
+      code = """
+      defmodule TestModule do
+        @spec helper(integer()) :: {:ok, integer()}
+        def helper(value), do: {:ok, value}
+      end
+      """
+
+      {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+      metadata = MetadataBuilder.build(ast)
+
+      local_sigs_map = ElixirTypes.build_local_sigs_map(metadata, TestModule)
+
+      assert {:def, {sig_kind, _domain, [{[arg_descr], return_descr}]}} =
+               local_sigs_map[{:helper, 1}]
+
+      assert sig_kind in [:infer, :strong]
+      assert arg_descr != nil
+      assert is_map(return_descr)
     end
   end
 end

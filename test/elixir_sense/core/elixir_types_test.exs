@@ -1,7 +1,10 @@
 defmodule ElixirSense.Core.ElixirTypesTest do
   use ExUnit.Case, async: false
 
+  alias ElixirSense.Core.Binding
   alias ElixirSense.Core.ElixirTypes
+  alias ElixirSense.Core.MetadataBuilder
+  alias ElixirSense.Core.TypeInference
   alias ElixirSense.Test.DescrCompat
 
   describe "availability" do
@@ -166,6 +169,281 @@ defmodule ElixirSense.Core.ElixirTypesTest do
         # body `42` is an integer, on both 1.19 and 1.20
         assert ElixirTypes.to_shape(return) == {:integer, nil}
       end
+    end
+  end
+
+  describe "of_match refinement with expected descriptors and guards (from m2)" do
+    setup do
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+
+      on_exit(fn ->
+        Application.put_env(:elixir_sense, :use_elixir_types, original_value)
+      end)
+
+      if ElixirTypes.available?() do
+        :ok
+      else
+        :skip
+      end
+    end
+
+    test "guard pattern matching refinement" do
+      # Test pattern with guards
+      pattern_ast =
+        {:when, [],
+         [
+           {:x, [version: 1], nil},
+           {{:., [], [:erlang, :is_integer]}, [], [{:x, [version: 1], nil}]}
+         ]}
+
+      match_ast = {:=, [], [pattern_ast, 42]}
+
+      result =
+        ElixirTypes.of_match(
+          pattern_ast,
+          nil,
+          match_ast,
+          TestModule,
+          {:test, 1},
+          "test.ex",
+          :dynamic,
+          target_keys: [{:x, 1}]
+        )
+
+      case result do
+        {:ok, vars, _descrs} when is_map(vars) ->
+          # Should handle guard patterns
+          assert is_map(vars)
+
+        :error ->
+          # Acceptable — Module.Types.Pattern.of_match may not handle :when directly
+          :ok
+
+        other ->
+          flunk("Unexpected result: #{inspect(other)}")
+      end
+    end
+
+    test "type intersection with expected descriptors" do
+      # The "intersection" is between the expected_descr (integer) and the
+      # matched value type (42 = integer), applied by Module.Types.Pattern
+      pattern_ast = {:x, [version: 1], nil}
+      match_ast = {:=, [], [pattern_ast, 42]}
+
+      # Use integer descriptor as expected type
+      expected_descr = Module.Types.Descr.integer()
+
+      result =
+        ElixirTypes.of_match(
+          pattern_ast,
+          expected_descr,
+          match_ast,
+          TestModule,
+          {:test, 1},
+          "test.ex",
+          :dynamic,
+          target_keys: [{:x, 1}]
+        )
+
+      case result do
+        {:ok, vars, _descrs} when is_map(vars) ->
+          # Should use expected descriptor for better refinement
+          assert is_map(vars)
+
+        other ->
+          flunk("Unexpected result: #{inspect(other)}")
+      end
+    end
+  end
+
+  describe "pattern refinement conservatism (from m2)" do
+    setup do
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+
+      on_exit(fn ->
+        Application.put_env(:elixir_sense, :use_elixir_types, original_value)
+      end)
+
+      :ok
+    end
+
+    test "struct pattern refinement maintains conservatism" do
+      if ElixirTypes.available?() do
+        # Test struct pattern with existing struct - should be conservative
+        pattern_ast =
+          {:%, [], [Date, {:%{}, [], [{:year, {:year, [version: 1], nil}}]}]}
+
+        match_ast = {:=, [], [pattern_ast, Macro.escape(~D[2023-01-01])]}
+
+        result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
+
+        case result do
+          {:ok, vars, _descrs} when is_map(vars) ->
+            # Should work but be conservative with struct fields
+            assert is_map(vars)
+
+          other ->
+            flunk("Unexpected result: #{inspect(other)}")
+        end
+      end
+    end
+
+    test "binary pattern demonstrates conservative behavior" do
+      if ElixirTypes.available?() do
+        pattern_ast =
+          {:<<>>, [],
+           [
+             {:"::", [], [{:data, [version: 1], nil}, 8]},
+             {:"::", [], [{:rest, [version: 2], nil}, {:binary, [], Elixir}]}
+           ]}
+
+        match_ast = {:=, [], [pattern_ast, <<72, 101, 108, 108, 111>>]}
+
+        result = ElixirTypes.of_match(pattern_ast, nil, match_ast)
+
+        case result do
+          {:ok, vars, _descrs} when is_map(vars) ->
+            assert vars[{:data, 1}] == {:integer, nil}
+            assert vars[{:rest, 2}] == {:binary, nil}
+
+          :error ->
+            :ok
+
+          other ->
+            flunk("Unexpected result: #{inspect(other)}")
+        end
+      end
+    end
+
+    @tag :requires_expected_type_native
+    test "end-to-end integration: local signatures influence binding type inference" do
+      if ElixirTypes.available?() do
+        # This test ensures local signatures actually change the type seen at call sites
+        # Similar to the existing integration test but more comprehensive
+
+        code = """
+        defmodule TestModule do
+          def caller() do
+            result = helper()
+            result
+          end
+
+          defp helper() do
+            case 1 do
+              1 -> :success
+              _ -> :failure
+            end
+          end
+        end
+        """
+
+        # Build metadata
+        {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+        metadata = MetadataBuilder.build(ast)
+
+        # Test that local signatures are built and used
+        local_sigs = ElixirTypes.build_local_sigs_map(metadata, TestModule)
+
+        case local_sigs do
+          %{} when map_size(local_sigs) > 0 ->
+            assert Map.has_key?(local_sigs, {:helper, 0})
+
+            # Test that these signatures can be used for type inference
+            call_ast = {:helper, [], []}
+            context = %{module: TestModule, function: {:caller, 0}, file: "test.ex"}
+
+            result =
+              TypeInference.type_of_with_elixir_types(
+                call_ast,
+                :none,
+                local_sigs,
+                metadata,
+                context
+              )
+
+            case result do
+              type when is_tuple(type) ->
+                assert tuple_size(type) >= 2
+
+              other ->
+                flunk("Unexpected result: #{inspect(other)}")
+            end
+
+          other ->
+            flunk("Unexpected local_sigs result: #{inspect(other)}")
+        end
+      end
+    end
+
+    @tag :requires_expected_type_native
+    test "end-to-end integration: remote signatures influence binding type inference" do
+      if ElixirTypes.available?() do
+        assert {:ok, %{sig: sig}} =
+                 ElixirSense.Core.ExCkReader.lookup_signature(
+                   ElixirSenseExample.RemoteSignatures,
+                   :helper,
+                   0
+                 )
+
+        assert sig ==
+                 {:infer, nil, [{[], %{dynamic: %{atom: {:union, %{success: [], failure: []}}}}}]}
+
+        # This test ensures local signatures actually change the type seen at call sites
+        # Similar to the existing integration test but more comprehensive
+
+        code = """
+        defmodule TestModule do
+          def caller() do
+            result = ElixirSenseExample.RemoteSignatures.helper()
+            result
+          end
+        end
+        """
+
+        # Build metadata
+        {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
+        metadata = MetadataBuilder.build(ast)
+
+        # Test that local signatures are built and used
+        local_sigs = ElixirTypes.build_local_sigs_map(metadata, TestModule)
+
+        # Test that these signatures can be used for type inference
+        call_ast =
+          {{:., [line: 3], [ElixirSenseExample.RemoteSignatures, :helper]}, [line: 1], []}
+
+        context = %{module: TestModule, function: {:caller, 0}, file: "test.ex"}
+
+        result =
+          TypeInference.type_of_with_elixir_types(
+            call_ast,
+            :none,
+            local_sigs,
+            metadata,
+            context
+          )
+
+        case result do
+          type when is_tuple(type) ->
+            assert tuple_size(type) >= 2
+
+          other ->
+            flunk("Unexpected result: #{inspect(other)}")
+        end
+      end
+    end
+
+    test "Binding unions results across union remote targets" do
+      env = %Binding{module: TestModule, function: {:caller, 0}, requires: [], vars: []}
+
+      results =
+        [String, Integer]
+        |> Enum.map(fn mod ->
+          Binding.expand(env, {:call, {:atom, mod}, :module_info, [{:atom, :module}]})
+        end)
+
+      assert Enum.all?(results, &(&1 in [nil, :none] or is_tuple(&1) or is_map(&1)))
     end
   end
 
@@ -619,6 +897,28 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       # Should return :error if not enabled, or {:ok, descr} if available
       result = ElixirTypes.of_expr(42)
       assert result == :error or match?({:ok, _}, result)
+    end
+  end
+
+  describe "TypeInference integration when feature disabled (from integration_test)" do
+    setup do
+      # Ensure the feature is disabled for these tests
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, false)
+
+      on_exit(fn ->
+        Application.put_env(:elixir_sense, :use_elixir_types, original_value)
+      end)
+    end
+
+    test "falls back to existing behavior when disabled" do
+      # Test that our integration doesn't break existing functionality
+      result = TypeInference.type_of(42, :none)
+      assert result == {:integer, 42}
+
+      # Test with an unknown function call - should return local call type
+      result = TypeInference.type_of({:unknown_function, [], []}, :none)
+      assert match?({:local_call, :unknown_function, {1, 1}, []}, result)
     end
   end
 
