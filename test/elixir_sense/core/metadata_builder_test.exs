@@ -9992,6 +9992,41 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [%CallInfo{position: {3, 3}}, %CallInfo{position: {3, 25}}] =
                state.calls[3] |> Enum.filter(&(&1.func == :@))
     end
+
+    test "self-referential @spec when guard does not blow up metadata building" do
+      # Regression: a recursive `when` guard such as `when opt: [term :: opt]`
+      # used to be substituted with Macro.prewalk, which re-traversed the
+      # substituted output and expanded `opt` forever, building an ever-growing
+      # AST until the process OOMed (locator hang / CI runner kill). The fix
+      # tracks guard vars currently being expanded and stops on recursion.
+      # Asserting completion (not timing) pins the root cause: this returns
+      # promptly instead of hanging.
+      state =
+        """
+        defmodule Proto do
+          @spec fun(opt) :: any when opt: [term :: opt]
+          def fun(a), do: a
+        end
+        """
+        |> string_to_state
+
+      assert %{{Proto, :fun, 1} => %State.SpecInfo{}} = state.specs
+    end
+
+    test "mutually recursive @spec when guards do not blow up metadata building" do
+      # Transitive cycle: a -> b -> a. The expansion-path tracking must break
+      # this too, not just direct self-reference.
+      state =
+        """
+        defmodule Proto do
+          @spec fun(a) :: any when a: [b], b: [a]
+          def fun(x), do: x
+        end
+        """
+        |> string_to_state
+
+      assert %{{Proto, :fun, 1} => %State.SpecInfo{}} = state.specs
+    end
   end
 
   describe "defrecord" do

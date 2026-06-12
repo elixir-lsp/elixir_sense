@@ -1101,13 +1101,54 @@ defmodule ElixirSense.Core.Compiler.State do
           into: %{},
           do: {var, type}
 
-    Macro.prewalk(type_ast, fn
-      {name, _, nil} = ast when is_atom(name) -> Map.get(guard_map, name, ast)
-      ast -> ast
-    end)
+    # Substitute `when` guard vars. We must NOT use Macro.prewalk here because it
+    # re-traverses substituted output: a (directly or transitively) recursive guard
+    # such as `when opt: [term :: opt]` would expand `opt` forever, building an
+    # ever-growing AST until the process OOMs. We instead walk the AST manually and
+    # track the set of guard vars currently being expanded; a var already on the
+    # expansion path is left as-is, which breaks self-referential and mutually
+    # recursive guards while still expanding every other guard var.
+    do_substitute_spec_vars(type_ast, guard_map, MapSet.new())
   end
 
   defp substitute_spec_vars(type_ast, _guards), do: type_ast
+
+  defp do_substitute_spec_vars({name, _, nil} = ast, guard_map, in_progress)
+       when is_atom(name) do
+    case guard_map do
+      %{^name => replacement} ->
+        if MapSet.member?(in_progress, name) do
+          # recursive guard reference — stop expanding to avoid infinite growth
+          ast
+        else
+          do_substitute_spec_vars(replacement, guard_map, MapSet.put(in_progress, name))
+        end
+
+      _ ->
+        ast
+    end
+  end
+
+  defp do_substitute_spec_vars({left, meta, right}, guard_map, in_progress) do
+    {
+      do_substitute_spec_vars(left, guard_map, in_progress),
+      meta,
+      do_substitute_spec_vars(right, guard_map, in_progress)
+    }
+  end
+
+  defp do_substitute_spec_vars({left, right}, guard_map, in_progress) do
+    {
+      do_substitute_spec_vars(left, guard_map, in_progress),
+      do_substitute_spec_vars(right, guard_map, in_progress)
+    }
+  end
+
+  defp do_substitute_spec_vars(list, guard_map, in_progress) when is_list(list) do
+    Enum.map(list, &do_substitute_spec_vars(&1, guard_map, in_progress))
+  end
+
+  defp do_substitute_spec_vars(other, _guard_map, _in_progress), do: other
 
   defp spec_ast_to_shape({:|, _, variants}, module) do
     {:union, Enum.map(variants, &spec_ast_to_shape(&1, module))}
