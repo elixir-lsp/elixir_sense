@@ -78,6 +78,7 @@ defmodule ElixirSense.Core.ElixirTypes do
   # credo:disable-for-this-file Credo.Check.Refactor.Apply
   alias Module.Types.Descr
   alias ElixirSense.Core.ExCkReader
+  alias ElixirSense.Core.ModuleResolver
   alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.State.AttributeInfo
   alias ElixirSense.Core.State.SpecInfo
@@ -671,11 +672,10 @@ defmodule ElixirSense.Core.ElixirTypes do
     {:ok, atom}
   end
 
-  defp module_from_ast({:__MODULE__, _, _}, metadata) when is_map(metadata) do
-    metadata
-    |> metadata_env()
-    |> case do
-      %{module: module} when is_atom(module) -> {:ok, module}
+  defp module_from_ast({:__MODULE__, _, _} = ast, metadata) when is_map(metadata) do
+    # Pure AST->module resolution (current module) is delegated to ModuleResolver.
+    case metadata_env(metadata) do
+      env when is_map(env) -> ModuleResolver.resolve(ast, env)
       _ -> :error
     end
   end
@@ -725,83 +725,25 @@ defmodule ElixirSense.Core.ElixirTypes do
     end
   end
 
-  defp module_from_ast({:__aliases__, _, parts}, metadata) when is_list(parts) do
-    try do
-      {:ok, resolve_alias(parts, metadata)}
-    rescue
-      ArgumentError -> :error
+  defp module_from_ast({:__aliases__, _, parts} = ast, metadata)
+       when is_list(parts) and is_map(metadata) do
+    # Pure AST->module (alias) resolution is delegated to ModuleResolver.
+    case metadata_env(metadata) do
+      env when is_map(env) -> ModuleResolver.resolve(ast, env)
+      # No env: fall back to bare concat to preserve prior behavior.
+      _ -> resolve_bare_alias(parts)
     end
   end
 
   defp module_from_ast(_ast, _metadata), do: :error
 
-  defp resolve_alias(parts, metadata) when is_list(parts) and is_map(metadata) do
-    env = metadata_env(metadata)
-
-    aliases =
-      case env do
-        %{aliases: aliases} when is_list(aliases) -> aliases
-        _ -> []
-      end
-
-    current_module = if is_map(env), do: env.module, else: nil
-
-    mod = Module.concat(parts)
-
-    case ElixirSense.Core.Introspection.expand_alias(mod, aliases) do
-      ^mod ->
-        case expand_alias_from_env(current_module, aliases, parts) do
-          resolved when is_atom(resolved) and not is_nil(resolved) ->
-            resolved
-
-          _ ->
-            # For single-element aliases, try parent module resolution as fallback
-            case parts do
-              [single] when is_atom(single) and is_atom(current_module) ->
-                resolve_parent_alias(current_module, single) || Module.concat(parts)
-
-              _ ->
-                Module.concat(parts)
-            end
-        end
-
-      resolved ->
-        resolved
-    end
-  end
-
-  defp resolve_alias(parts, _metadata), do: Module.concat(parts)
-
-  defp resolve_parent_alias(module, single) when is_atom(module) and is_atom(single) do
-    parent = module |> Module.split() |> Enum.drop(-1)
-
-    case parent do
-      [] -> nil
-      parts -> Module.concat(parts ++ [single])
-    end
+  # Mirrors the historical `resolve_alias(parts, non_map_metadata)` fallback that
+  # simply concatenated the parts when no env was available.
+  defp resolve_bare_alias(parts) do
+    {:ok, Module.concat(parts)}
   rescue
-    e ->
-      Logger.debug("resolve_parent_alias failed: #{Exception.format(:error, e, __STACKTRACE__)}")
-      nil
+    ArgumentError -> :error
   end
-
-  defp resolve_parent_alias(_, _), do: nil
-
-  defp expand_alias_from_env(module, aliases, list)
-       when is_atom(module) and is_list(aliases) and is_list(list) do
-    env = %Macro.Env{module: module, aliases: aliases}
-
-    case ElixirSense.Core.Normalized.Macro.Env.expand_alias(env, [], list, trace: false) do
-      {:alias, resolved} when is_atom(resolved) -> resolved
-      _ -> nil
-    end
-  rescue
-    e ->
-      Logger.debug("expand_alias_from_env failed: #{Exception.format(:error, e, __STACKTRACE__)}")
-      nil
-  end
-
-  defp expand_alias_from_env(_, _, _), do: nil
 
   defp metadata_env(metadata) do
     source = if is_map(metadata), do: metadata.cursor_env || metadata.closest_env, else: nil
@@ -1741,10 +1683,20 @@ defmodule ElixirSense.Core.ElixirTypes do
       {:non_empty_list, [], [elem]} ->
         {:nonempty_list, quoted_to_shape(elem)}
 
-      # non_empty_list with explicit (non-list) tail — improper list, which we
-      # cannot represent; degrade to nil rather than claiming a proper list.
-      {:non_empty_list, [], [_elem, _tail]} ->
-        nil
+      # non_empty_list with explicit tail — a non-empty (possibly-improper) list.
+      # Represent it as the `{:nonempty_list, elem, tail}` 3-tuple when BOTH the
+      # element and the tail convert; degrade to nil only if either side is
+      # unconvertible (a `nil` from `quoted_to_shape` means "unknown", not
+      # "absent", so we cannot soundly drop it here).
+      {:non_empty_list, [], [elem, tail]} ->
+        elem_shape = quoted_to_shape(elem)
+        tail_shape = quoted_to_shape(tail)
+
+        if is_nil(elem_shape) or is_nil(tail_shape) do
+          nil
+        else
+          {:nonempty_list, elem_shape, tail_shape}
+        end
 
       # Tuple types. The top type `tuple()` quotes to a single open marker
       # `{:{}, [], [{:..., [], nil}]}` → `:tuple` (don't claim arity 0). Tuples
@@ -1900,14 +1852,30 @@ defmodule ElixirSense.Core.ElixirTypes do
     # grammar contract so coercion can build the right descr (closed_map for a
     # nil tail, open_map otherwise). Before this, to_shape collapsed BOTH to a
     # nil tail, which silently over-reported closedness for open maps.
-    map_tail = if open_map_marker?(fields), do: :open, else: nil
-
     kv_pairs =
       for {key_quoted, value_quoted} <- fields do
         case extract_quoted_map_key(key_quoted) do
           nil -> {{:domain, quoted_to_shape(key_quoted)}, value_quoted}
           atom_key -> {atom_key, value_quoted}
         end
+      end
+
+    # Tail per the shape grammar:
+    #   * `:open`   — the descr carries the `{:..., [], nil}` open marker;
+    #   * `:closed` — a literal-complete descr (all atom keys known, no open
+    #                 marker): the descr round-trip is closed-by-default so a
+    #                 closed descr coerces back to a closed_map EXACTLY;
+    #   * `nil`     — a descr whose closedness we cannot assert (DOMAIN keys
+    #                 like `%{atom() => term()}` encode openness WITHOUT the
+    #                 `:...` marker; closing those would wrongly exclude maps the
+    #                 domain admits), so stay conservatively partial.
+    has_domain_key? = Enum.any?(kv_pairs, &match?({{:domain, _}, _}, &1))
+
+    map_tail =
+      cond do
+        open_map_marker?(fields) -> :open
+        has_domain_key? -> nil
+        true -> :closed
       end
 
     # Check if this is a struct (has __struct__ field with a module atom)
@@ -2091,86 +2059,29 @@ defmodule ElixirSense.Core.ElixirTypes do
   def coerce_var_type_public(type_like), do: coerce_var_type(type_like)
 
   @doc """
-  Like `coerce_var_type_public/1`, but with closed-map fidelity opts.
+  Like `coerce_var_type_public/1`. The `:closed_literals` option is DEPRECATED
+  and now a no-op.
 
-  ## Options
+  Closed-map fidelity is driven by the shape's map tail itself (the three-marker
+  model — see `ElixirSense.Core.Binding`'s "Shape vocabulary"):
 
-    * `:closed_literals` (default `false`) — when `true`, a `nil`-tail map shape
-      (`{:map, fields, nil}`) is coerced to a `Descr.closed_map/1` instead of the
-      default `open_map`. Per the shape-grammar contract, a `nil` tail means a
-      GENUINELY closed map (all keys known: map literals, or `to_shape/1` output
-      for a closed descr). An `:open` (or any non-`nil`) tail always coerces to
-      `open_map`.
+    * `:closed` — literal-complete (map literal in EXPRESSION context, `Map.new/0`,
+      `Map.from_struct/1` of a known struct, or a closed descr round-tripped via
+      `to_shape/1`): coerced to a `Descr.closed_map/1` (dynamic-wrapped) BY DEFAULT,
+      so the descr round-trip is EXACT.
+    * `nil` (partial) — closedness unknown (guard facts such as `is_map_key/2`
+      narrowing): coerced to an `open_map`, since closing would wrongly assert
+      other keys absent.
+    * `:open` — additional unknown keys exist: coerced to an `open_map`.
 
-  ### Soundness — why this is OPT-IN, not the default
-
-  Closing a map asserts all OTHER keys absent. That is correct for literal-complete
-  shapes, but UNSOUND for the partial `nil`-tail maps that guard facts produce —
-  e.g. `is_map_key(m, :a)` narrows `m` to `{:map, [a: nil], nil}` in
-  `type_inference/guard.ex`, which asserts only that `:a` is present, NOT that the
-  map is closed. Those partial producers use a `nil` tail and are indistinguishable
-  from literal-complete `nil`-tail maps AT THE COERCION SITE, and they DO flow into
-  the public coercion path (binding.ex intersection, compiler clause/state seeding).
-  So the default (`:closed_literals` off) keeps every map open, preserving the
-  documented seeding contract (open maps never wrongly exclude a clause).
-
-  Only callers that KNOW their shape is literal-complete (currently: the
-  compiler-parity descr round-trip, where `to_shape/1` of a closed descr yields a
-  `nil` tail and an `:open` tail for an open descr) should pass `closed_literals: true`.
-
-  ### Backlog (third tail marker)
-
-  The fully general fix is a THIRD tail marker (e.g. `:closed`) distinct from both
-  `nil` (currently overloaded as "closed unless a partial producer") and `:open`,
-  so literal-complete and guard-fact-partial maps are distinguishable everywhere.
-  That touches the shared shape grammar consumed across `binding.ex` /
-  `type_presentation.ex` (which pattern-match `tail in [nil, :open]`) and is OUT OF
-  SCOPE for this wave; this opt is the minimal, sound, default-preserving step.
+  Because closedness now lives in the tail, the old `:closed_literals` opt (which
+  blanket-closed `nil`-tail maps) is obsolete: `nil` now means PARTIAL and MUST
+  stay open. The option is accepted for source compatibility but ignored.
   """
   def coerce_var_type_public(type_like, opts) when is_list(opts) do
-    if Keyword.get(opts, :closed_literals, false) do
-      coerce_var_type_closed(type_like)
-    else
-      coerce_var_type(type_like)
-    end
+    _ = opts
+    coerce_var_type(type_like)
   end
-
-  # Closed-literal coercion: only the OUTERMOST `nil`-tail map is built closed.
-  # Nested field values go through the normal (open, default-safe) coercion, so a
-  # nested guard-fact partial map can never be wrongly closed. Structs already
-  # derive closed/open from the loaded defstruct in `coerce_struct_descr`, so they
-  # need no special handling here.
-  # An EMPTY-field `nil`-tail map (`{:map, [], nil}`) is the map TOP (`map()`),
-  # NOT the empty closed map (`%{}` round-trips through the distinct `:empty_map`
-  # shape). Closing it to `closed_map([])` would wrongly collapse the top to the
-  # empty map, so leave empty-field maps open even under `closed_literals: true`.
-  defp coerce_var_type_closed({:map, [], nil} = shape) do
-    coerce_var_type(shape)
-  end
-
-  # A `nil`-tail map with DOMAIN keys (`{{:domain, _}, _}`) is open: openness is
-  # encoded by the domain keys (`%{atom() => term(), ...}`), not by a `:...`
-  # marker, so to_shape gives it a nil tail. `coerce_map_descr` drops domain keys
-  # (only atom-keyed pairs survive), so closing here would build an empty/partial
-  # closed map and wrongly exclude maps the domain admits. Keep these open.
-  defp coerce_var_type_closed({:map, fields, nil} = shape)
-       when is_list(fields) do
-    if Enum.all?(fields, &match?({k, _} when is_atom(k), &1)) do
-      try do
-        Descr.dynamic(coerce_map_descr(fields, [], closed: true))
-      rescue
-        # If closed_map construction is unavailable on this Descr, fall back to
-        # the sound open coercion rather than failing.
-        _ -> coerce_var_type(shape)
-      catch
-        _, _ -> coerce_var_type(shape)
-      end
-    else
-      coerce_var_type(shape)
-    end
-  end
-
-  defp coerce_var_type_closed(type_like), do: coerce_var_type(type_like)
 
   # task #10: Binding shapes are best-effort. Seeding them as *static* descrs
   # makes the typesystem treat them as certain, so intersections/matches collapse
@@ -2234,6 +2145,20 @@ defmodule ElixirSense.Core.ElixirTypes do
     Descr.non_empty_list(coerce_var_type(element_type))
   end
 
+  # Improper (possibly-improper) non-empty list. When the arity-2 constructor
+  # `Descr.non_empty_list/2` is available, build the precise improper descr with
+  # the coerced tail. Otherwise fall back to `Descr.dynamic()` (unknown) — NOT a
+  # widened proper list: an improper list is not a member of `list(t)`, so
+  # widening would be UNSOUND.
+  defp coerce_static_descr({:nonempty_list, element_type, tail_type}) do
+    if loaded_exported?(Descr, :non_empty_list, 2) do
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
+      apply(Descr, :non_empty_list, [coerce_var_type(element_type), coerce_var_type(tail_type)])
+    else
+      Descr.dynamic()
+    end
+  end
+
   defp coerce_static_descr({:tuple, _arity, elements}) when is_list(elements) do
     Descr.tuple(Enum.map(elements, &coerce_var_type/1))
   end
@@ -2243,12 +2168,18 @@ defmodule ElixirSense.Core.ElixirTypes do
     Descr.open_tuple(Enum.map(elements, &coerce_var_type/1))
   end
 
-  # The map tail (`nil` = closed-by-grammar, `:open` = additional keys) is
-  # deliberately NOT used to close the descr on this default path: guard facts in
-  # `type_inference/guard.ex` emit `nil`-tail PARTIAL maps (e.g. `is_map_key/2`
-  # narrowing) that are indistinguishable from literal-complete maps here, and a
-  # closed_map would unsoundly exclude maps with other keys. Closed-map fidelity
-  # is available opt-in via `coerce_var_type_public(_, closed_literals: true)`.
+  # The map tail drives closedness on coercion:
+  #   * `:closed` — literal-complete (map literal in expression context, or a
+  #     closed descr round-tripped via `to_shape/1`): build a CLOSED map so the
+  #     descr round-trip is EXACT. Falls back to open if `closed_map` is
+  #     unavailable or construction fails (drift tolerance).
+  #   * `nil` (partial) / `:open` — closedness unknown or extra keys exist (guard
+  #     facts like `is_map_key/2` narrowing emit `nil`-tail PARTIAL maps). Build
+  #     an OPEN map; a closed_map would unsoundly exclude maps with other keys.
+  defp coerce_static_descr({:map, fields, :closed}) when is_list(fields) do
+    maybe_closed_map_descr(fields)
+  end
+
   defp coerce_static_descr({:map, fields, _tail}) when is_list(fields) do
     coerce_map_descr(fields, [])
   end
@@ -2313,11 +2244,37 @@ defmodule ElixirSense.Core.ElixirTypes do
   # the real (open or fuller) map empty and filtering out valid clauses. This is
   # the soundness-preserving default for the public seeding path.
   #
-  # `closed: true` builds a CLOSED map (all keys known). Used only by the opt-in
-  # `coerce_var_type_public(_, closed_literals: true)` path, where the caller has
-  # established the shape is literal-complete (a `nil`-tail map that is NOT a
-  # partial guard fact — e.g. `to_shape/1` of a closed descr). See that function's
-  # doc for the soundness contract.
+  # `closed: true` builds a CLOSED map (all keys known). Used by the `:closed`-tail
+  # coercion path (`maybe_closed_map_descr/1`), where the shape is literal-complete
+  # (map literal in expression context, `Map.new`/`Map.from_struct`, or `to_shape/1`
+  # of a closed descr). A `nil`-tail (partial) map never reaches this path.
+  # Closed-map coercion for a `:closed`-tail (literal-complete) map shape.
+  #
+  # An EMPTY-field map (`{:map, [], :closed}`) is the empty map `%{}`. Building it
+  # as `closed_map([])` is correct (the empty map has no keys) and is what
+  # `Map.new/0` / `%{}`-as-expression should mean. (The map TOP `map()` uses a
+  # `nil`/`:open` empty-field shape, not `:closed`, and goes through open coercion.)
+  #
+  # A map with DOMAIN keys cannot be closed: `coerce_map_descr` keeps only
+  # atom-keyed pairs, so closing would drop the domain and wrongly exclude maps
+  # the domain admits. Fall back to the open coercion for those.
+  #
+  # If `closed_map/1` is unavailable on the running Descr, or construction fails,
+  # fall back to the sound open coercion (Module.Types API drift tolerance).
+  defp maybe_closed_map_descr(fields) do
+    if Enum.all?(fields, &match?({k, _} when is_atom(k), &1)) do
+      try do
+        coerce_map_descr(fields, [], closed: true)
+      rescue
+        _ -> coerce_map_descr(fields, [])
+      catch
+        _, _ -> coerce_map_descr(fields, [])
+      end
+    else
+      coerce_map_descr(fields, [])
+    end
+  end
+
   defp coerce_map_descr(fields, extra_pairs, opts \\ []) do
     atom_pairs =
       extra_pairs ++ for({k, v} when is_atom(k) <- fields, do: {k, coerce_field_value(v)})

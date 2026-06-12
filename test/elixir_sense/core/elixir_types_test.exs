@@ -223,8 +223,10 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "handles closed map" do
+      # A closed descr round-trips to a `:closed` tail (literal-complete), so the
+      # descr round-trip is closed-by-default.
       assert ElixirTypes.to_shape(Module.Types.Descr.closed_map(foo: Module.Types.Descr.binary())) ==
-               {:map, [foo: {:binary, nil}], nil}
+               {:map, [foo: {:binary, nil}], :closed}
     end
 
     test "handles empty list" do
@@ -255,15 +257,16 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert ElixirTypes.to_shape(Module.Types.Descr.non_empty_list(Module.Types.Descr.integer())) ==
                {:nonempty_list, {:integer, nil}}
 
-      # task #22: a non_empty_list with an explicit non-list (improper) tail is
-      # unrepresentable as a proper-list shape, so we degrade to nil rather than
-      # silently claiming a proper list.
+      # A non_empty_list with an explicit non-list (improper) tail is now
+      # represented as the `{:nonempty_list, elem, tail}` 3-tuple (both the
+      # element and tail convert). Previously this degraded to nil because the
+      # shape algebra had no improper-list representation.
       assert ElixirTypes.to_shape(
                Module.Types.Descr.non_empty_list(
                  Module.Types.Descr.integer(),
                  Module.Types.Descr.integer()
                )
-             ) == nil
+             ) == {:nonempty_list, {:integer, nil}, {:integer, nil}}
     end
 
     test "handles open map" do
@@ -295,10 +298,10 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       #
       # A domain-keyed open map carries NO `{:..., [], nil}` open marker in its
       # quoted form — openness is encoded by the domain keys themselves
-      # (`atom() => term()`, `integer() => binary()`, ...) — so its tail is `nil`,
-      # not `:open`. Coercion's opt-in closed path explicitly refuses to close a
-      # nil-tail map that contains domain keys (see coerce_var_type_closed), so
-      # this nil tail is not a soundness hazard.
+      # (`atom() => term()`, `integer() => binary()`, ...) — so `to_shape` gives it
+      # a `nil` (PARTIAL) tail, never `:closed`. The `:closed` coercion path
+      # (maybe_closed_map_descr) refuses to close a map with domain keys, and a
+      # `nil`-partial tail coerces OPEN anyway, so this is not a soundness hazard.
       descr =
         Module.Types.Descr.open_map([
           {Module.Types.Descr.to_domain_keys(Module.Types.Descr.integer()),
@@ -504,12 +507,12 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
   end
 
-  describe "closed-map coercion fidelity (coerce_var_type_public/2 :closed_literals)" do
+  describe "closed-map coercion fidelity (three-marker model)" do
     @describetag :requires_native_types
 
     alias Module.Types.Descr
 
-    test "default coercion keeps a nil-tail map OPEN (soundness-preserving default)" do
+    test "a nil-tail (PARTIAL) map coerces OPEN (soundness-preserving default)" do
       shape = {:map, [a: {:integer, nil}], nil}
 
       coerced = ElixirTypes.coerce_var_type_public(shape)
@@ -525,10 +528,10 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert Descr.subtype?(Descr.upper_bound(with_other), Descr.upper_bound(coerced))
     end
 
-    test "closed_literals: true coerces a nil-tail map to a CLOSED map" do
-      shape = {:map, [a: {:integer, nil}], nil}
+    test "a :closed-tail map coerces to a CLOSED map BY DEFAULT" do
+      shape = {:map, [a: {:integer, nil}], :closed}
 
-      coerced = ElixirTypes.coerce_var_type_public(shape, closed_literals: true)
+      coerced = ElixirTypes.coerce_var_type_public(shape)
       # closed: still a (dynamic-wrapped) supertype of the closed original...
       assert Descr.subtype?(
                Descr.upper_bound(Descr.closed_map(a: Descr.integer())),
@@ -540,33 +543,43 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       refute Descr.subtype?(Descr.upper_bound(with_other), Descr.upper_bound(coerced))
     end
 
-    test "closed_literals: true leaves an :open-tail map OPEN" do
-      shape = {:map, [a: {:integer, nil}], :open}
+    test "the deprecated :closed_literals opt is a no-op (nil-tail stays OPEN)" do
+      shape = {:map, [a: {:integer, nil}], nil}
 
       coerced = ElixirTypes.coerce_var_type_public(shape, closed_literals: true)
+      # nil is PARTIAL now; the opt must NOT close it.
       with_other = Descr.closed_map(a: Descr.integer(), b: Descr.binary())
       assert Descr.subtype?(Descr.upper_bound(with_other), Descr.upper_bound(coerced))
     end
 
-    test "closed_literals: true leaves the empty nil-tail map (map() top) OPEN" do
-      # {:map, [], nil} is the map TOP, not the empty closed map — must stay open.
-      shape = {:map, [], nil}
+    test "an :open-tail map coerces OPEN" do
+      shape = {:map, [a: {:integer, nil}], :open}
 
-      coerced = ElixirTypes.coerce_var_type_public(shape, closed_literals: true)
-      assert Descr.subtype?(Descr.upper_bound(Descr.empty_map()), Descr.upper_bound(coerced))
+      coerced = ElixirTypes.coerce_var_type_public(shape)
+      with_other = Descr.closed_map(a: Descr.integer(), b: Descr.binary())
+      assert Descr.subtype?(Descr.upper_bound(with_other), Descr.upper_bound(coerced))
+    end
 
-      assert Descr.subtype?(
+    test "an empty :closed map coerces to the empty closed map %{}" do
+      shape = {:map, [], :closed}
+
+      coerced = ElixirTypes.coerce_var_type_public(shape)
+      # The empty closed map admits ONLY %{}, so it is NOT a supertype of a
+      # non-empty map.
+      refute Descr.subtype?(
                Descr.upper_bound(Descr.closed_map(a: Descr.integer())),
                Descr.upper_bound(coerced)
              )
+
+      assert Descr.subtype?(Descr.upper_bound(Descr.empty_map()), Descr.upper_bound(coerced))
     end
 
-    test "closed_literals: true leaves a domain-keyed nil-tail map OPEN" do
-      # A domain-keyed open map has a nil tail (no `:...` marker) but is genuinely
-      # open. coerce_var_type_closed refuses to close maps with domain keys.
+    test "a domain-keyed map round-trips to a nil (partial) tail and coerces OPEN" do
+      # A domain-keyed open map (e.g. `%{integer() => binary()}`) has no `:...`
+      # marker, so to_shape gives it a `nil` (partial) tail — never `:closed`.
       shape = {:map, [{{:domain, {:integer, nil}}, {:binary, nil}}], nil}
 
-      coerced = ElixirTypes.coerce_var_type_public(shape, closed_literals: true)
+      coerced = ElixirTypes.coerce_var_type_public(shape)
       # Domain keys are dropped by coercion, so the closed variant would be the
       # empty map; staying OPEN means a non-empty map is still admitted.
       assert Descr.subtype?(
@@ -575,13 +588,14 @@ defmodule ElixirSense.Core.ElixirTypesTest do
              )
     end
 
-    test "exact closed round-trip: closed descr -> to_shape -> coerce(closed) == dynamic(closed)" do
+    test "EXACT closed round-trip: closed descr -> to_shape (:closed) -> coerce == dynamic(closed)" do
       closed = Descr.closed_map(a: Descr.integer(), b: Descr.binary())
 
       shape = ElixirTypes.to_shape(closed)
-      assert {:map, _fields, nil} = shape
+      # to_shape now yields a `:closed` tail; the default coercion closes it.
+      assert {:map, _fields, :closed} = shape
 
-      coerced = ElixirTypes.coerce_var_type_public(shape, closed_literals: true)
+      coerced = ElixirTypes.coerce_var_type_public(shape)
       # coerce_var_type wraps in dynamic(); the round-trip is exact modulo that wrap.
       assert Descr.equal?(coerced, Descr.dynamic(closed))
     end
@@ -720,7 +734,8 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       result = ElixirTypes.of_expr(map_ast)
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
-      assert {:map, fields, nil} = shape
+      # A closed descr round-trips to a `:closed` tail.
+      assert {:map, fields, :closed} = shape
       assert fields == [key: {:atom, :value}]
     end
 
@@ -944,10 +959,11 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert Descr.equal?(descr, Descr.dynamic(Descr.integer()))
     end
 
-    test "task #10: plain map shapes coerce to an OPEN map (not closed)" do
-      # An open map admits extra keys; a closed map asserts all other keys absent
-      # and would intersect emptily with a fuller real map. A map that ALSO has a
-      # :bar key must still be compatible (non-empty intersection) with our seed.
+    test "task #10: nil-tail (partial) map shapes coerce to an OPEN map (not closed)" do
+      # A `nil` tail is PARTIAL (closedness unknown). An open map admits extra
+      # keys; a closed map asserts all other keys absent and would intersect
+      # emptily with a fuller real map. A map that ALSO has a :bar key must still
+      # be compatible (non-empty intersection) with our seed.
       descr = ElixirTypes.coerce_var_type_public({:map, [foo: {:integer, nil}], nil})
       fuller = Descr.dynamic(Descr.closed_map(foo: Descr.integer(), bar: Descr.binary()))
       refute Descr.empty?(Descr.intersection(descr, fuller))

@@ -135,7 +135,9 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
     test "infers type from simple guard: == map" do
       guard_expr = quote(do: x == %{a: :b}) |> expand()
       result = Guard.type_information_from_guards(guard_expr)
-      assert result == %{{:x, 0} => {:map, [a: {:atom, :b}], nil}}
+      # `%{a: :b}` here is an EXPRESSION (the RHS of `==`), so it is `:closed`
+      # (literal-complete): x equals exactly that map.
+      assert result == %{{:x, 0} => {:map, [a: {:atom, :b}], :closed}}
     end
 
     test "infers type from simple guard: == tuple empty" do

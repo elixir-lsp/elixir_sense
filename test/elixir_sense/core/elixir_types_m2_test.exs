@@ -253,7 +253,7 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       # add/2 body is %{foo: x, bar: y}, which returns a map. task #20: native
       # dynamic-mode inference yields a dynamic-wrapped descr, so to_shape now
       # surfaces a {:dynamic, {:map, ...}} marker — unwrap it for the assertion.
-      {:map, fields, nil} =
+      {:map, fields, :closed} =
         case result do
           {:dynamic, inner} -> inner
           inner -> inner
@@ -761,8 +761,8 @@ defmodule ElixirSense.Core.ElixirTypesM2Test do
       result = ElixirTypes.to_shape(list_descr)
 
       case result do
-        # List of maps
-        {:list, {:map, _fields, nil}} -> :ok
+        # List of (closed) maps — a closed descr round-trips to a `:closed` tail.
+        {:list, {:map, _fields, :closed}} -> :ok
         other -> flunk("Unexpected complex shape: #{inspect(other)}")
       end
     end

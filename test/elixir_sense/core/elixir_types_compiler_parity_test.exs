@@ -192,14 +192,14 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
                end)
     end
 
-    test "closed-map round-trip is EXACT under closed_literals: true" do
+    test "closed-map round-trip is EXACT by default (:closed tail)" do
       alias Module.Types.Descr
 
-      # For closed-map descrs, `to_shape/1` yields a `nil` tail (genuinely closed),
-      # and coercing back with `closed_literals: true` reconstructs the same closed
-      # map (modulo the `dynamic/1` wrap every coerced shape carries). This is the
-      # tightened fidelity guarantee — the default open coercion is only a
-      # SUPERtype; closed_literals makes the closed-map round-trip exact.
+      # For closed-map descrs, `to_shape/1` yields a `:closed` tail (literal-
+      # complete), and the DEFAULT coercion reconstructs the same closed map
+      # (modulo the `dynamic/1` wrap every coerced shape carries). This is the
+      # tightened fidelity guarantee — the descr round-trip is now closed-by-
+      # default; no opt-in flag is needed (the old `closed_literals` opt is gone).
       closed_corpus = [
         {"closed %{a: integer}", Descr.closed_map(a: Descr.integer())},
         {"closed %{a: integer, b: binary}",
@@ -210,7 +210,20 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
       failures =
         for {label, descr} <- closed_corpus do
           shape = ElixirTypes.to_shape(descr)
-          coerced = ElixirTypes.coerce_var_type_public(shape, closed_literals: true)
+
+          # A plain closed map round-trips to a `:closed` tail; a closed map with a
+          # `__struct__` key round-trips to a `{:struct, ...}` shape (which derives
+          # closedness from the loaded defstruct, not the tail). Both coerce closed.
+          case shape do
+            {:map, _, tail} ->
+              assert tail == :closed,
+                     "expected a :closed tail for #{label}, got #{inspect(shape)}"
+
+            {:struct, _, _, _} ->
+              :ok
+          end
+
+          coerced = ElixirTypes.coerce_var_type_public(shape)
 
           if Descr.equal?(coerced, Descr.dynamic(descr)) do
             nil
@@ -228,20 +241,20 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
                end)
     end
 
-    test "open-map round-trip stays OPEN even under closed_literals: true" do
+    test "open-map round-trip stays OPEN" do
       alias Module.Types.Descr
 
-      # An open-map descr round-trips to an `:open` tail, which `closed_literals`
-      # must NOT close — it would unsoundly exclude maps with other keys.
+      # An open-map descr round-trips to an `:open` tail, which coercion must NOT
+      # close — it would unsoundly exclude maps with other keys.
       open = Descr.open_map(a: Descr.integer())
       shape = ElixirTypes.to_shape(open)
       assert {:map, _fields, :open} = shape
 
-      coerced = ElixirTypes.coerce_var_type_public(shape, closed_literals: true)
+      coerced = ElixirTypes.coerce_var_type_public(shape)
       with_other = Descr.closed_map(a: Descr.integer(), b: Descr.binary())
 
       assert Descr.subtype?(Descr.upper_bound(with_other), Descr.upper_bound(coerced)),
-             "closed_literals wrongly closed an :open-tail map"
+             "coercion wrongly closed an :open-tail map"
     end
 
     test "unconvertible (nil to_shape) corpus entries are well below half" do

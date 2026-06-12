@@ -1,5 +1,39 @@
 # ElixirSense types integration — consolidated backlog (Fable)
 
+## Deep-architecture wave — DONE (2026-06-12, workflow types-deep-architecture)
+
+The three hardest deferred items, run as a sequential opus pipeline (each stage kept
+the full suite green; final gates: 1944 tests, +39; compile/format/credo clean; all
+385 elixir-ls provider tests pass unchanged against the new dep):
+
+- **Third map-tail marker** — `{:map, fields, tail}` now has the three-marker model:
+  `:closed` (literal-complete; produced by EXPRESSION-context map literals — pattern
+  context stays partial, the central subtlety — closed-descr round-trips, and
+  Map-construction on closed bases), `nil` redefined as partial (guard facts), `:open`
+  unchanged. Closed maps coerce `closed_map` BY DEFAULT (the `closed_literals` opt is
+  a documented no-op); `map_key` misses on `:closed` maps yield `:not_set` (precision
+  win); partial maps can never produce `:not_set`. Exact closed round-trip asserted in
+  the parity suite. Display: `:closed` and partial both render marker-less (deliberate
+  compromise, documented); `:open` keeps `...`.
+- **Improper lists** — new `{:nonempty_list, elem, tail}` shape: produced by to_shape
+  of `non_empty_list(a, tail)` descrs, `++` with known non-list RHS on a non-empty
+  proper LHS, and expression-context cons onto concrete non-list tails (deferred refs
+  excluded; pattern context untouched so subtraction precision is unaffected).
+  Coerces via probed `Descr.non_empty_list/2` (fallback dynamic() — never widened to
+  proper, which would be unsound); renders the compiler spelling
+  `non_empty_list(elem, tail)`; conservative algebra (proper and improper never
+  subsume each other). End-to-end verified: `x = [1 | :a]` and `x = [1] ++ :a` both
+  hint `non_empty_list(integer(), :a)`.
+- **Module resolution** — new `ElixirSense.Core.ModuleResolver` consolidates the two
+  genuinely-overlapping pure-AST resolvers (`ElixirTypes.module_from_ast/2` and the
+  pure parts of `Binding.resolve_type_module/2`) over the canonical
+  `Introspection.expand_alias` engine; 20 equivalence-matrix tests; zero behavior
+  change. Documented residual: the `resolve_same_root_alias` fallback in binding.ex
+  disagrees with the canonical fallback — unifying it is a deliberate semantics
+  decision left as the follow-up; `type_hints` receiver consolidation blocked on
+  Binding passing raw AST.
+
+
 ## Architectural wave — DONE (2026-06-12, workflow types-architectural-wave)
 
 The remaining architectural P1/P2 items were addressed (gates: 1905 tests, +39;

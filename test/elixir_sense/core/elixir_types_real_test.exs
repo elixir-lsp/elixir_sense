@@ -74,7 +74,7 @@ defmodule ElixirSense.Core.ElixirTypesRealTest do
         # Complex types (AST form)
         {[1, 2, 3], {:nonempty_list, {:integer, nil}}},
         {{:{}, [], [1, :ok]}, {:tuple, 2, [{:integer, nil}, {:atom, :ok}]}},
-        {{:%{}, [], [key: :value]}, {:map, [key: {:atom, :value}], nil}}
+        {{:%{}, [], [key: :value]}, {:map, [key: {:atom, :value}], :closed}}
       ]
 
       for {expr, expected_shape} <- test_cases do

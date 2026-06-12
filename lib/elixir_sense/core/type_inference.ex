@@ -49,6 +49,10 @@ defmodule ElixirSense.Core.TypeInference do
       ) do
     {fields, updated_struct} =
       case type_of(ast, context) do
+        # A `:closed` map tail means "literal-complete with no update base"; for a
+        # struct the closedness is derived from the loaded defstruct, not the map
+        # tail, so normalise it back to `nil` (no base) here.
+        {:map, fields, :closed} -> {fields, nil}
         {:map, fields, updated_map} -> {fields, updated_map}
         {:struct, fields, _, updated_struct} -> {fields, updated_struct}
         _ -> {[], nil}
@@ -120,15 +124,27 @@ defmodule ElixirSense.Core.TypeInference do
           {type_of(left, context), right}
 
         list ->
-          {nil, list}
+          # No update base. The tail records map-literal completeness:
+          #   * `:closed` in EXPRESSION context — `%{a: 1}` CONSTRUCTS a map with
+          #     EXACTLY key `:a`; all keys are known (literal-complete).
+          #   * `nil` (partial) in `:match` context — `%{a: 1}` as a PATTERN
+          #     matches ANY map that HAS `:a` (other keys may exist), so
+          #     closedness is unknown. `nil` is the conservative partial tail.
+          tail = if context == :match, do: nil, else: :closed
+          {tail, list}
       end
 
     field_types = get_fields_type(fields, context)
 
     case field_types |> Keyword.fetch(:__struct__) do
       {:ok, type} ->
+        # A struct derives closed/open from its loaded defstruct, not the map
+        # tail, so a `:closed` tail (literal in expression context) collapses back
+        # to `nil` (no update base) in the struct's 4th slot.
+        updated_struct = if updated_map == :closed, do: nil, else: updated_map
+
         {:struct, field_types |> Keyword.delete(:__struct__), type |> known_struct_type(),
-         updated_map}
+         updated_struct}
 
       _ ->
         {:map, field_types, updated_map}
@@ -199,39 +215,66 @@ defmodule ElixirSense.Core.TypeInference do
     if native do
       native
     else
-      type =
-        case list do
-          [] ->
-            :empty
+      case list do
+        [] ->
+          {:list, :empty}
 
-          [{:|, _, [head, tail]}] ->
-            # `[a | b]`: if the tail is itself a list, fold its element type in
-            # (proper list `a ∪ tail_elems`); otherwise keep the head's type
-            # (the tail is a variable / improper suffix we can't see through).
-            head_type = type_of(head, context)
+        [{:|, _, [head, tail]}] ->
+          # `[a | b]`: if the tail is itself a list, fold its element type in
+          # (proper list `a ∪ tail_elems`). If the tail resolves to a KNOWN
+          # NON-LIST shape, the result is an IMPROPER non-empty list — the
+          # `{:nonempty_list, elem, tail}` 3-tuple. An unknown (`nil`) tail stays
+          # conservative (proper list of the head's type).
+          head_type = type_of(head, context)
 
-            case type_of(tail, context) do
-              {:list, :empty} -> head_type
-              {:list, tail_elem} -> union_element([head_type, tail_elem])
-              {:nonempty_list, tail_elem} -> union_element([head_type, tail_elem])
-              _ -> head_type
-            end
+          case type_of(tail, context) do
+            {:list, :empty} ->
+              {:list, head_type}
 
-          elements ->
-            # The element type is the union of every element's type (a trailing
-            # cons `[a, b | t]` contributes its head `b`; the tail var is
-            # unknown). Single-type lists collapse back to that one type; an
-            # unknown element widens to `nil` via `Binding.normalize_union/1`
-            # when the stored shape is later expanded.
+            {:list, tail_elem} ->
+              {:list, union_element([head_type, tail_elem])}
+
+            {:nonempty_list, tail_elem} ->
+              {:list, union_element([head_type, tail_elem])}
+
+            # Cons onto an already-improper tail stays improper with the same
+            # final tail; the proper prefix gains `head_type`.
+            {:nonempty_list, tail_elem, tail_tail} ->
+              {:nonempty_list, union_element([head_type, tail_elem]), tail_tail}
+
+            tail_shape ->
+              # A CONCRETE, RESOLVED non-list shape proves the cons is improper —
+              # in EXPRESSION context, emit the `{:nonempty_list, elem, tail}`
+              # 3-tuple. PATTERN (`:match`) context keeps the conservative
+              # under-approximation (`{:list, head_type}`): the cross-clause
+              # subtraction machinery (`precise_pattern_type`) reasons over
+              # proper-list shapes and must not see an improper 3-tuple here.
+              # Anything else (unknown `nil`, or a DEFERRED reference like
+              # `{:attribute, _}` / `{:variable, _, _}` / `{:call, ...}` that may
+              # yet resolve to a list) also stays the conservative proper list.
+              if context != :match and improper_tail?(tail_shape) do
+                {:nonempty_list, head_type, tail_shape}
+              else
+                {:list, head_type}
+              end
+          end
+
+        elements ->
+          # The element type is the union of every element's type (a trailing
+          # cons `[a, b | t]` contributes its head `b`; the tail var is
+          # unknown). Single-type lists collapse back to that one type; an
+          # unknown element widens to `nil` via `Binding.normalize_union/1`
+          # when the stored shape is later expanded.
+          type =
             elements
             |> Enum.map(fn
               {:|, _, [head, _tail]} -> type_of(head, context)
               element -> type_of(element, context)
             end)
             |> union_element()
-        end
 
-      {:list, type}
+          {:list, type}
+      end
     end
   end
 
@@ -682,6 +725,35 @@ defmodule ElixirSense.Core.TypeInference do
       members -> {:union, members}
     end
   end
+
+  # Is this shape a CONCRETE, RESOLVED non-list value that, as a cons tail, makes
+  # the list improper? Only scalars and structural shapes count — NOT list shapes
+  # (`{:list, _}`/`{:nonempty_list, _}`/`:list`/`:empty`), NOT `nil`/`:none`, and
+  # NOT deferred reference forms (`{:attribute, _}`, `{:variable, _, _}`,
+  # `{:call, ...}`, `{:tuple_nth, ...}`, etc.) which may still resolve to a list.
+  defp improper_tail?(:atom), do: true
+  defp improper_tail?(:boolean), do: true
+  defp improper_tail?({:atom, _}), do: true
+  defp improper_tail?(:integer), do: true
+  defp improper_tail?({:integer, _}), do: true
+  defp improper_tail?(:float), do: true
+  defp improper_tail?({:float, _}), do: true
+  defp improper_tail?(:number), do: true
+  defp improper_tail?(:binary), do: true
+  defp improper_tail?({:binary, _}), do: true
+  defp improper_tail?(:bitstring), do: true
+  defp improper_tail?(:pid), do: true
+  defp improper_tail?(:port), do: true
+  defp improper_tail?(:reference), do: true
+  defp improper_tail?(:tuple), do: true
+  defp improper_tail?({:tuple, _, _}), do: true
+  defp improper_tail?({:tuple_open, _}), do: true
+  defp improper_tail?({:map, _, _}), do: true
+  defp improper_tail?({:struct, _, _, _}), do: true
+  defp improper_tail?(:fun), do: true
+  defp improper_tail?({:fun, _}), do: true
+  defp improper_tail?({:fun, _, _}), do: true
+  defp improper_tail?(_other), do: false
 
   # A binary segment is sub-byte (makes the whole `<<>>` a bitstring) only when
   # it is an explicit `::bitstring`/`::bits`, or an integer/bit segment with a

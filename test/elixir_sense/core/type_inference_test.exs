@@ -420,7 +420,10 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "list" do
       assert type_of("[]") == {:list, :empty}
       assert type_of("[a]") == {:list, {:variable, :a, 1}}
-      assert type_of("[a | 1]") == {:list, {:variable, :a, 1}}
+      # `[a | 1]` has a concrete non-list tail (`1`), so it is a non-empty
+      # IMPROPER list: `{:nonempty_list, elem, tail}` (was conservatively
+      # degraded to `{:list, elem}` before the improper-list shape existed).
+      assert type_of("[a | 1]") == {:nonempty_list, {:variable, :a, 1}, {:integer, 1}}
       assert type_of("[a]", :match) == {:list, nil}
       assert type_of("[a | 1]", :match) == {:list, nil}
       assert type_of("[^a]", :match) == {:list, {:variable, :a, 1}}
@@ -467,14 +470,22 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "map" do
-      assert type_of("%{}") == {:map, [], nil}
-      assert type_of("%{asd: a}") == {:map, [{:asd, {:variable, :a, 1}}], nil}
+      # Map literals in EXPRESSION context are `:closed` (literal-complete): the
+      # constructed map has exactly the listed keys.
+      assert type_of("%{}") == {:map, [], :closed}
+      assert type_of("%{asd: a}") == {:map, [{:asd, {:variable, :a, 1}}], :closed}
       # Non-atom keys are preserved as domain keys (`{:domain, key_type}`).
       assert type_of("%{\"asd\" => a}") ==
-               {:map, [{{:domain, {:binary, "asd"}}, {:variable, :a, 1}}], nil}
+               {:map, [{{:domain, {:binary, "asd"}}, {:variable, :a, 1}}], :closed}
 
       assert type_of("%{b | asd: a}") ==
                {:map, [{:asd, {:variable, :a, 1}}], {:variable, :b, 1}}
+
+      # In :match context a map literal is a PATTERN — `nil` (partial), matching
+      # any map that has the listed keys.
+      assert type_of("%{}", :match) == {:map, [], nil}
+      # In :match context a bound variable has no standalone type (`nil`).
+      assert type_of("%{asd: a}", :match) == {:map, [asd: nil], nil}
 
       assert type_of("%{b | asd: a}", :match) == :none
     end
@@ -557,8 +568,11 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       assert type_of("b = 5 = a") == {:intersection, [{:integer, 5}, {:variable, :a, 1}]}
       assert type_of("5 = 5") == {:integer, 5}
 
+      # LHS is a pattern (`:match` → partial `nil`); RHS is an expression
+      # (`:closed`).
       assert type_of("%{foo: a} = %{bar: b}") ==
-               {:intersection, [{:map, [foo: nil], nil}, {:map, [bar: {:variable, :b, 1}], nil}]}
+               {:intersection,
+                [{:map, [foo: nil], nil}, {:map, [bar: {:variable, :b, 1}], :closed}]}
 
       assert type_of("%{foo: a} = %{bar: b}", :match) ==
                {:intersection, [{:map, [foo: nil], nil}, {:map, [bar: nil], nil}]}

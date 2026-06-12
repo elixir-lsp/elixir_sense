@@ -39,6 +39,10 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert TP.render({:list, :empty}) == {:ok, "empty_list()"}
       assert TP.render({:nonempty_list, {:integer, nil}}) == {:ok, "non_empty_list(integer())"}
 
+      # improper non-empty list: compiler spelling non_empty_list(elem, tail)
+      assert TP.render({:nonempty_list, {:integer, nil}, {:atom, :a}}) ==
+               {:ok, "non_empty_list(integer(), :a)"}
+
       assert TP.render({:tuple, 2, [{:atom, :ok}, {:integer, nil}]}) ==
                {:ok, "{:ok, integer()}"}
 

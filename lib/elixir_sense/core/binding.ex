@@ -98,14 +98,76 @@ defmodule ElixirSense.Core.Binding do
 
   Rendering: both render as `"empty_list()"`.
 
-  ### Map tail — `nil` (closed) vs `:open`
+  ### List shapes — proper vs improper (`{:nonempty_list, elem, tail}`)
 
-  The third element of `{:map, fields, tail}` distinguishes two distinct
-  semantics:
+  Three list shapes (plus the `:list` top and `{:list, :empty}` empty list):
 
-  - `nil` tail ("closed map"): **all** keys are known.  A map literal
-    `%{a: 1}` compiles to `{:map, [a: {:integer, 1}], nil}`.
-  - `:open` tail ("open map"): **additional unknown keys may exist**.
+  - `{:list, elem}` — a PROPER list INCLUDING the empty list `[]`. Element type
+    `elem` (`nil` = unknown element).
+  - `{:nonempty_list, elem}` (2-tuple) — a PROPER NON-EMPTY list. Same element
+    semantics; guarantees at least one cell and a `[]` terminator.
+  - `{:nonempty_list, elem, tail}` (3-tuple) — a NON-EMPTY, POSSIBLY-IMPROPER
+    list: a proper prefix of `elem` elements terminated by `tail` (the final
+    tail type, e.g. `2` in `[1 | 2]`). When `tail` is itself a list this would
+    be proper, but producers only emit the 3-tuple when `tail` is a KNOWN
+    NON-LIST shape, so it always denotes a genuinely improper list.
+
+    Producers:
+      * `ElixirTypes.to_shape/1` of a `non_empty_list(a, tail)` quoted form
+        (the explicit-tail variant) — both sides converting.
+      * the `++` rule (`expand_call`): known non-empty proper LHS `++` known
+        non-list RHS → `{:nonempty_list, left_elem, right_shape}`.
+      * `TypeInference.type_of` for a cons `[h | t]` whose tail `t` resolves to
+        a known non-list shape.
+
+    Algebra (deliberately conservative — improper lists are a separate kind):
+      * `covers?`: a proper `{:list, _}`/`{:nonempty_list, _}` does NOT cover
+        the 3-tuple, and the 3-tuple covers only an equal-kind 3-tuple
+        (elementwise prefix + tail). Improper is neither subsumed by nor
+        subsumes proper lists.
+      * `combine_intersection`: two 3-tuples intersect elementwise (prefix via
+        `intersect_list_elem`, tail via the general intersection; a `:none`
+        tail bottoms the whole shape). Any proper/improper mix falls to the
+        conservative `nil` (the kinds are not provably disjoint — see below).
+      * `shape_kind` keeps the 3-tuple at `:list`-kind so the disjointness
+        fallback never claims `:none` against a proper list (an over-claim of
+        disjointness would be worse than a missed one).
+
+    Rendering: `non_empty_list(elem, tail)` (the compiler's spelling).
+
+    Coercion (`ElixirTypes`): probes `Descr.non_empty_list/2`; when present →
+    `dynamic(non_empty_list(coerce(elem), coerce(tail)))`. If the arity-2
+    constructor is missing the fallback is `Descr.dynamic()` (unknown) — NOT a
+    widened proper list, which would be UNSOUND (improper lists are not in
+    `list(t)`). The 3-tuple is intentionally left OUT of the `descr_exact?`
+    whitelist: exactness holds only when the arity-2 constructor exists, and
+    keeping it off the whitelist avoids asserting a precision we can't always
+    deliver.
+
+  ### Map tail — `:closed` vs `nil` (partial) vs `:open` (three-marker model)
+
+  The third element of `{:map, fields, tail}` records what we know about the
+  map's COMPLETENESS — i.e. whether keys beyond `fields` may exist:
+
+  - `:closed` tail ("literal-complete"): **all** keys are known; no other key
+    can be present.  Producers (only where completeness is CERTAIN):
+      * `TypeInference.type_of` for a map literal in EXPRESSION context —
+        `%{a: 1}` as an expression CONSTRUCTS a map with exactly key `:a`, so
+        `{:map, [a: {:integer, 1}], :closed}`.  (As a PATTERN it is `nil` —
+        see below.)
+      * `ElixirTypes.to_shape/1` of a closed descr (no `:...` marker, no domain
+        keys) — the descr round-trip is closed-by-default.
+      * `Map.new/0` (empty `:closed`), `Map.put`/`merge`/`delete`/`update` on a
+        `:closed` base, and `Map.from_struct/1` of a resolved struct.
+
+  - `nil` tail ("partial"): **at least** these keys are present; closedness is
+    UNKNOWN (other keys may or may not exist).  This is the conservative legacy
+    default.  Producers: map literals in `:match` (PATTERN) context — `%{a: 1}`
+    as a pattern matches any map that HAS `:a`; guard facts in
+    `type_inference/guard.ex` (e.g. `is_map_key(m, :a)` narrowing); `parse_type`
+    for typespec maps; any fallback that knows some keys but not closedness.
+
+  - `:open` tail ("open map"): **additional unknown keys DO exist**.
     Produced when a map update's base cannot be resolved
     (`def f(m), do: %{m | a: 1}` → `{:map, [a: nil], :open}`), when
     `expand_map_base` sees an unknown base (`nil` → `{[], :open}`), and by
@@ -113,13 +175,28 @@ defmodule ElixirSense.Core.Binding do
 
   Consumer / algebra:
   - `covers?({:map, [], tail}, {:map, _, _})` when `tail in [nil, :open]`
-    returns `true` — both spellings of the empty-field map subsume any map.
-  - `merge_tails/2`: the merge of two tails is `:open` if either is `:open`,
-    otherwise `nil`.
-  - `expand_map_base/3` propagates the tail.
-  - Rendering: `{:map, [], :open}` → `"map()"`;
-    `{:map, fields, :open}` → `"%{..., key: type, ...}"`;
-    `{:map, fields, nil}` → `"%{key: type, ...}"` (no open marker).
+    returns `true` — the empty-field PARTIAL or OPEN map is the map top.
+    A `:closed` empty-field map (`%{}`) is NOT the top (it is the empty map),
+    so it is deliberately excluded from that guard.
+  - `merge_tails/2` (e.g. `Map.merge`): `:open` if either is `:open`; `:closed`
+    only if BOTH are `:closed`; otherwise `nil` (partial).
+  - `intersect_tails/2` (map ∩ map): `:closed` if either operand is `:closed`
+    (intersection pins the key set); otherwise `nil`.
+  - `expand_map_base/3` propagates the tail; a resolved struct base is `:closed`.
+  - `map_key` access (`do_expand({:map_key, ...})`): a key MISSING from a
+    `:closed` map is `:not_set` (PROVABLY absent — precision win); missing from a
+    `nil`-partial or `:open` map is `nil` (unknown — other keys may exist).  A
+    `nil`-partial map must NEVER yield `:not_set`; that would be unsound.
+  - Coercion (`ElixirTypes`): `:closed` → `Descr.closed_map` (dynamic-wrapped),
+    EXACT; `nil` and `:open` → `open_map` (closing a partial/open map would
+    wrongly assert other keys absent).
+
+  Rendering note (DELIBERATE display compromise — see `TypePresentation`):
+  `:closed` renders WITHOUT a marker (`%{key: type}`), exactly as the old `nil`
+  did.  `nil`-PARTIAL also KEEPS that same marker-less rendering FOR NOW: adding
+  a `...`/partial marker would churn every guard-fact display expectation, so the
+  partial-vs-closed distinction is intentionally NOT surfaced in the rendered
+  string.  `:open` keeps its `...` marker (`%{..., key: type}` / `map()`).
 
   ### `{:dynamic, _}` — display-only, not in Binding algebra
 
@@ -159,7 +236,7 @@ defmodule ElixirSense.Core.Binding do
   | `:pid`/`:port`/`:reference` | as named | scalar builtins                |
   | `:tuple`         | `"tuple()"`         | generic tuple (any arity)             |
   | `:fun`           | `"fun()"`           | generic function                      |
-  | `:list`          | `"list()"`          | generic list (subsumes all list shapes) |
+  | `:list`          | `"list()"`          | generic list (subsumes proper list shapes) |
   | `:empty_map`     | `"empty_map()"`     | `%{}` from Descr (task #22)           |
   | `:non_struct_map`| `"non_struct_map()"` | open non-struct map from Descr       |
   | `:boolean`       | `"boolean()"`       | `false | true`                        |
@@ -189,38 +266,38 @@ defmodule ElixirSense.Core.Binding do
 
   ---
 
-  ## Improper-list degradation policy
+  ## Improper-list policy
 
-  The shape algebra has **no representation for improper lists**.  The
-  compiler's set-theoretic type `non_empty_list(head, tail)` with a
-  non-list tail is a proper-type concept that cannot be preserved here.
-  The policy is:
+  The shape algebra DOES now model non-empty improper lists, via the
+  `{:nonempty_list, elem, tail}` 3-tuple (see "List shapes" above). The
+  compiler's set-theoretic `non_empty_list(head, tail)` with a non-list tail
+  maps to that 3-tuple. Three former degradation points are now precise where
+  both component types are known; the remaining degradations are noted:
 
   1. **`to_shape` boundary** (`ElixirTypes.quoted_to_shape/1`): a
-     `{:non_empty_list, [], [_elem, _tail]}` form (improper tail explicit)
-     degrades to `nil` (unknown) rather than claiming a proper list.
-     See line ~1746 in `elixir_types.ex`.
+     `{:non_empty_list, [], [elem, tail]}` form (explicit improper tail) now
+     converts to `{:nonempty_list, elem_shape, tail_shape}` when BOTH sides
+     convert; it degrades to `nil` only if either side is unconvertible. A
+     PROPER `non_empty_list`'s quoted form has no tail arg → stays the 2-tuple.
 
-  2. **`++` with unknown or non-list RHS** (`expand_call` for `++`): when
-     the RHS of `++` is not a known proper list (`{:list, _}`,
-     `{:nonempty_list, _}`, or `:list`) and the LHS is not `{:list, :empty}`,
-     the result is `nil` (unknown).  A non-list or improper RHS makes the
-     result potentially improper; the shape `{:list, _}` would over-claim.
-     See line ~959.
+  2. **`++` with non-list RHS** (`expand_call` for `++`): a known NON-EMPTY
+     proper LHS `++` a known NON-LIST RHS now yields the improper 3-tuple. A
+     POSSIBLY-EMPTY LHS (`{:list, _}`/`:list`) with a non-list RHS stays `nil`
+     (conservative): `[] ++ x == x` means the result could be the bare RHS,
+     which the prefix-bearing 3-tuple can't model. An empty-list LHS yields the
+     RHS directly. An unknown RHS stays `nil`.
 
-  3. **Cons patterns** (`parse_type` for `[head | _]`): the terminator type
-     is silently dropped; `[head | _]` parses to `{:list, head_type}`.  The
-     comment says "for simplicity we skip terminator type" (line ~2276).
-     This means a type-spec's `maybe_improper_list(h, t)` or
-     `nonempty_improper_list(h, t)` is represented as `{:list, h}` — a
-     sound over-approximation (widens to proper list) but loses the
-     improper-tail information.
+  3. **Cons patterns** (`parse_type` for `[head | _]`): UNCHANGED — the
+     terminator type is still dropped; `[head | _]` parses to `{:list, head}`.
+     A type-spec's `maybe_improper_list(h, t)` / `nonempty_improper_list(h, t)`
+     remains a sound over-approximation (widened proper list). Cons in PATTERN
+     context likewise keeps its under-approximation rules for subtraction
+     (`precise_pattern_type` is unchanged); only cons in EXPRESSION context
+     produces the 3-tuple (via `TypeInference.type_of`).
 
-  **Backlog item**: a `{:improper_list, head, tail}` shape (or a pair of
-  shapes `{head, tail}` at the list level) would let the algebra model the
-  full Erlang/Elixir list tower.  Until that shape exists, all three
-  degradation points above intentionally fall back to `nil` or a widened
-  proper-list shape rather than inventing false precision.
+  **Remaining backlog**: improper lists from typespecs (point 3) and the
+  proper/improper intersection mix (which stays `nil`) are still coarse. The
+  3-tuple closes the most common end-to-end path (`[a] ++ b`, `[h | t]`).
   """
 
   require Logger
@@ -229,6 +306,7 @@ defmodule ElixirSense.Core.Binding do
   alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.ExCkReader
   alias ElixirSense.Core.Introspection
+  alias ElixirSense.Core.ModuleResolver
   alias ElixirSense.Core.Normalized.Typespec
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Struct
@@ -434,8 +512,16 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
-  # Map literal — third slot `nil` means "no update base", so this is a closed
-  # map. (Distinct from a map *update* whose base fails to resolve, below.)
+  # Literal-complete map (`:closed` tail) — all keys are known. Produced by
+  # `type_inference` for map literals in EXPRESSION context and by
+  # `ElixirTypes.to_shape` for a closed descr. Preserve completeness.
+  def do_expand(_env, {:map, fields, :closed}, _stack) do
+    {:map, fields, :closed}
+  end
+
+  # Partial map (`nil` tail) — at least these keys are present; closedness is
+  # unknown (guard facts, the conservative legacy default). Preserve as-is.
+  # (Distinct from a map *update* whose base fails to resolve, below.)
   def do_expand(_env, {:map, fields, nil}, _stack) do
     {:map, fields, nil}
   end
@@ -448,6 +534,12 @@ defmodule ElixirSense.Core.Binding do
   # Map update `%{base | fields}` — `updated_map` is the base shape to merge.
   def do_expand(env, {:map, fields, updated_map}, stack) do
     case expand(env, updated_map, stack) do
+      # Literal-complete base — a map update keeps the same key set (update only
+      # rebinds existing keys), so the result stays `:closed`.
+      {:map, expanded_fields, :closed} ->
+        {:map, put_fields(expanded_fields, fields), :closed}
+
+      # Partial base (closedness unknown): the result is likewise partial.
       {:map, expanded_fields, nil} ->
         {:map, put_fields(expanded_fields, fields), nil}
 
@@ -475,7 +567,7 @@ defmodule ElixirSense.Core.Binding do
 
   def do_expand(env, {:map_key, map_candidate, key_candidate}, stack) do
     expanded_key = expand(env, key_candidate, stack)
-    expanded_fields = expand_map_fields(env, map_candidate, stack)
+    {expanded_fields, tail} = expand_map_base(env, map_candidate, stack)
 
     cond do
       :none in expanded_fields ->
@@ -484,7 +576,14 @@ defmodule ElixirSense.Core.Binding do
       match?({:atom, _}, expanded_key) ->
         {:atom, key} = expanded_key
         # `Keyword.get/2` tolerates non-atom (domain) keys present in the list.
-        Keyword.get(expanded_fields, key)
+        # On a `:closed` (literal-complete) map a missing key is PROVABLY absent
+        # (`:not_set`); on a `nil`-partial or `:open` map it is merely unknown
+        # (`nil`), since other keys may exist.
+        case Keyword.fetch(expanded_fields, key) do
+          {:ok, value} -> value
+          :error when tail == :closed -> :not_set
+          :error -> nil
+        end
 
       true ->
         # Non-atom key: project through a matching domain key (`%{"a" => v}["a"]`).
@@ -516,7 +615,7 @@ defmodule ElixirSense.Core.Binding do
       {list, type} when list in [:list, :nonempty_list] and type not in [:empty, :none] ->
         type
 
-      {:map, fields, tail} when tail in [nil, :open] ->
+      {:map, fields, tail} when tail in [nil, :open, :closed] ->
         case fields do
           [{_key, value} | _] ->
             {:tuple, 2, [nil, value]}
@@ -561,6 +660,11 @@ defmodule ElixirSense.Core.Binding do
 
   def do_expand(env, {:nonempty_list, type}, stack),
     do: {:nonempty_list, expand(env, type, stack)}
+
+  # Improper (possibly-improper) non-empty list: a proper prefix of `elem`
+  # elements terminated by a non-list `tail`. Expand both components.
+  def do_expand(env, {:nonempty_list, elem, tail}, stack),
+    do: {:nonempty_list, expand(env, elem, stack), expand(env, tail, stack)}
 
   # Set difference, used for cross-clause occurrence typing (a later `case`
   # clause sees the scrutinee type minus what earlier clauses matched). Resolved
@@ -920,14 +1024,22 @@ defmodule ElixirSense.Core.Binding do
   # concrete shape is not a list.
   defp list_like?({:list, _}), do: true
   defp list_like?({:nonempty_list, _}), do: true
+  # An improper non-empty list is still "list-like" for the purposes of the
+  # `++`/`--` argument guard: treating it as non-list would falsely claim
+  # `:none` (dead code). Note the `++` improper-producing clause matches only a
+  # PROPER non-empty LHS (2-tuple), so an improper 3-tuple LHS still falls
+  # through to the conservative `nil`.
+  defp list_like?({:nonempty_list, _, _}), do: true
   defp list_like?(:list), do: true
   defp list_like?(nil), do: true
   defp list_like?(_other), do: false
 
-  # The element type of a (possibly unknown) list shape.
+  # The element type of a (possibly unknown) list shape. For an improper
+  # 3-tuple this is the proper-prefix element type (the tail is dropped).
   defp list_element_type({:list, :empty}), do: :empty
   defp list_element_type({:list, elem}), do: elem
   defp list_element_type({:nonempty_list, elem}), do: elem
+  defp list_element_type({:nonempty_list, elem, _tail}), do: elem
   defp list_element_type(_other), do: nil
 
   # The element type of `a ++ b`: the union of both element types. An unknown
@@ -1036,6 +1148,14 @@ defmodule ElixirSense.Core.Binding do
 
   defp covers?({:nonempty_list, sub_elem}, {:nonempty_list, mem_elem}),
     do: list_elem_covers?(sub_elem, mem_elem)
+
+  # Improper non-empty list (3-tuple): conservative. An improper list is NOT
+  # subsumed by any proper list shape, and a proper-list subtrahend does not
+  # cover an improper member; so the 3-tuple only covers an equal-kind 3-tuple
+  # whose prefix element and tail both cover (elementwise). It covers no proper
+  # list and is covered by no proper list.
+  defp covers?({:nonempty_list, sub_elem, sub_tail}, {:nonempty_list, mem_elem, mem_tail}),
+    do: list_elem_covers?(sub_elem, mem_elem) and covers?(sub_tail, mem_tail)
 
   # Map top (`%{}` / `map()`) subsumes any concrete map or struct. An open empty
   # map (`%{...}`) is likewise the map top.
@@ -1158,11 +1278,14 @@ defmodule ElixirSense.Core.Binding do
         {:list, list_element_type(left)}
 
       true ->
-        # `a ++ b`. The result is a proper `{:list, elem}` only when the RHS is a
-        # known proper list (then the elements are the union of both sides). For a
-        # non-list/improper or unknown RHS the result can be improper or be the RHS
-        # itself (when LHS is `[]`), neither of which the shape algebra can model
-        # soundly, so we return nil (unknown) rather than over-claiming a list.
+        # `a ++ b`. The result is a proper `{:list, elem}` when the RHS is a
+        # known proper list (then the elements are the union of both sides). When
+        # the LHS is a known NON-EMPTY proper list and the RHS is a known NON-LIST
+        # shape, `a ++ b` is a non-empty IMPROPER list with proper prefix `a` and
+        # final tail `b` — the `{:nonempty_list, elem, tail}` 3-tuple. When the LHS
+        # is possibly-empty (`{:list, _}`/`:list`) the result might be exactly the
+        # RHS (`[] ++ x == x`), which we can't model, so we stay conservative
+        # (`nil`). When the LHS is `[]` the result is exactly `x`.
         right = if match?([_ | _], rest), do: expand(env, hd(rest), stack), else: nil
 
         cond do
@@ -1177,7 +1300,16 @@ defmodule ElixirSense.Core.Binding do
           left == {:list, :empty} ->
             right
 
-          # Unknown / non-list / improper RHS: can't be modeled as a list shape.
+          # Known non-empty proper LHS ++ known non-list RHS: improper non-empty
+          # list. The proper prefix carries the LHS element type; the final tail is
+          # the RHS shape. (Improper 3-tuple LHS or possibly-empty LHS fall
+          # through to the conservative `nil`: a possibly-empty LHS could yield the
+          # bare RHS, and chaining onto an already-improper list is ill-typed.)
+          match?({:nonempty_list, _}, left) and right != nil and not list_like?(right) ->
+            {:nonempty_list, list_element_type(left), right}
+
+          # Unknown / non-list / improper RHS with possibly-empty LHS: can't be
+          # modeled as a list shape.
           true ->
             nil
         end
@@ -1834,6 +1966,11 @@ defmodule ElixirSense.Core.Binding do
     end
   end
 
+  # `Map.new/0` constructs the empty map — literal-complete (no keys at all).
+  defp expand_call(_env, {:atom, Map}, :new, [], _include_private, _, _stack) do
+    {:map, [], :closed}
+  end
+
   defp expand_call(env, {:atom, Map}, fun, [map, key, default], _include_private, _, stack)
        when fun in [:get, :get_lazy] do
     fields = expand_map_fields(env, map, stack)
@@ -2013,16 +2150,16 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp expand_call(env, {:atom, Map}, :from_struct, [struct], _include_private, _, stack) do
-    # `nil` tail = all fields known (resolved struct); `:open` = unknown base,
-    # so the resulting map may carry fields we never saw.
+    # `:closed` tail = all fields known (resolved struct → literal-complete map);
+    # `:open` = unknown base, so the resulting map may carry fields we never saw.
     {fields, tail} =
       case expand(env, struct, stack) do
         {:struct, fields, _, nil} ->
-          {fields, nil}
+          {fields, :closed}
 
         {:atom, atom} ->
           case expand(env, {:struct, [], {:atom, atom}, nil}, stack) do
-            {:struct, fields, _, nil} -> {fields, nil}
+            {:struct, fields, _, nil} -> {fields, :closed}
             nil -> {[], :open}
             _ -> {[:none], nil}
           end
@@ -2664,8 +2801,15 @@ defmodule ElixirSense.Core.Binding do
 
   defp resolve_type_module(_env, module) when is_atom(module), do: module
 
-  defp resolve_type_module(%Binding{module: current_module}, {:__MODULE__, _, _}),
-    do: current_module
+  defp resolve_type_module(%Binding{} = env, {:__MODULE__, _, _} = ast) do
+    # Pure AST->module resolution delegated to ModuleResolver. Preserve the
+    # prior behavior of yielding `nil` (not an error) when there is no current
+    # module by mapping `:error` -> `nil`.
+    case ModuleResolver.resolve(ast, env) do
+      {:ok, module} -> module
+      :error -> nil
+    end
+  end
 
   defp resolve_type_module(%Binding{attributes: attrs} = env, {:@, _, [{attr, _, _}]})
        when is_atom(attr) do
@@ -2895,18 +3039,20 @@ defmodule ElixirSense.Core.Binding do
     combine_intersection(s2, s1)
   end
 
-  defp combine_intersection_custom({:map, fields_1, nil}, {:map, fields_2, nil}) do
+  defp combine_intersection_custom({:map, fields_1, tail_1}, {:map, fields_2, tail_2})
+       when tail_1 in [nil, :closed] and tail_2 in [nil, :closed] do
     keys = (safe_keys(fields_1) ++ safe_keys(fields_2)) |> Enum.uniq()
     fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
 
     if Enum.any?(fields, fn {_k, v} -> v == :none end) do
       :none
     else
-      {:map, fields, nil}
+      {:map, fields, intersect_tails(tail_1, tail_2)}
     end
   end
 
-  defp combine_intersection_custom({:struct, fields_1, type, nil}, {:map, fields_2, nil}) do
+  defp combine_intersection_custom({:struct, fields_1, type, nil}, {:map, fields_2, tail_2})
+       when tail_2 in [nil, :closed] do
     keys =
       if type != nil,
         do: safe_keys(fields_1),
@@ -2922,9 +3068,10 @@ defmodule ElixirSense.Core.Binding do
   end
 
   defp combine_intersection_custom(
-         {:map, _fields_1, nil} = map,
+         {:map, _fields_1, tail} = map,
          {:struct, _fields_2, _type, nil} = str
-       ) do
+       )
+       when tail in [nil, :closed] do
     combine_intersection(str, map)
   end
 
@@ -2991,6 +3138,20 @@ defmodule ElixirSense.Core.Binding do
   # concrete shape.
   defp combine_intersection_custom(:list, {tag, _} = l) when tag in [:list, :nonempty_list], do: l
   defp combine_intersection_custom({tag, _} = l, :list) when tag in [:list, :nonempty_list], do: l
+
+  # Two improper non-empty lists (3-tuples): intersect elementwise. The prefix
+  # element uses the list-element intersection (a disjoint prefix still leaves a
+  # one-element prefix possible, so it collapses to the conservative element
+  # rather than `:none`); the tail uses the general intersection. A `:none` tail
+  # makes the whole shape `:none`. Any mixed proper/improper or `:list`-vs-3-tuple
+  # pair falls through to the conservative fallback (`nil`), since the kinds are
+  # not provably disjoint (`shape_kind` keeps both `:list`).
+  defp combine_intersection_custom({:nonempty_list, e1, t1}, {:nonempty_list, e2, t2}) do
+    case combine_intersection(t1, t2) do
+      :none -> :none
+      tail -> {:nonempty_list, intersect_list_elem(e1, e2), tail}
+    end
+  end
 
   # Scalar specificity: if one side subsumes the other the intersection is the
   # narrower of the two (e.g. `integer() and 5` is `5`, `atom() and :ok` is
@@ -3065,6 +3226,12 @@ defmodule ElixirSense.Core.Binding do
   defp shape_kind(:list), do: :list
   defp shape_kind({:list, _}), do: :list
   defp shape_kind({:nonempty_list, _}), do: :list
+  # The improper 3-tuple is kept `:list`-kind (NOT a distinct kind) so the
+  # disjointness fallback never claims `:none` against a proper list shape —
+  # conservative. In descr terms an improper non_empty_list(a, tail) with a
+  # non-empty-excluding tail IS disjoint from proper list(t), but asserting that
+  # here risks an unsound `:none`, so we stay coarse.
+  defp shape_kind({:nonempty_list, _, _}), do: :list
   defp shape_kind(:tuple), do: :tuple
   defp shape_kind({:tuple, _, _}), do: :tuple
   defp shape_kind({:map, _, _}), do: :map
@@ -3085,26 +3252,40 @@ defmodule ElixirSense.Core.Binding do
 
   # Expand a map/struct base used as an operand of `Map.put`/`merge`/etc.
   # Returns `{fields, tail}` where `tail` is:
-  #   * `nil`   — the base is a closed map/struct (all keys known), or empty;
-  #   * `:open` — the base is an open map (additional unknown keys exist), e.g.
-  #               an untyped parameter (`expand/3` → nil) or another open map;
+  #   * `:closed` — the base is a literal-complete map or a resolved struct (ALL
+  #                 keys known); a put/delete/merge keeps the result closed;
+  #   * `nil`     — the base is a PARTIAL map (closedness unknown, e.g. a guard
+  #                 fact); the result stays partial;
+  #   * `:open`   — the base is an open map (additional unknown keys exist), e.g.
+  #                 an untyped parameter (`expand/3` → nil) or another open map;
   #   * `[:none]` (as fields) — the base is provably not a map (bottom).
-  # Synthesising results from an OPEN base must keep the result open, otherwise
-  # we wrongly assert the absence of keys we never saw (P1 unsoundness).
+  # Synthesising results from an OPEN/partial base must NOT assert the absence of
+  # keys we never saw (P1 unsoundness); only a `:closed` base licenses that.
   defp expand_map_base(env, map_or_struct, stack) do
     case expand(env, map_or_struct, stack) do
-      {:map, fields, tail} when tail in [nil, :open] -> {fields, tail}
-      {:struct, fields, _, nil} -> {fields, nil}
+      {:map, fields, tail} when tail in [nil, :open, :closed] -> {fields, tail}
+      # A resolved struct is literal-complete (all defstruct keys known).
+      {:struct, fields, _, nil} -> {fields, :closed}
       # Unknown base: we know nothing about it, so it may carry any keys.
       nil -> {[], :open}
       _ -> {[:none], nil}
     end
   end
 
-  # Combining two map tails: the result is open if either operand is open.
+  # Combining two map tails (e.g. `Map.merge/2`):
+  #   * open if either operand is open (additional unknown keys remain);
+  #   * closed only if BOTH operands are closed (both key sets fully known);
+  #   * otherwise partial (`nil`) — at least one operand has unknown closedness.
   defp merge_tails(:open, _), do: :open
   defp merge_tails(_, :open), do: :open
+  defp merge_tails(:closed, :closed), do: :closed
   defp merge_tails(_, _), do: nil
+
+  # Intersecting two map tails (map ∩ map): a `:closed` operand pins the result
+  # closed (it constrains the key set); two partials stay partial.
+  defp intersect_tails(:closed, _), do: :closed
+  defp intersect_tails(_, :closed), do: :closed
+  defp intersect_tails(_, _), do: nil
 
   def from_var(value) when is_atom(value) do
     {:atom, value}

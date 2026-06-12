@@ -15,7 +15,8 @@ defmodule ElixirSense.Core.TypePresentation do
   matching `Module.Types.Descr.to_quoted_string/2` output exactly:
 
   - Unions join with `" or "` (not `" | "`).
-  - Lists render as `list(t)`, `non_empty_list(t)`, `empty_list()`.
+  - Lists render as `list(t)`, `non_empty_list(t)`, `empty_list()`, and
+    improper non-empty lists as `non_empty_list(t, tail)`.
   - `boolean()`, `tuple()`, `map()`, `bitstring()`, etc. use the compiler names.
 
   The custom structural engine adds **extra-precision spellings** that the
@@ -225,6 +226,9 @@ defmodule ElixirSense.Core.TypePresentation do
   defp widen_literals({:list, :empty}), do: {:list, :empty}
   defp widen_literals({:list, elem}), do: {:list, widen_literals(elem)}
   defp widen_literals({:nonempty_list, elem}), do: {:nonempty_list, widen_literals(elem)}
+
+  defp widen_literals({:nonempty_list, elem, tail}),
+    do: {:nonempty_list, widen_literals(elem), widen_literals(tail)}
 
   defp widen_literals({:tuple, size, elems}) when is_list(elems),
     do: {:tuple, size, Enum.map(elems, &widen_literals/1)}
@@ -476,6 +480,10 @@ defmodule ElixirSense.Core.TypePresentation do
   defp segment({:list, elem}), do: "list(" <> segment(elem) <> ")"
   defp segment({:nonempty_list, elem}), do: "non_empty_list(" <> segment(elem) <> ")"
 
+  # Improper non-empty list: compiler spelling `non_empty_list(elem, tail)`.
+  defp segment({:nonempty_list, elem, tail}),
+    do: "non_empty_list(" <> segment(elem) <> ", " <> segment(tail) <> ")"
+
   # Fixed-arity tuple: {s1, s2, ...}
   defp segment({:tuple, _size, elems}) when is_list(elems),
     do: "{" <> Enum.map_join(elems, ", ", &segment/1) <> "}"
@@ -496,6 +504,14 @@ defmodule ElixirSense.Core.TypePresentation do
   defp segment({:map, [], :open}), do: "map()"
   defp segment({:map, fields, :open}) when is_list(fields), do: "%{..., " <> fields(fields) <> "}"
 
+  # `:closed` (literal-complete) and `nil` (partial) tails BOTH render without an
+  # open marker. This is a DELIBERATE display compromise (three-marker model, see
+  # `ElixirSense.Core.Binding`): surfacing the partial-vs-closed distinction in the
+  # rendered string (e.g. a `...` for partial) would churn every guard-fact display
+  # expectation for no user-facing benefit, so partial maps render exactly as
+  # closed ones do. Only `:open` carries the `...` marker (handled above).
+  # An empty-field `:closed`/`nil` map renders as `map()` for the same reason
+  # (the empty closed map `%{}` round-trips through the distinct `:empty_map` shape).
   defp segment({:map, [], _updated}), do: "map()"
   defp segment({:map, fields, _updated}) when is_list(fields), do: "%{" <> fields(fields) <> "}"
 

@@ -1741,7 +1741,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{
                  name: :inner_attr,
                  positions: [{5, 5}, {7, 13}],
-                 type: {:map, [abc: {:atom, nil}], nil}
+                 type: {:map, [abc: {:atom, nil}], :closed}
                },
                %AttributeInfo{
                  name: :inner_attr_1,
@@ -1816,7 +1816,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{
                  name: :myattribute,
                  positions: [{2, 3}, {3, 14}],
-                 type: {:map, [abc: {:atom, String}], nil}
+                 type: {:map, [abc: {:atom, String}], :closed}
                },
                %AttributeInfo{
                  name: :some_attr,
@@ -2007,7 +2007,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert Enum.find(get_line_vars(state, 4), &(&1.name == :acc)).type ==
-               {:map, [], nil}
+               {:map, [], :closed}
     end
 
     test "for ... reduce: result is the seed unioned with clause bodies (not a list)" do
@@ -2030,7 +2030,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert Enum.find(get_line_vars(state, 8), &(&1.name == :x)).type ==
                {:union,
                 [
-                  {:map, [], nil},
+                  {:map, [], :closed},
                   {:call, {:atom, Map}, :put,
                    [{:variable, :acc, 2}, {:variable, :i, 1}, {:integer, 1}]}
                 ]}
@@ -2152,7 +2152,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{
                  name: :myattribute,
                  positions: [{2, 3}, {3, 9}],
-                 type: {:map, [abc: {:atom, String}], nil}
+                 type: {:map, [abc: {:atom, String}], :closed}
                },
                %AttributeInfo{
                  name: :other,
@@ -2204,7 +2204,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{
                  name: :myattribute,
                  positions: [{2, 3}, {3, 16}],
-                 type: {:tuple, 2, [{:atom, :ok}, {:map, [abc: {:atom, nil}], nil}]}
+                 type: {:tuple, 2, [{:atom, :ok}, {:map, [abc: {:atom, nil}], :closed}]}
                }
              ]
 
@@ -2670,22 +2670,25 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert [%VarInfo{type: {:map, [asd: {:integer, 5}], nil}}] = state |> get_line_vars(4)
+      # Map literals in expression context are `:closed` (literal-complete),
+      # including nested literals.
+      assert [%VarInfo{type: {:map, [asd: {:integer, 5}], :closed}}] = state |> get_line_vars(4)
 
       assert [
                %VarInfo{
                  type:
-                   {:map, [asd: {:integer, 5}, nested: {:map, [wer: {:binary, "asd"}], nil}], nil}
+                   {:map, [asd: {:integer, 5}, nested: {:map, [wer: {:binary, "asd"}], :closed}],
+                    :closed}
                }
              ] = state |> get_line_vars(6)
 
       # `%{"asd" => "dsds"}` — non-atom key preserved as a domain key.
       assert [
-               %VarInfo{type: {:map, [{{:domain, {:binary, "asd"}}, {:binary, "dsds"}}], nil}}
+               %VarInfo{type: {:map, [{{:domain, {:binary, "asd"}}, {:binary, "dsds"}}], :closed}}
              ] = state |> get_line_vars(8)
 
       assert [
-               %VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], nil}}
+               %VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], :closed}}
              ] = state |> get_line_vars(10)
 
       assert [

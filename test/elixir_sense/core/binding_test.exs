@@ -137,7 +137,7 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "map update with a KNOWN base stays closed (no regression)" do
+    test "map update with a KNOWN partial base stays partial (nil tail preserved)" do
       assert {:map, [a: {:integer, 9}, b: {:integer, 2}], nil} ==
                Binding.expand(
                  @env,
@@ -145,9 +145,22 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "map literal (no update base) stays closed" do
+    test "map update on a :closed base stays :closed" do
+      assert {:map, [a: {:integer, 9}, b: {:integer, 2}], :closed} ==
+               Binding.expand(
+                 @env,
+                 {:map, [a: {:integer, 9}], {:map, [a: {:integer, 1}, b: {:integer, 2}], :closed}}
+               )
+    end
+
+    test "nil-tail (partial) map literal is preserved as-is" do
       assert {:map, [a: {:integer, 1}], nil} ==
                Binding.expand(@env, {:map, [a: {:integer, 1}], nil})
+    end
+
+    test ":closed map literal is preserved as-is" do
+      assert {:map, [a: {:integer, 1}], :closed} ==
+               Binding.expand(@env, {:map, [a: {:integer, 1}], :closed})
     end
 
     test "map update with a non-atom (domain) key does not crash" do
@@ -2820,7 +2833,8 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "from_struct" do
-      assert {:map, [other: nil, typed_field: nil], nil} =
+      # A resolved struct is literal-complete, so the resulting map is `:closed`.
+      assert {:map, [other: nil, typed_field: nil], :closed} =
                Binding.expand(
                  @env,
                  {:call, {:atom, Map}, :from_struct,
@@ -2829,7 +2843,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "from_struct atom arg" do
-      assert {:map, [other: nil, typed_field: nil], nil} =
+      assert {:map, [other: nil, typed_field: nil], :closed} =
                Binding.expand(
                  @env,
                  {:call, {:atom, Map}, :from_struct,
@@ -2944,7 +2958,8 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "new" do
-      assert {:map, [], nil} = Binding.expand(@env, {:call, {:atom, Map}, :new, []})
+      # `Map.new/0` constructs the empty, literal-complete (`:closed`) map.
+      assert {:map, [], :closed} = Binding.expand(@env, {:call, {:atom, Map}, :new, []})
     end
   end
 
@@ -3559,11 +3574,24 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "non-empty LHS with non-list RHS is unknown (improper list)" do
-      assert nil ==
+    test "non-empty proper LHS with known non-list RHS is an improper non-empty list" do
+      # `[1, ...] ++ :a` is a non-empty IMPROPER list: proper prefix of the LHS
+      # element type, final tail = the RHS shape. Modeled by the 3-tuple (was
+      # conservatively `nil` before the improper-list shape existed).
+      assert {:nonempty_list, {:integer, nil}, {:atom, :a}} ==
                Binding.expand(
                  @env,
                  {:call, {:atom, Kernel}, :++, [{:nonempty_list, {:integer, nil}}, {:atom, :a}]}
+               )
+    end
+
+    test "possibly-empty LHS with non-list RHS stays unknown (could be the bare RHS)" do
+      # `list ++ :a` could be exactly `:a` when the LHS is `[]`, which the
+      # prefix-bearing 3-tuple can't model, so we stay conservative (`nil`).
+      assert nil ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :++, [{:list, {:integer, nil}}, {:atom, :a}]}
                )
     end
 
@@ -3580,6 +3608,70 @@ defmodule ElixirSense.Core.BindingTest do
                Binding.expand(
                  @env,
                  {:call, {:atom, Kernel}, :--, [{:list, {:integer, nil}}, {:atom, :a}]}
+               )
+    end
+  end
+
+  describe "improper non-empty list shape ({:nonempty_list, elem, tail})" do
+    # The 3-tuple = non-empty, possibly-improper list: proper prefix of `elem`
+    # elements terminated by a non-list `tail`. It is its OWN kind variant —
+    # neither subsumed by nor subsuming proper list shapes.
+
+    test "do_expand expands both components" do
+      assert {:nonempty_list, {:integer, nil}, {:atom, :a}} ==
+               Binding.expand(@env, {:nonempty_list, :integer, {:atom, :a}})
+    end
+
+    test "is NOT covered by a proper list union member (improper not subsumed)" do
+      # A union of a proper list and the improper 3-tuple does NOT collapse —
+      # `covers?` keeps both (the proper shape does not subsume the improper one).
+      improper = {:nonempty_list, {:integer, nil}, {:atom, :a}}
+
+      assert {:union, members} =
+               Binding.expand(@env, {:union, [{:list, {:integer, nil}}, improper]})
+
+      assert improper in members
+    end
+
+    test "two equal-shaped 3-tuples in a union dedupe via covers?" do
+      improper = {:nonempty_list, {:integer, nil}, {:atom, :a}}
+      assert improper == Binding.expand(@env, {:union, [improper, improper]})
+    end
+
+    test "intersection of two 3-tuples is elementwise" do
+      # prefix: {:integer, nil} ∩ nil = {:integer, nil}; tail: boolean ∩ true = true
+      assert {:nonempty_list, {:integer, nil}, {:atom, true}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [
+                    {:nonempty_list, {:integer, nil}, :boolean},
+                    {:nonempty_list, nil, {:atom, true}}
+                  ]}
+               )
+    end
+
+    test "intersection bottoms out when the tails are disjoint" do
+      assert :none ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [
+                    {:nonempty_list, {:integer, nil}, {:atom, :a}},
+                    {:nonempty_list, {:integer, nil}, {:atom, :b}}
+                  ]}
+               )
+    end
+
+    test "intersection with a proper list stays conservative (nil), not :none" do
+      # An improper list and a proper list are not provably disjoint in the
+      # coarse `shape_kind` classifier (both `:list`), so the intersection is
+      # `nil` (unknown) rather than an unsound `:none`.
+      assert nil ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [{:nonempty_list, {:integer, nil}, {:atom, :a}}, {:list, {:integer, nil}}]}
                )
     end
   end
@@ -3958,14 +4050,19 @@ defmodule ElixirSense.Core.BindingTest do
       assert result == {:tuple, 1, [nil]}
     end
 
-    # --- :open vs nil map tail distinction ---
+    # --- map tail three-marker model: :closed / nil (partial) / :open ---
 
-    test "closed map tail nil renders with no open marker" do
-      # {:map, [a: {:integer, 1}], nil} = closed
+    # Rendering compromise: both `:closed` (literal-complete) and `nil` (partial)
+    # render WITHOUT the open marker; only `:open` carries `...`.
+    test "closed map tail :closed renders with no open marker" do
       alias ElixirSense.Core.TypePresentation
-      shape = {:map, [a: {:integer, 1}], nil}
-      {:ok, rendered} = TypePresentation.render(shape)
-      # closed map — must NOT contain the "..." open marker
+      {:ok, rendered} = TypePresentation.render({:map, [a: {:integer, 1}], :closed})
+      refute String.contains?(rendered, "...")
+    end
+
+    test "partial map tail nil renders with no open marker (display compromise)" do
+      alias ElixirSense.Core.TypePresentation
+      {:ok, rendered} = TypePresentation.render({:map, [a: {:integer, 1}], nil})
       refute String.contains?(rendered, "...")
     end
 
@@ -3981,6 +4078,48 @@ defmodule ElixirSense.Core.BindingTest do
       alias ElixirSense.Core.TypePresentation
       {:ok, rendered} = TypePresentation.render({:map, [], :open})
       assert rendered == "map()"
+    end
+
+    # map_key access: a missing key on a `:closed` map is PROVABLY absent
+    # (`:not_set`); on a `nil`-partial or `:open` map it is merely unknown (`nil`).
+    test "map_key on :closed map: missing key is :not_set" do
+      closed = {:map, [a: {:integer, 1}], :closed}
+      assert :not_set == Binding.expand(@env, {:map_key, closed, {:atom, :b}})
+      assert {:integer, 1} == Binding.expand(@env, {:map_key, closed, {:atom, :a}})
+    end
+
+    test "map_key on nil-partial map: missing key is nil (unknown), never :not_set" do
+      partial = {:map, [a: {:integer, 1}], nil}
+      assert nil == Binding.expand(@env, {:map_key, partial, {:atom, :b}})
+    end
+
+    test "map_key on :open map: missing key is nil (unknown)" do
+      open = {:map, [a: {:integer, 1}], :open}
+      assert nil == Binding.expand(@env, {:map_key, open, {:atom, :b}})
+    end
+
+    # merge_tails: closed only if BOTH closed; partial otherwise; open is sticky.
+    test "Map.merge of two :closed maps stays :closed" do
+      a = {:map, [a: {:integer, 1}], :closed}
+      b = {:map, [b: {:integer, 2}], :closed}
+      assert {:map, _, :closed} = Binding.expand(@env, {:call, {:atom, Map}, :merge, [a, b]})
+    end
+
+    test "Map.merge of :closed and nil-partial maps is partial (nil)" do
+      a = {:map, [a: {:integer, 1}], :closed}
+      b = {:map, [b: {:integer, 2}], nil}
+      assert {:map, _, nil} = Binding.expand(@env, {:call, {:atom, Map}, :merge, [a, b]})
+    end
+
+    # Map.put on a :closed base keeps the result :closed (key set still known).
+    test "Map.put on a :closed base stays :closed" do
+      base = {:map, [a: {:integer, 1}], :closed}
+
+      assert {:map, _, :closed} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :put, [base, {:atom, :b}, {:integer, 2}]}
+               )
     end
 
     # --- :not_set filtering in fields_for_receiver ---

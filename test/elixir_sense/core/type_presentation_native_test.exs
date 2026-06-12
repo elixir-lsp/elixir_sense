@@ -571,4 +571,33 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
       [:x, :v]
     )
   end
+
+  test "native-on: improper cons `[h | non_list]` renders non_empty_list(elem, tail)" do
+    code = """
+    defmodule M do
+      def f do
+        x = [1 | :a]
+        x
+      end
+    end
+    """
+
+    assert hint(code, :x, {4, 5}) == {:ok, "non_empty_list(integer(), :a)"}
+  end
+
+  test "native-on: `[proper] ++ non_list` renders an improper non_empty_list" do
+    # The ++ thunk resolves end-to-end: a non-empty proper LHS appended with a
+    # non-list RHS is a non-empty improper list (3-tuple), rendered with the
+    # compiler's `non_empty_list(elem, tail)` spelling.
+    code = """
+    defmodule M do
+      def f do
+        x = [1] ++ :a
+        x
+      end
+    end
+    """
+
+    assert hint(code, :x, {4, 5}) == {:ok, "non_empty_list(integer(), :a)"}
+  end
 end
