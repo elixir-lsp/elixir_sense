@@ -858,6 +858,15 @@ defmodule ElixirSense.Core.Binding do
   # Field keys, tolerating non-atom (domain) keys — `Keyword.keys/1` would raise.
   defp field_keys(fields), do: Enum.map(fields, &elem(&1, 0))
 
+  # Field value by key, tolerating non-atom (domain) keys — `Keyword.get/3` and
+  # `fields[key]` raise for keys like `{:domain, _}`.
+  defp field_get(fields, key, default \\ nil) do
+    case List.keyfind(fields, key, 0) do
+      {_key, value} -> value
+      nil -> default
+    end
+  end
+
   # Override `base` fields with `overrides` by key, for any key type (atom or
   # `{:domain, _}`). `Keyword.merge/2` raises on non-atom keys.
   defp put_fields(base, overrides) do
@@ -937,7 +946,7 @@ defmodule ElixirSense.Core.Binding do
   # unknown.
   defp merge_fields(fields_1, fields_2) do
     Enum.map(fields_1, fn {key, value_1} ->
-      {key, normalize_union([value_1, Keyword.get(fields_2, key)])}
+      {key, normalize_union([value_1, field_get(fields_2, key)])}
     end)
   end
 
@@ -2826,7 +2835,9 @@ defmodule ElixirSense.Core.Binding do
 
   defp combine_intersection_custom({:struct, fields_1, nil, nil}, {:struct, fields_2, nil, nil}) do
     keys = (safe_keys(fields_1) ++ safe_keys(fields_2)) |> Enum.uniq()
-    fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
+
+    fields =
+      for k <- keys, do: {k, combine_intersection(field_get(fields_1, k), field_get(fields_2, k))}
 
     if Enum.any?(fields, fn {_k, v} -> v == :none end) do
       :none
@@ -2841,7 +2852,9 @@ defmodule ElixirSense.Core.Binding do
        )
        when type_2 == type or is_nil(type_2) do
     keys = safe_keys(fields_1)
-    fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
+
+    fields =
+      for k <- keys, do: {k, combine_intersection(field_get(fields_1, k), field_get(fields_2, k))}
 
     if Enum.any?(fields, fn {_k, v} -> v == :none end) do
       :none
@@ -2868,7 +2881,9 @@ defmodule ElixirSense.Core.Binding do
   defp combine_intersection_custom({:map, fields_1, tail_1}, {:map, fields_2, tail_2})
        when tail_intersectable?(tail_1) and tail_intersectable?(tail_2) do
     keys = (safe_keys(fields_1) ++ safe_keys(fields_2)) |> Enum.uniq()
-    fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
+
+    fields =
+      for k <- keys, do: {k, combine_intersection(field_get(fields_1, k), field_get(fields_2, k))}
 
     if Enum.any?(fields, fn {_k, v} -> v == :none end) do
       :none
@@ -2884,7 +2899,8 @@ defmodule ElixirSense.Core.Binding do
         do: safe_keys(fields_1),
         else: (safe_keys(fields_1) ++ safe_keys(fields_2)) |> Enum.uniq()
 
-    fields = for k <- keys, do: {k, combine_intersection(fields_1[k], fields_2[k])}
+    fields =
+      for k <- keys, do: {k, combine_intersection(field_get(fields_1, k), field_get(fields_2, k))}
 
     if Enum.any?(fields, fn {_k, v} -> v == :none end) do
       :none

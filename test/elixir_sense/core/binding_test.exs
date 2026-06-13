@@ -175,6 +175,38 @@ defmodule ElixirSense.Core.BindingTest do
       assert {:abc, nil} in fields
     end
 
+    test "union-merging two maps with a non-atom (domain) key does not crash" do
+      # Same domain key + same tail on both -> coalesced via merge_fields,
+      # which must look up the field value tolerantly (Keyword.get would raise).
+      a = {:map, [{{:domain, {:binary, "k"}}, {:integer, 1}}], nil}
+      b = {:map, [{{:domain, {:binary, "k"}}, {:atom, :x}}], nil}
+
+      assert {:map, [{{:domain, {:binary, "k"}}, merged}], nil} =
+               Binding.expand(@env, {:union, [a, b]})
+
+      assert merged == {:union, [{:integer, 1}, {:atom, :x}]}
+    end
+
+    test "intersecting two maps with a non-atom (domain) key does not crash" do
+      a = {:map, [{{:domain, {:binary, "k"}}, {:integer, nil}}], :closed}
+      b = {:map, [{{:domain, {:binary, "k"}}, {:integer, nil}}], :closed}
+
+      assert {:map, [{{:domain, {:binary, "k"}}, {:integer, nil}}], :closed} =
+               Binding.expand(@env, {:intersection, [a, b]})
+    end
+
+    test "intersecting a generic struct with a domain-keyed map does not crash" do
+      # type == nil takes the union-of-keys branch, so the map's domain key is
+      # looked up on the struct side too; previously fields_1[{:domain,_}] raised.
+      str = {:struct, [field: {:integer, nil}], nil, nil}
+      map = {:map, [{{:domain, {:binary, "k"}}, {:integer, 1}}], nil}
+
+      assert match?(
+               {:struct, _fields, nil, nil},
+               Binding.expand(@env, {:intersection, [str, map]})
+             )
+    end
+
     test "tuple_nth out-of-bounds index resolves to :none, not nil" do
       tuple = {:tuple, 2, [{:atom, :a}, {:integer, 1}]}
       assert Binding.expand(@env, {:tuple_nth, tuple, 1}) == {:integer, 1}

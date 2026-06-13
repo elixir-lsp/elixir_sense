@@ -36,6 +36,13 @@ defmodule ElixirSense.Core.TypeInference.Guard do
   # Negative `is_map_key`: the key is known to be ABSENT, recorded as
   # `:not_set` (so e.g. `x.key` would be a violation and completion won't
   # suggest the key). Erlang arg order is `is_map_key(key, map)`.
+  #
+  # Narrowing to a map is sound: in a guard, `is_map_key(k, non_map)` raises,
+  # which makes `not is_map_key(k, non_map)` fail the guard — so a clause with
+  # this as its (sole) guard matches only maps lacking the key (verified: a
+  # non-map argument takes the no-match clause). Inside an `orelse`, the
+  # handler below keeps a per-var fact only when both disjuncts constrain it
+  # and then unions them, so the map fact never leaks unconditionally.
   def type_information_from_guards(
         {{:., _, [:erlang, :not]}, _, [{{:., _, [:erlang, :is_map_key]}, _, [key, var]}]}
       ) do
