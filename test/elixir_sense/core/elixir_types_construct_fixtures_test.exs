@@ -1,36 +1,4 @@
 defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
-  @moduledoc """
-  Compiler-comparison construct fixtures (GPT round-5 P2).
-
-  Strategy: two complementary harnesses, mirroring the existing suites.
-
-  1. **In-context pipe** (from `type_presentation_native_test.exs`): parse a
-     small module with `Parser.parse_string`, look up the variable via
-     `Metadata.get_env`, and render with `TypePresentation.render_hint/2`. These
-     tests are gated on `ElixirTypes.available?()` and restore the
-     `use_elixir_types` flag via `on_exit`. Assertions are exact when the
-     structural engine can produce a stable text; otherwise they use a documented
-     sound-widening membership (the rendered string is a supertype of the precise
-     type, which is always valid).
-
-  2. **Compiled-fixture pipe** (from `elixir_types_apply_parity_test.exs`):
-     compile in-memory with `Code.compile_string` + `infer_signatures: true`,
-     read the real ExCk chunk, then call `ElixirTypes.apply_signature/2` and
-     compare against the compiler's own recorded return with `Descr.equal?`.
-     These tests also carry `@moduletag :requires_native_types`.
-
-  Coverage: 25 deterministic fixtures across constructs not yet covered end-to-end
-  by the parity suites — try/rescue/catch/after, receive with after, for with
-  :into, :uniq, multiple generators and filters, case over remote scrutinee,
-  with chains, struct field access chains, optional-key map flows, binaries with
-  utf8 segments, captures (&Mod.fun/1 and &(&1 + 1)), macro-generated code, and
-  multi-clause remote dependency style apply_signature with argument-selected
-  clauses.
-
-  All tests are deterministic across seeds (no random inputs; no ordering
-  assumptions). The suite is isolated: it touches only this file.
-  """
-
   use ExUnit.Case, async: false
 
   alias ElixirSense.Core.Binding
@@ -44,21 +12,12 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
 
   @moduletag :requires_native_types
 
-  # ---------------------------------------------------------------------------
-  # Shared setup: enable native typing for all tests; restore on exit.
-  # ---------------------------------------------------------------------------
-
   setup do
     original = Application.get_env(:elixir_sense, :use_elixir_types, false)
     Application.put_env(:elixir_sense, :use_elixir_types, true)
     on_exit(fn -> Application.put_env(:elixir_sense, :use_elixir_types, original) end)
     :ok
   end
-
-  # ---------------------------------------------------------------------------
-  # Helper: in-context hint via the full parse/bind/render pipeline.
-  # Returns {:ok, text}, :skip, or {:no_var, names}.
-  # ---------------------------------------------------------------------------
 
   defp hint(code, var_name, position) do
     metadata = Parser.parse_string(code, true, true, position)
@@ -70,11 +29,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       var -> TP.render_hint(binding, var)
     end
   end
-
-  # ---------------------------------------------------------------------------
-  # Helper: collect all variable names that appear in scope anywhere in the
-  # module (robust to exact positions). Used for scope-survival assertions.
-  # ---------------------------------------------------------------------------
 
   defp scoped_var_names(code) do
     {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
@@ -97,12 +51,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       end
     end
   end
-
-  # ---------------------------------------------------------------------------
-  # Helper: compile src in-memory with `infer_signatures: true` and return a
-  # flat map of {fun, arity} => sig. Mirrors `compile_and_read_sigs` from the
-  # apply-parity suite.
-  # ---------------------------------------------------------------------------
 
   defp compile_and_read_sigs(src) do
     previous = Code.get_compiler_option(:infer_signatures)
@@ -137,16 +85,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     descr
   end
 
-  # ---------------------------------------------------------------------------
-  # ── PART 1: In-context pipeline (parse → bind → hint) ───────────────────────
-  # ---------------------------------------------------------------------------
-
-  # ── 1. for with :into binary ─────────────────────────────────────────────────
-
-  # The `for` compiler lowers `into: ""` to a `Collectable` accumulator over
-  # a binary seed. The result type is `bitstring()` — a sound widening of
-  # `binary()` (bitstring is the compiler's name for the accumulation output
-  # when the static seed is a binary literal).
   test "for with :into binary produces bitstring() hint" do
     if ElixirTypes.available?() do
       code = """
@@ -170,8 +108,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 2. for with :into map ─────────────────────────────────────────────────────
-
   test "for with :into map produces map() hint" do
     if ElixirTypes.available?() do
       code = """
@@ -190,8 +126,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 3. for with :uniq ────────────────────────────────────────────────────────
-
   test "for with :uniq produces list(term()) hint" do
     if ElixirTypes.available?() do
       code = """
@@ -209,8 +143,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       assert hint_text == "list(term())"
     end
   end
-
-  # ── 4. for with multiple generators ──────────────────────────────────────────
 
   test "for with multiple generators produces list of pair tuples hint" do
     if ElixirTypes.available?() do
@@ -233,8 +165,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 5. for with multiple generators and filter ───────────────────────────────
-
   test "for with multiple generators and uniq filter keeps list({term(), term()}) hint" do
     if ElixirTypes.available?() do
       code = """
@@ -254,8 +184,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 6. for with filter ───────────────────────────────────────────────────────
-
   test "for with is_integer filter produces list(term()) hint" do
     if ElixirTypes.available?() do
       code = """
@@ -274,13 +202,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 7. case over remote-call scrutinee (nil clause subtracted) ───────────────
-
-  # `System.get_env/1` is typed `binary() | nil` by the native engine. The `nil`
-  # clause is consumed by the nil branch; the 1.20 cross-clause subtraction
-  # (`:previous` capability) leaves `binary()` in the catch-all clause. This test
-  # is gated on `:previous` so it stays green on 1.18/1.19 (where the catch-all
-  # would still see `binary() | nil`).
   test "case over remote scrutinee: nil clause subtracted, value is binary()" do
     if ElixirTypes.available?(:previous) do
       code = """
@@ -298,11 +219,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 8. receive with after: union of message and timeout branches ──────────────
-
-  # `receive do {:msg, x} -> {:got, x} after 100 -> :timeout end`
-  # The result is the union of the message branch `{:got, term()}` and the
-  # after branch `:timeout`.
   test "receive with after: result is :timeout or {:got, term()}" do
     if ElixirTypes.available?() do
       code = """
@@ -326,11 +242,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 9. with chain result ──────────────────────────────────────────────────────
-
-  # A `with` chain that mixes precise `{:ok, x}` patterns and an `else` clause
-  # with `{:error, reason}`. The result type is the union of the success and
-  # error branches.
   test "with chain result is {:error, term()} or {:ok, float() or integer()}" do
     if ElixirTypes.available?() do
       code = """
@@ -360,11 +271,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 10. struct field access chain: literal value in struct literal ────────────
-
-  # `x = %URI{host: "h.com"}; y = x.host` — the literal string wins over the
-  # generic `binary()` descriptor because the structural engine carries the
-  # literal `{:binary, "h.com"}` shape.
   test "struct field access chain: literal host value hint" do
     if ElixirTypes.available?() do
       code = """
@@ -385,10 +291,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 11. binary with utf8 segment ─────────────────────────────────────────────
-
-  # `<<h::utf8, rest::binary>> = s` — the utf8 segment gives an integer() and
-  # the rest segment gives binary().
   test "binary utf8 segment: h is integer(), rest is binary()" do
     if ElixirTypes.available?() do
       code = """
@@ -406,11 +308,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 12. capture &Mod.fun/1 bound to a variable ───────────────────────────────
-
-  # `fun = &String.upcase/1` — the capture is a function `(binary() -> term())`.
-  # Note: the ElixirSense structural engine renders the function shape as
-  # `(binary() -> term())` (keeping arity info from the spec).
   test "capture &String.upcase/1 bound: hint is (binary() -> term())" do
     # Typing a captured remote function needs the expected-type expression API
     # (1.19+); on 1.18 the hint pipeline declines (:skip), so this assertion only
@@ -432,10 +329,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 13. capture &(&1 + 1) bound to a variable ────────────────────────────────
-
-  # `fun = &(&1 + 1)` — the anon capture is typed by the native engine as
-  # `(float() or integer() -> float() or integer())`.
   test "capture &(&1 + 1) bound: hint is (float() or integer() -> float() or integer())" do
     if ElixirTypes.available?() do
       code = """
@@ -459,10 +352,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ── 14. invoke &(&1 + 1): result type ────────────────────────────────────────
-
-  # `fun = &(&1 + 1); result = fun.(3)` — the invocation result is
-  # `float() or integer()`.
   test "invoking anon &(&1 + 1) with integer yields float() or integer() hint" do
     # Invoking a captured anonymous fun and typing its result needs the
     # expected-type expression API (1.19+); on 1.18 the pipeline declines (:skip).
@@ -482,12 +371,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # ── PART 2: Scope-survival assertions (native-on vars must not be dropped) ──
-  # ---------------------------------------------------------------------------
-
-  # ── 15. try/rescue scope ─────────────────────────────────────────────────────
-
   test "native-on: try/rescue exception var stays in scope" do
     assert_in_scope(
       """
@@ -504,8 +387,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       [:e]
     )
   end
-
-  # ── 16. try/catch scope ───────────────────────────────────────────────────────
 
   test "native-on: try/catch kind and val vars stay in scope" do
     assert_in_scope(
@@ -524,8 +405,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     )
   end
 
-  # ── 17. receive pattern var in scope ─────────────────────────────────────────
-
   test "native-on: receive pattern var stays in scope with after" do
     assert_in_scope(
       """
@@ -542,8 +421,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       [:payload]
     )
   end
-
-  # ── 18. with generator and else vars in scope ─────────────────────────────────
 
   test "native-on: with generator vars and else var stay in scope" do
     assert_in_scope(
@@ -563,8 +440,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     )
   end
 
-  # ── 19. for comprehension generator var in scope ──────────────────────────────
-
   test "native-on: for comprehension generator var stays in scope" do
     assert_in_scope(
       """
@@ -579,8 +454,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       [:x]
     )
   end
-
-  # ── 20. for with multiple generators: all gen vars in scope ───────────────────
 
   test "native-on: for with multiple generators keeps all generator vars in scope" do
     assert_in_scope(
@@ -597,15 +470,7 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
     )
   end
 
-  # ---------------------------------------------------------------------------
-  # ── PART 3: Compiled-fixture / apply_signature parity ───────────────────────
-  # ---------------------------------------------------------------------------
-
   describe "apply_signature parity for constructs not in the parity suite" do
-    # ── 21. try/rescue/catch return union ──────────────────────────────────────
-
-    # The compiler records the union of all branches for the function body.
-    # `apply_signature` on a gradual arg must return dynamic(union_of_all_branches).
     test "try/rescue/catch: recorded return is dynamic union of all clause bodies" do
       alias Module.Types.Descr
 
@@ -635,8 +500,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       applied_result = applied(sigs, {:f, 1}, [nil])
       assert Descr.equal?(applied_result, recorded)
     end
-
-    # ── 22. receive with after: recorded return ───────────────────────────────
 
     test "receive with after: recorded return is dynamic(:timeout or {:got, term()})" do
       alias Module.Types.Descr
@@ -671,8 +534,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       assert Descr.equal?(recorded, expected)
     end
 
-    # ── 23. for with :into binary: recorded return is bitstring ───────────────
-
     test "for with :into binary: recorded return is dynamic(bitstring())" do
       alias Module.Types.Descr
 
@@ -698,11 +559,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
       end
     end
 
-    # ── 24. multi-clause: argument atom tag selects the right clause ──────────
-
-    # `process(:string, v) -> String.upcase(v)` and
-    # `process(:integer, v) -> v + 1`. Passing `:string` + binary selects the
-    # string clause; passing `:integer` + integer selects the integer clause.
     test "multi-clause: :string arg selects string clause, :integer selects integer clause" do
       alias Module.Types.Descr
 
@@ -729,11 +585,6 @@ defmodule ElixirSense.Core.ElixirTypesConstructFixturesTest do
              )
     end
 
-    # ── 25. macro-generated function: apply_signature parity ──────────────────
-
-    # A macro that generates `def add_n(x), do: x + <n>` creates a normal
-    # inferred clause. `apply_signature` on integer input reproduces the
-    # compiler's recorded return for `use_add10`.
     test "macro-generated function: apply_signature reproduces recorded return" do
       alias Module.Types.Descr
 

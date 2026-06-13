@@ -51,9 +51,7 @@ defmodule ElixirSense.Core.TypePresentationTest do
     end
 
     test "open map renders the `...` marker (additional unknown keys)" do
-      # render/1 does not widen literals, so `1` stays `1`.
       assert TP.render({:map, [a: {:integer, 1}], :open}) == {:ok, "%{..., a: 1}"}
-      # An empty open map is the map top.
       assert TP.render({:map, [], :open}) == {:ok, "map()"}
     end
 
@@ -72,11 +70,8 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert TP.render({:dynamic, {:atom, :ok}}) == {:ok, "dynamic(:ok)"}
     end
 
-    # Canary: a stray {:dynamic, inner} shape must render as dynamic(inner),
-    # NOT fall through to the catch-all segment/1 clause that returns "term()".
-    # This guards the gradual-shape policy: {:dynamic, _} segments arriving from
-    # the native-descr path must never silently degrade to "unknown".
     test "stray {:dynamic, inner} renders dynamic(inner) — not term() or unknown" do
+      # {:dynamic, _} segments must never silently degrade to "unknown".
       assert TP.render({:dynamic, :boolean}) == {:ok, "dynamic(boolean())"}
       assert TP.render({:dynamic, {:list, :integer}}) == {:ok, "dynamic(list(integer()))"}
       # A nested dynamic inside a union must also survive, not collapse to term().
@@ -102,8 +97,6 @@ defmodule ElixirSense.Core.TypePresentationTest do
     end
 
     test "structs drop uninformative term() fields" do
-      # A struct typed only by its module (e.g. a `defimpl for:` arg) renders as
-      # `%URI{}`, keeping only fields we actually know something about.
       shape = {:struct, [host: nil, scheme: {:binary, nil}], {:atom, URI}, nil}
       assert TP.render(shape) == {:ok, "%URI{scheme: binary()}"}
 
@@ -111,13 +104,12 @@ defmodule ElixirSense.Core.TypePresentationTest do
       assert TP.render(all_unknown) == {:ok, "%URI{}"}
     end
 
-    test "structs keep {:optional, _} fields (not dropped as uninformative)" do
+    test "structs keep optional fields (not dropped)" do
       shape = {:struct, [host: {:optional, {:binary, nil}}], {:atom, URI}, nil}
       assert TP.render(shape) == {:ok, "%URI{host: if_set(binary())}"}
     end
 
     test "unions use compiler dialect: or (not |)" do
-      # Compiler dialect: " or " separator (task #18)
       assert TP.render({:union, [{:atom, :a}, {:atom, :b}]}) == {:ok, ":a or :b"}
     end
 

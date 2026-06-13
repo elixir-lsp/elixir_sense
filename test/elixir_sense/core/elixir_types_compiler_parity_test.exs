@@ -1,22 +1,4 @@
 defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
-  @moduledoc """
-  Compiler-parity tests for ElixirSense.Core.ElixirTypes.
-
-  All tests are gated on `ElixirTypes.available?()` and skipped when the native
-  Module.Types backend is not present (Elixir < 1.18).
-
-  (a) Descr rendering parity — `ElixirTypes.descr_to_string/1` must return exactly
-      the same string as `Module.Types.Descr.to_quoted_string/2` for a fixed corpus.
-
-  (b) Shape round-trip soundness — for each corpus descr whose `to_shape/1` returns
-      non-nil, `descr → to_shape → coerce_var_type_public → upper_bound` must be a
-      SUPERtype of the original's upper_bound, i.e. `Descr.subtype?(ub_orig, ub_coerced)`.
-      The test fails if more than half the corpus is unconvertible (nil to_shape).
-
-  (c) ExCk parity — for five stdlib functions with inferred signatures, `lookup_signature`
-      succeeds and every clause's return descr renders via `descr_to_string` without error.
-  """
-
   use ExUnit.Case, async: true
 
   alias ElixirSense.Core.ElixirTypes
@@ -27,10 +9,6 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
   # We guard every test with `requires_native_types` instead of a module-level
   # skip so the test file itself always compiles.
   @moduletag :requires_native_types
-
-  # ---------------------------------------------------------------------------
-  # Corpus builder
-  # ---------------------------------------------------------------------------
 
   # Returns a list of {label, descr} pairs. Called inside tests so that the
   # Module.Types.Descr functions are only invoked on Elixir 1.18+.
@@ -106,10 +84,6 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
     ] ++ bitstring_entries ++ fun_entries
   end
 
-  # ---------------------------------------------------------------------------
-  # (a) Descr rendering parity
-  # ---------------------------------------------------------------------------
-
   describe "descr_to_string parity with Module.Types.Descr.to_quoted_string/2" do
     test "every corpus descr renders identically via both paths" do
       alias Module.Types.Descr
@@ -161,10 +135,6 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
                end)
     end
   end
-
-  # ---------------------------------------------------------------------------
-  # (b) Shape round-trip soundness
-  # ---------------------------------------------------------------------------
 
   describe "shape round-trip soundness" do
     test "to_shape -> coerce_var_type_public round-trip: coerced is supertype of original" do
@@ -298,10 +268,6 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # (c) ExCk parity with stdlib functions
-  # ---------------------------------------------------------------------------
-
   describe "ExCk stdlib signature parity" do
     # These five functions are present in every recent Elixir's standard library
     # and have inferred (:sig) entries in their ExCk chunks.
@@ -342,10 +308,6 @@ defmodule ElixirSense.Core.ElixirTypesCompilerParityTest do
       end
     end
   end
-
-  # ---------------------------------------------------------------------------
-  # Helpers
-  # ---------------------------------------------------------------------------
 
   # Closed Date-struct field pairs, mirroring the corpus builder. Kept as a
   # helper so the closed round-trip test can reuse the exact same shape.

@@ -1,14 +1,11 @@
 defmodule ElixirSense.Core.ElixirTypesExCkIntegrationTest do
   use ExUnit.Case, async: false
 
-  # Entire module exercises the native Module.Types backend (Elixir 1.18+).
   @moduletag :requires_native_types
 
   alias ElixirSense.Core.{ElixirTypes, TypeInference}
 
   describe "remote function integration" do
-    # Remote-call typing and remote-signature resolution go through native
-    # expression typing (expected-type backend, 1.19+). Excluded on 1.18.
     @describetag :requires_expected_type_native
 
     setup do
@@ -218,15 +215,10 @@ defmodule ElixirSense.Core.ElixirTypesExCkIntegrationTest do
     end
 
     test "of_expr resolves aliases from metadata during remote call typing" do
-      # Verify alias resolution works through of_expr (via init_stack metadata threading)
       metadata = %ElixirSense.Core.Metadata{
         cursor_env: {[], %{module: TestModule, aliases: [{Elixir.MyAlias, Integer}]}}
       }
 
-      # MyAlias.to_string(42) where MyAlias → Integer
-      # of_expr may return dynamic(term()) if ExCk doesn't have the sig cached,
-      # but should not crash — the alias resolution itself is tested more directly
-      # via maybe_remote_call_sig tests above.
       ast = {{:., [], [{:__aliases__, [], [MyAlias]}, :to_string]}, [], [42]}
 
       result =
@@ -241,8 +233,6 @@ defmodule ElixirSense.Core.ElixirTypesExCkIntegrationTest do
     end
 
     test "of_expr resolves __MODULE__ from metadata during remote call typing" do
-      # Verify __MODULE__ resolution works through maybe_remote_call_sig
-      # (full of_expr for remote calls with complex args can fail on variable lookup)
       metadata = %ElixirSense.Core.Metadata{
         cursor_env: {[], %{module: String}}
       }

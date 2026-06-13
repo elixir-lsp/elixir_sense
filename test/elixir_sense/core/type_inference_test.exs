@@ -678,9 +678,7 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "with without else unions the do body and each <- failure value" do
-      # The `{:ok, v}` generator pattern is a precise tagged tuple (no guard), so
-      # the failure value is the RHS `a` with `{:ok, _}` subtracted (task #26 /
-      # mirrors `expr.ex:883` — subtract only when the pattern is precise).
+      # Precise patterns subtract from failure; `{:ok, _}` is precise
       assert type_of("with {:ok, v} <- a, do: :done") ==
                {:union,
                 [

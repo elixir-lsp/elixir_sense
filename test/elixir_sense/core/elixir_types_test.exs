@@ -96,7 +96,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
   end
 
-  describe "capabilities memoization (Task 3)" do
+  describe "capabilities memoization" do
     # Capabilities are immutable within a VM (modules do not gain or lose exports).
     # The computed map is cached in :persistent_term after the first call.
     test "capabilities/0 returns identical maps on repeated calls (persistent_term memoized)" do
@@ -172,7 +172,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
   end
 
-  describe "of_match refinement with expected descriptors and guards (from m2)" do
+  describe "of_match refinement with expected descriptors and guards" do
     setup do
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
       Application.put_env(:elixir_sense, :use_elixir_types, true)
@@ -257,7 +257,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
   end
 
-  describe "pattern refinement conservatism (from m2)" do
+  describe "pattern refinement conservatism" do
     setup do
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
       Application.put_env(:elixir_sense, :use_elixir_types, true)
@@ -482,8 +482,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "handles dynamic" do
-      # task #20: dynamic() is no longer dropped to nil — it carries a
-      # `{:dynamic, nil}` marker so the presentation layer can render it.
       assert ElixirTypes.to_shape(Module.Types.Descr.dynamic()) == nil
     end
 
@@ -509,12 +507,10 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "handles empty list" do
-      # task #22: empty_list() is a distinct shape, not a generic empty list tuple.
       assert ElixirTypes.to_shape(Module.Types.Descr.empty_list()) == :empty_list
     end
 
     test "handles empty map" do
-      # task #22: empty_map() (closed `%{}`) is distinct from the map top type.
       assert ElixirTypes.to_shape(Module.Types.Descr.empty_map()) == :empty_map
     end
 
@@ -532,14 +528,9 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "handles nonempty list" do
-      # task #22: non-emptiness is preserved as a distinct {:nonempty_list, _}.
       assert ElixirTypes.to_shape(Module.Types.Descr.non_empty_list(Module.Types.Descr.integer())) ==
                {:nonempty_list, {:integer, nil}}
 
-      # A non_empty_list with an explicit non-list (improper) tail is now
-      # represented as the `{:nonempty_list, elem, tail}` 3-tuple (both the
-      # element and tail convert). Previously this degraded to nil because the
-      # shape algebra had no improper-list representation.
       assert ElixirTypes.to_shape(
                Module.Types.Descr.non_empty_list(
                  Module.Types.Descr.integer(),
@@ -601,9 +592,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "handles open tuple" do
-      # task #7: open tuples carry a dedicated {:tuple_open, shapes} shape (the
-      # known prefix), distinct from a closed-arity tuple — we must NOT claim the
-      # exact arity for an open tuple.
       assert ElixirTypes.to_shape(
                Module.Types.Descr.open_tuple([
                  Module.Types.Descr.atom([:ok]),
@@ -611,7 +599,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
                ])
              ) == {:tuple_open, [{:atom, :ok}, {:binary, nil}]}
 
-      # Open tuple with fallback - still extracts the known prefix
       assert ElixirTypes.to_shape(
                Module.Types.Descr.open_tuple(
                  [Module.Types.Descr.atom([:ok]), Module.Types.Descr.binary()],
@@ -656,8 +643,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "handles tuple" do
-      # task #7: the tuple top type quotes to a bare open marker `{...}` and
-      # becomes the `:tuple` shape — NOT an arity-0 tuple `{}`.
       assert ElixirTypes.to_shape(Module.Types.Descr.tuple()) == :tuple
 
       assert ElixirTypes.to_shape(
@@ -669,8 +654,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "handles boolean" do
-      # task #22: boolean() stays a dedicated :boolean shape (compiler prints
-      # `boolean()`), not a decomposed false | true union.
       assert ElixirTypes.to_shape(Module.Types.Descr.boolean()) == :boolean
     end
 
@@ -900,7 +883,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
   end
 
-  describe "TypeInference integration when feature disabled (from integration_test)" do
+  describe "TypeInference integration when feature disabled" do
     setup do
       # Ensure the feature is disabled for these tests
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
@@ -966,14 +949,11 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
 
     test "types list literals" do
-      # List with integers. task #22: a non-empty literal list types as a
-      # non_empty_list, surfaced as the {:nonempty_list, _} shape.
       list_ast = [1, 2, 3]
       result = ElixirTypes.of_expr(list_ast)
       assert {:ok, descr} = result
       assert ElixirTypes.to_shape(descr) == {:nonempty_list, {:integer, nil}}
 
-      # Empty list. task #22: surfaced as the :empty_list shape.
       empty_ast = []
       result = ElixirTypes.of_expr(empty_ast)
       assert {:ok, descr} = result
@@ -984,8 +964,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       list_ast = [1, :ok]
       result = ElixirTypes.of_expr(list_ast)
       assert {:ok, descr} = result
-      # Mixed list elements get unified to a single type. A non-empty literal
-      # list surfaces as {:nonempty_list, _} (task #22).
       shape = ElixirTypes.to_shape(descr)
       assert match?({:nonempty_list, _}, shape)
     end
@@ -1110,10 +1088,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "types local call" do
       call_ast = {:foo, [], []}
       assert {:ok, descr} = ElixirTypes.of_expr(call_ast)
-      # Returns dynamic(term()); task #20 surfaces the dynamic top as
-      # {:dynamic, nil} rather than dropping it to nil. (Previously this test
-      # passed the raw AST to to_shape — a no-op that always yielded nil; fixed
-      # to convert the actual descr.)
       shape = ElixirTypes.to_shape(descr)
       assert shape == nil
     end
@@ -1121,8 +1095,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "types remote call" do
       call_ast = {{:., [], [Foo, :bar]}, [], []}
       assert {:ok, descr} = ElixirTypes.of_expr(call_ast)
-      # Returns dynamic(term()) — no ExCk sig for Foo.bar (task #20). (Fixed to
-      # convert the actual descr, not the raw AST.)
       shape = ElixirTypes.to_shape(descr)
       assert shape == nil
     end
@@ -1130,7 +1102,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "types anonymous call" do
       call_ast = {{:., [], [{:foo, [version: 0], nil}]}, [], []}
       result = ElixirTypes.of_expr(call_ast)
-      # Returns dynamic(term()) — no local handler or remote sig available (task #20).
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert shape == nil
@@ -1139,7 +1110,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "types variables" do
       variable_ast = {:foo, [version: 0], nil}
       result = ElixirTypes.of_expr(variable_ast)
-      # dynamic when var not known; task #20 surfaces it as {:dynamic, nil}.
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert shape == nil
@@ -1147,7 +1117,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       result =
         ElixirTypes.of_expr(variable_ast, variables: %{{:foo, 0} => Module.Types.Descr.integer()})
 
-      # concrete type when known
       assert {:ok, descr} = result
       shape = ElixirTypes.to_shape(descr)
       assert shape == {:integer, nil}
@@ -1156,8 +1125,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     test "types property access" do
       call_ast = {{:., [], [{:foo, [version: 0], nil}, :bar]}, [no_parens: true], []}
       assert {:ok, descr} = ElixirTypes.of_expr(call_ast)
-      # Returns dynamic(term()) — no local handler or remote sig available (task
-      # #20). (Fixed to convert the actual descr, not the raw AST.)
       shape = ElixirTypes.to_shape(descr)
       assert shape == nil
     end
@@ -1215,7 +1182,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
     end
   end
 
-  # New coverage for the Fable audit fixes (tasks #7-#11, #15, #17, #19-#22, #37).
   describe "audit fixes" do
     @describetag :requires_native_types
 
@@ -1228,28 +1194,25 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
     alias Module.Types.Descr
 
-    test "task #21: bitstring() converts to :bitstring shape" do
-      # bitstring() is the 1.20 spelling; older Descr may not expose bitstring/0.
+    test "bitstring() converts to :bitstring shape" do
       if function_exported?(Descr, :bitstring, 0) do
         # credo:disable-for-next-line Credo.Check.Refactor.Apply
         assert ElixirTypes.to_shape(apply(Descr, :bitstring, [])) == :bitstring
       end
     end
 
-    test "task #21: not_set() converts to :not_set shape" do
+    test "not_set() converts to :not_set shape" do
       assert ElixirTypes.to_shape(Descr.not_set()) == :not_set
     end
 
-    test "task #7: open tuple keeps the {:tuple_open, _} shape" do
+    test "open tuple keeps the {:tuple_open, _} shape" do
       shape =
         ElixirTypes.to_shape(Descr.open_tuple([Descr.atom([:ok]), Descr.integer()]))
 
       assert shape == {:tuple_open, [{:atom, :ok}, {:integer, nil}]}
     end
 
-    test "task #19: a loaded struct's quoted form converts to a struct shape" do
-      # Date is loaded and complete; descr.ex map_literal_to_quoted emits the
-      # `%Date{...}` quoted form, which we now convert to a {:struct, ...} shape.
+    test "a loaded struct's quoted form converts to a struct shape" do
       descr = Module.Types.Of.struct_type(Date, [%{field: :year}])
       shape = ElixirTypes.to_shape(descr)
 
@@ -1262,46 +1225,29 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert {:struct, _fields, {:atom, Date}, nil} = unwrapped
     end
 
-    test "task #9: a negation member degrades the type to nil (not silently dropped)" do
-      # `integer() | not binary()` simplifies to `not binary()` (a bare negation
-      # in the quoted form). Negations are unconvertible; we degrade to nil rather
-      # than dropping the member, which would make the displayed type narrower
-      # than the truth.
+    test "a negation member degrades the type to nil (not silently dropped)" do
       negated = Descr.negation(Descr.binary())
       union = Descr.union(Descr.integer(), negated)
       assert ElixirTypes.to_shape(union) == nil
     end
 
-    test "task #10: coerced shapes are dynamic-wrapped (gradual, not certain)" do
-      # A statically-coerced descr makes the typesystem treat the seed as certain,
-      # collapsing matches to none(). The compiler wraps inferred values in
-      # dynamic/1; we mirror that. Assert the coerced integer is gradual (carries
-      # a dynamic component) rather than a fully-static integer().
+    test "coerced shapes are dynamic-wrapped (gradual, not certain)" do
       descr = ElixirTypes.coerce_var_type_public(:integer)
       assert Descr.gradual?(descr)
       refute Descr.gradual?(Descr.integer())
-      # It is still equivalent to integer() as a gradual type.
       assert Descr.equal?(descr, Descr.dynamic(Descr.integer()))
     end
 
-    test "task #10: nil-tail (partial) map shapes coerce to an OPEN map (not closed)" do
-      # A `nil` tail is PARTIAL (closedness unknown). An open map admits extra
-      # keys; a closed map asserts all other keys absent and would intersect
-      # emptily with a fuller real map. A map that ALSO has a :bar key must still
-      # be compatible (non-empty intersection) with our seed.
+    test "nil-tail (partial) map shapes coerce to an OPEN map (not closed)" do
       descr = ElixirTypes.coerce_var_type_public({:map, [foo: {:integer, nil}], nil})
       fuller = Descr.dynamic(Descr.closed_map(foo: Descr.integer(), bar: Descr.binary()))
       refute Descr.empty?(Descr.intersection(descr, fuller))
     end
 
-    test "task #10: a loaded struct coerces to a closed map over the FULL field set" do
-      # Date is loaded; we expand the complete defstruct field set so the seed
-      # matches a real, complete Date value rather than asserting unknown fields
-      # absent (which a partial closed_map over just {:year} would do).
+    test "a loaded struct coerces to a closed map over the FULL field set" do
       descr =
         ElixirTypes.coerce_var_type_public({:struct, [year: {:integer, nil}], {:atom, Date}, nil})
 
-      # A real complete Date value: closed map over the full field set.
       full_keys = Date.__struct__() |> Map.from_struct() |> Map.keys()
 
       real_pairs =
@@ -1311,8 +1257,6 @@ defmodule ElixirSense.Core.ElixirTypesTest do
 
       refute Descr.empty?(Descr.intersection(descr, real))
 
-      # And a struct missing fields (a partial closed map) must NOT match it —
-      # confirming we expanded to the full field set.
       partial =
         Descr.dynamic(
           Descr.closed_map([{:__struct__, Descr.atom([Date])}, {:year, Descr.integer()}])
@@ -1321,33 +1265,26 @@ defmodule ElixirSense.Core.ElixirTypesTest do
       assert Descr.empty?(Descr.intersection(descr, partial))
     end
 
-    test "task #17: descr_to_string renders via the compiler's to_quoted_string" do
+    test "descr_to_string renders via the compiler's to_quoted_string" do
       case ElixirTypes.descr_to_string(Descr.integer()) do
         {:ok, str} -> assert str == "integer()"
         :error -> :ok
       end
 
-      # opts form is accepted and still produces a string
       case ElixirTypes.descr_to_string(Descr.binary(), collapse_structs: true) do
         {:ok, str} -> assert is_binary(str)
         :error -> :ok
       end
     end
 
-    # `of_expr` public typing needs the expected-type API (1.19+); on 1.18 it
-    # returns :error by design (expression typing stays on the custom engine).
     @tag :requires_expected_type_native
-    test "task #11: distinct unversioned named vars in a body don't alias" do
-      # `foo + bar` — two distinct unversioned names. Before the fix both were
-      # stamped version 0 and collapsed into one context slot. With the fix they
-      # get distinct versions; typing the expression must not crash and must
-      # produce a result (no cross-contamination / no raise).
+    test "distinct unversioned named vars in a body don't alias" do
       ast = {:+, [], [{:foo, [], nil}, {:bar, [], nil}]}
       assert {:ok, _descr} = ElixirTypes.of_expr(ast)
     end
   end
 
-  describe "apply_signature (Task 1 — mirror compiler apply semantics)" do
+  describe "apply_signature" do
     @describetag :requires_native_types
 
     setup do

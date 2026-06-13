@@ -706,10 +706,7 @@ defmodule ElixirSense.Core.ElixirTypesLocalInferenceTest do
     end
   end
 
-  describe "MetadataBuilder-level inference (from m2)" do
-    # Local signature inference feeds the native expression typer, which is the
-    # expected-type backend (1.19+). Excluded on 1.18 via test_helper.
-    # The file-level setup already enables use_elixir_types.
+  describe "MetadataBuilder-level inference" do
     @describetag :requires_expected_type_native
 
     test "captures clause AST during compilation" do
@@ -732,19 +729,13 @@ defmodule ElixirSense.Core.ElixirTypesLocalInferenceTest do
         |> elem(1)
         |> MetadataBuilder.build()
 
-      # Clauses are captured during the module body and PRUNED once the
-      # module-level inference pass computes the signature (O(n) rework) —
-      # the signature itself is the evidence the clauses were captured.
       add_key = {TestModule, :add, 2}
 
       assert %{elixir_types_clauses: [], elixir_types_sig: {:infer, _, _}} =
                state.mods_funs_to_positions[add_key]
 
-      # Check that clauses were captured for factorial/1
       factorial_key = {TestModule, :factorial, 1}
 
-      # Recursive functions deliberately skip inference (local handler
-      # disabled); clauses are pruned after the module pass either way.
       assert %{elixir_types_clauses: []} = state.mods_funs_to_positions[factorial_key]
     end
 
@@ -806,17 +797,13 @@ defmodule ElixirSense.Core.ElixirTypesLocalInferenceTest do
                elixir_types_status: status
              } = state.mods_funs_to_positions[key]
 
-      # Clauses pruned post-inference; the two-clause sig proves capture.
       assert clauses == []
       assert {:infer, _domain, sig_clauses} = sig
       assert length(sig_clauses) == 2
 
-      # Status should be ok or skipped
       assert status == :ok
 
       assert {:infer, _domain, clause_types} = sig
-      # Note: String.length return type is dynamic() since remote handler
-      # doesn't have ExCk data during local inference
       assert length(clause_types) == 2
     end
 
@@ -855,7 +842,6 @@ defmodule ElixirSense.Core.ElixirTypesLocalInferenceTest do
         |> elem(1)
         |> MetadataBuilder.build()
 
-      # Both public and private functions should be captured
       public_key = {TestModule, :public_fun, 1}
       private_key = {TestModule, :private_fun, 1}
 
@@ -870,32 +856,6 @@ defmodule ElixirSense.Core.ElixirTypesLocalInferenceTest do
       code = """
       defmodule TestModule do
         def simple_add(x, y), do: x + y
-        # def simple_add(x, y) do
-          # if x do
-          #   %{ispies: 1}
-          # else
-          #   %{fo: 1}
-          # end
-          # try do
-          #   %{ispies: :ok}
-          # else
-          #   a -> %{a | ispies: :ok}
-          # rescue
-          #   _ -> %{foj: 1}
-          # end
-          # cond do
-          #   x -> %{ispies: :ok}
-          #   true -> 1
-          # end
-          # n = receive do
-          #   a -> %{ispies: :ok}
-          # after
-          #   2 -> %{foj: 1}
-          # end
-          # for _ <- 1..10 do
-          #   %{ispies: :ok}
-          # end
-        # end
         def identity(x), do: x
       end
       """
@@ -906,14 +866,11 @@ defmodule ElixirSense.Core.ElixirTypesLocalInferenceTest do
         |> elem(1)
         |> MetadataBuilder.build()
 
-      # Build local signatures map
       local_sigs_map = ElixirTypes.build_local_sigs_map(state, TestModule)
 
-      # Should have captured signatures for both functions
       assert Map.has_key?(local_sigs_map, {:simple_add, 2})
       assert Map.has_key?(local_sigs_map, {:identity, 1})
 
-      # Test that we can use the local handler
       assert {:def, {:infer, _domain, _clause_types}} = Map.get(local_sigs_map, {:simple_add, 2})
     end
 
@@ -930,16 +887,11 @@ defmodule ElixirSense.Core.ElixirTypesLocalInferenceTest do
         |> elem(1)
         |> MetadataBuilder.build()
 
-      # Build local signatures map
       local_sigs_map = ElixirTypes.build_local_sigs_map(state, TestModule)
 
-      # Test typing a local call with the signatures map
       call_ast = {:add, [], [1, 2]}
       result = TypeInference.type_of_with_elixir_types(call_ast, :none, local_sigs_map)
 
-      # add/2 body is %{foo: x, bar: y}, which returns a map. task #20: native
-      # dynamic-mode inference yields a dynamic-wrapped descr, so to_shape now
-      # surfaces a {:dynamic, {:map, ...}} marker — unwrap it for the assertion.
       {:map, fields, :closed} =
         case result do
           {:dynamic, inner} -> inner

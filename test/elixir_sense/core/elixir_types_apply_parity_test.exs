@@ -1,29 +1,4 @@
 defmodule ElixirSense.Core.ElixirTypesApplyParityTest do
-  @moduledoc """
-  Apply-mirror parity harness (consolidated backlog 1.3).
-
-  Strategy: compile fixture modules in-memory with `Code.compile_string`, which
-  emits a real ExCk chunk per module. We read BOTH the callee's signature and
-  the caller's recorded inferred return from those chunks (via
-  `ElixirSense.Core.ExCkReader.read_chunk/2` with the raw chunk binary), then
-  assert that `ElixirTypes.apply_signature(callee_sig, [arg_shape])` reproduces
-  the compiler's own recorded return for `def use_*, do: callee(<literal>)`.
-
-  Critical mechanism finding (documented for future drift): the ground-truth
-  comparison only works for LOCAL (same-module) calls. For a REMOTE call the
-  compiler records the caller's inferred return as a bare `dynamic(term())` —
-  remote return types are checked for errors but NOT narrowed into the caller's
-  recorded sig. Local calls go through the local handler, which applies the
-  callee sig and records the precise applied (dynamic-wrapped) return. So every
-  fixture below makes a LOCAL call.
-
-  Second finding: every signature the 1.20 compiler emits for these fixtures is
-  `:infer` (never `:strong`). `apply_infer` always `dynamic()`-wraps its return
-  (apply.ex:1827), which is exactly what `apply_signature/2` does for `:infer`.
-  The `:strong` return/3-conditional wrapping (Task 2.1) is therefore exercised
-  by `elixir_types_test.exs` against hand-built `:strong` sigs; here we assert
-  the `:infer` parity that the compiler actually produces.
-  """
   use ExUnit.Case, async: false
 
   alias ElixirSense.Core.ElixirTypes
@@ -109,13 +84,11 @@ defmodule ElixirSense.Core.ElixirTypesApplyParityTest do
         end
         """)
 
-      # :a selects the atom clause (returns the integer 1|2 widened to integer()).
       assert Descr.equal?(
                applied(sigs, {:classify, 1}, [Descr.atom([:a])]),
                recorded_return(sigs, :use_a)
              )
 
-      # 99 selects the is_integer guard clause (returns :int).
       assert Descr.equal?(
                applied(sigs, {:classify, 1}, [Descr.integer()]),
                recorded_return(sigs, :use_int)
@@ -153,15 +126,6 @@ defmodule ElixirSense.Core.ElixirTypesApplyParityTest do
         end
         """)
 
-      # A statically-known atom arg is disjoint from the integer-only domain.
-      # On 1.20 the compiler refines the clause's recorded argument type via the
-      # `is_integer/1` guard, so the disjoint atom is rejected and
-      # apply_signature reports :error (an ill-typed call). On 1.18/1.19 the
-      # recorded clause argument type is the unrefined gradual `dynamic()`
-      # (`{[dynamic()], ...}` — see the ExCk chunk), so every argument is
-      # compatible and the call widens to the dynamic-wrapped return instead.
-      # Assert the version-appropriate outcome rather than baking in 1.20-only
-      # guard refinement.
       only_int_sig = Map.fetch!(sigs, {:only_int, 1})
 
       case ElixirTypes.apply_signature(only_int_sig, [Descr.atom([:nope])]) do
@@ -169,14 +133,11 @@ defmodule ElixirSense.Core.ElixirTypesApplyParityTest do
           :ok
 
         {:ok, descr} ->
-          # No domain refinement recorded: the clause arg type must itself be
-          # gradual (otherwise this would be a real selection bug).
           {:infer, _domain, [{[arg_type], _ret}]} = only_int_sig
           assert Descr.gradual?(arg_type)
           assert Descr.gradual?(descr)
       end
 
-      # And the well-typed call reproduces the recorded return.
       assert Descr.equal?(
                applied(sigs, {:only_int, 1}, [Descr.integer()]),
                recorded_return(sigs, :use_ok)
@@ -197,9 +158,6 @@ defmodule ElixirSense.Core.ElixirTypesApplyParityTest do
 
       sig = Map.fetch!(sigs, {:classify, 1})
 
-      # An unknown/gradual arg (nil shape coerces to dynamic()) is non-disjoint
-      # with every clause, so the return is the dynamic-wrapped union of all
-      # clause returns: integer() | :int.
       assert {:ok, descr} = ElixirTypes.apply_signature(sig, [nil])
       assert Descr.gradual?(descr)
       assert Descr.equal?(descr, Descr.dynamic(Descr.union(Descr.integer(), Descr.atom([:int]))))
@@ -219,9 +177,6 @@ defmodule ElixirSense.Core.ElixirTypesApplyParityTest do
 
       sig = Map.fetch!(sigs, {:classify, 1})
 
-      # atom | integer is non-disjoint with both the atom clause AND the integer
-      # clause, so both are selected and their returns unioned (integer() | :int),
-      # dynamic-wrapped (apply_infer always wraps).
       union_arg = Descr.union(Descr.atom([:a]), Descr.integer())
       assert {:ok, descr} = ElixirTypes.apply_signature(sig, [union_arg])
       assert Descr.equal?(descr, Descr.dynamic(Descr.union(Descr.integer(), Descr.atom([:int]))))
@@ -238,8 +193,6 @@ defmodule ElixirSense.Core.ElixirTypesApplyParityTest do
         end
         """)
 
-      # The recorded callee domain is an OPEN map %{k => term}; pass a closed map
-      # with an integer at :k (what the caller statically constructs).
       arg = Descr.closed_map(k: Descr.integer())
       assert Descr.equal?(applied(sigs, {:mapfun, 1}, [arg]), recorded_return(sigs, :use_map))
     end
@@ -272,7 +225,6 @@ defmodule ElixirSense.Core.ElixirTypesApplyParityTest do
         end
         """)
 
-      # ar/1 and ar/2 are distinct sigs; each applies independently.
       assert Descr.equal?(
                applied(sigs, {:ar, 1}, [Descr.integer()]),
                recorded_return(sigs, :use_ar1)
@@ -295,8 +247,6 @@ defmodule ElixirSense.Core.ElixirTypesApplyParityTest do
         end
         """)
 
-      # x + 1 is typed as number() (integer | float, bitmap 24). The recorded
-      # return for use_lit is dynamic(number()); apply_signature must match.
       assert Descr.equal?(
                applied(sigs, {:lit, 1}, [Descr.integer()]),
                recorded_return(sigs, :use_lit)

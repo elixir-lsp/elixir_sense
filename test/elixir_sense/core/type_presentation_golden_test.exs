@@ -35,8 +35,6 @@ defmodule ElixirSense.Core.TypePresentationGoldenTest do
     end
     """
 
-    # at the `other` clause body, `other` is the scrutinee minus `:a`
-    # compiler dialect: " or " separator (task #18)
     assert hint(code, :other, {5, 18}) == {:ok, ":b or :c"}
   end
 
@@ -108,7 +106,6 @@ defmodule ElixirSense.Core.TypePresentationGoldenTest do
     end
     """
 
-    # `else` matches the failure space: (:ok | :error) with :ok subtracted = :error
     assert hint(code, :other, {6, 20}) == {:ok, ":error"}
   end
 

@@ -42,9 +42,7 @@ defmodule ElixirSense.Core.BindingTest do
       safe_fetchers = [:get_env, :compile_env]
 
       Enum.each(unsafe_fetchers, fn fetcher ->
-        # `fetch_env!`/`compile_env!` raise when the env is unset; the failure is
-        # now rescued to nil (unknown) rather than :none (bottom). :none is dropped
-        # from unions and over-claims; an unresolvable config value is simply unknown.
+        # Failed fetch returns nil (unknown) not :none
         assert nil ==
                  Binding.expand(
                    build_dependency_injection_binding(fetcher),
@@ -127,10 +125,8 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "map update with an UNKNOWN base yields an OPEN map (P1 soundness)" do
-      # `def f(m), do: %{m | a: 1}` — base does not resolve. Map update preserves
-      # the full base type, so the result has the updated key PLUS unknown keys.
-      # It must be marked `:open`, never a closed `{:map, fields, nil}` literal.
+    test "map update with an UNKNOWN base yields an OPEN map" do
+      # Unresolved base must mark result :open (full base type preserved)
       assert {:map, [a: {:integer, 1}], :open} ==
                Binding.expand(
                  @env,
@@ -176,8 +172,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "union-merging two maps with a non-atom (domain) key does not crash" do
-      # Same domain key + same tail on both -> coalesced via merge_fields,
-      # which must look up the field value tolerantly (Keyword.get would raise).
+      # Domain-keyed fields are merged with field_get, not Keyword.get
       a = {:map, [{{:domain, {:binary, "k"}}, {:integer, 1}}], nil}
       b = {:map, [{{:domain, {:binary, "k"}}, {:atom, :x}}], nil}
 
@@ -196,8 +191,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "intersecting a generic struct with a domain-keyed map does not crash" do
-      # type == nil takes the union-of-keys branch, so the map's domain key is
-      # looked up on the struct side too; previously fields_1[{:domain,_}] raised.
+      # Domain-keyed fields are looked up tolerantly in union-of-keys branch
       str = {:struct, [field: {:integer, nil}], nil, nil}
       map = {:map, [{{:domain, {:binary, "k"}}, {:integer, 1}}], nil}
 
@@ -2278,9 +2272,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "versioned out-of-scope var does not resolve to a 0-arity local function" do
-      # Regression for task #6: a versioned var not in `env.vars` must be unknown
-      # (nil), never a same-named 0-arity function, even when such a function is
-      # imported. Otherwise the function's return type leaks into thunks.
+      # Versioned var not in scope is unknown (nil), not a same-named function call
       assert nil ==
                Binding.expand(
                  @env
@@ -3376,11 +3368,7 @@ defmodule ElixirSense.Core.BindingTest do
 
   describe "descr-backed intersection (native on, exact shapes)" do
     @describetag :requires_native_types
-    # Consolidated backlog P2 2.2 / GPT P1: when native typing is enabled AND both
-    # operands are `descr_exact?` shape kinds, intersection delegates to the real
-    # `Module.Types.Descr.intersection/2`, which is strictly more faithful than the
-    # hand-written structural approximation. These assertions encode the
-    # Descr-faithful results.
+    # When native typing enabled, intersection delegates to Descr.intersection/2
     setup do
       prev = Application.get_env(:elixir_sense, :use_elixir_types, false)
       Application.put_env(:elixir_sense, :use_elixir_types, true)
@@ -3736,7 +3724,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
   end
 
-  describe "andalso/orelse are not boolean-typed (task #27)" do
+  describe "andalso/orelse are not boolean-typed" do
     test "andalso/orelse do not resolve to :boolean" do
       refute :boolean ==
                Binding.expand(
@@ -4228,11 +4216,7 @@ defmodule ElixirSense.Core.BindingTest do
 
   describe "descr-backed covers?/disjointness/union dedup (native on, exact shapes)" do
     @describetag :requires_native_types
-    # GPT round-5 P1 items 1-3: when native typing is enabled AND both operands
-    # are `descr_exact?` shapes, subsumption (`covers?`) delegates to the faithful
-    # `Descr.subtype?/2`, the intersection conservative fallback uses
-    # `Descr.disjoint?/2`, and union dedup (which is driven by `covers?`) improves
-    # for free. These assertions encode the Descr-faithful results.
+    # Native typing delegates subsumption/intersection/dedup to Descr when both operands are exact shapes
     setup do
       prev = Application.get_env(:elixir_sense, :use_elixir_types, false)
       Application.put_env(:elixir_sense, :use_elixir_types, true)

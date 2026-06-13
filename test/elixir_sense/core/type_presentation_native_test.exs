@@ -44,7 +44,6 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
       descr =
         Descr.union(Descr.binary(), Descr.atom([nil]))
 
-      # No structural type — the native descriptor must produce the text.
       var = %VarInfo{
         version: 1,
         name: :x,
@@ -60,10 +59,7 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
   end
 
   test "native scrutinee type + cross-clause subtraction narrows the catch-all" do
-    # Cross-clause type subtraction is driven by the reverse-arrow / `previous`
-    # machinery introduced in Elixir 1.20. On 1.18/1.19 the catch-all clause
-    # retains the full scrutinee type (binary() | nil), so the precise binary()
-    # assertion only holds on 1.20+.
+    # Requires Elixir 1.20+ reverse-arrow mechanism.
     if ElixirTypes.available?(:previous) do
       code = """
       defmodule M do
@@ -76,16 +72,11 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
       end
       """
 
-      # System.get_env/1 is typed binary() | nil by the native engine; the `nil`
-      # clause is subtracted by the 1.20 reverse-arrow mechanism, leaving
-      # binary() in the `value` clause.
       assert hint(code, :value, {5, 22}) == {:ok, "binary()"}
     end
   end
 
-  test "native typing does not drop case clause body vars (build_env_context regression)" do
-    # Regression: build_env_context used `env[:key]` (Access) on a struct env,
-    # which raised and abandoned the whole case body under native typing.
+  test "native typing does not drop case clause body vars" do
     if ElixirTypes.available?() do
       code = """
       defmodule M do
@@ -105,17 +96,7 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     end
   end
 
-  # --- Native-on full-pipeline sweep ------------------------------------------
-  #
-  # The build_env_context crash showed that native typing can silently abandon a
-  # whole clause body. This sweep runs the full metadata pipeline native-on over
-  # the clause-bearing constructs and asserts their binding variables survive
-  # (no silent drop). Native typing may still degrade gracefully for some
-  # patterns (logging a caught warning), which is fine — the invariant is that
-  # variables stay in scope.
-
-  # All variable names that appear in scope anywhere in the module (robust to
-  # exact positions). Logs from graceful native degradation are swallowed.
+  # Native typing must not silently drop clause-body variables.
   defp scoped_var_names(code) do
     {:ok, ast} = Code.string_to_quoted(code, columns: true, token_metadata: true)
 
@@ -314,11 +295,6 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
 
   test "native-on: matches referencing earlier body vars produce no crash noise" do
     if ElixirTypes.available?() do
-      # Regression: typing each `=`/`<-`/clause in isolation crashed native
-      # `refine_body_var`/`of_pattern`/`of_match_var` when the value referenced an
-      # earlier body var, used a `{_, …}` tuple, a guard, or a `@attr` binary
-      # segment. Now all referenced vars (incl. `_` and `@attr` placeholders) are
-      # seeded and guards are stripped before native of_match.
       code = """
       defmodule M do
         @sep 0x3A
@@ -357,9 +333,6 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
 
   test "native-on: call/operator-shaped patterns (quoted code) produce no crash noise" do
     if ElixirTypes.available?() do
-      # Quoted / macro code can route non-pattern AST through case-clause typing:
-      # local calls, remote calls, and typespec operators are not valid patterns,
-      # and native `of_pattern` raised on them. They must be skipped, not crash.
       code = """
       defmodule M do
         defmacro gen(x) do
@@ -450,9 +423,6 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
       assert_received {:hint, {:ok, "integer()"}}
     end
   end
-
-  # --- Coverage fixtures: every construct keeps its bindings in scope native-on
-  # (precision may stay off==on; what matters is no clause-body var is dropped). ---
 
   test "native-on: fn clauses keep their pattern vars" do
     assert_in_scope(
@@ -545,9 +515,7 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     assert_in_scope(code, [:acc])
 
     if ElixirTypes.available?() do
-      # The native seed types `acc` from the `reduce:` initial value `%{}`,
-      # which is the closed empty map — 1.20 renders it with the dedicated
-      # `empty_map()` spelling; 1.18/1.19 render the same type as `map()`.
+      # 1.20+ renders empty map as `empty_map()`; 1.18/1.19 use `map()`.
       assert hint(code, :acc, {4, 9}) in [{:ok, "empty_map()"}, {:ok, "map()"}]
     end
   end
@@ -582,9 +550,7 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
     end
     """
 
-    # 1.20 widens the head element to `integer()`; 1.18/1.19's native typing
-    # keeps the literal `1` in the rendered improper-list element. Both are sound
-    # (the literal is a subtype of integer()).
+    # 1.20 widens to `integer()`; 1.18/1.19 keep the literal `1`.
     assert hint(code, :x, {4, 5}) in [
              {:ok, "non_empty_list(integer(), :a)"},
              {:ok, "non_empty_list(1, :a)"}
@@ -592,11 +558,7 @@ defmodule ElixirSense.Core.TypePresentationNativeTest do
   end
 
   test "native-on: `[proper] ++ non_list` renders an improper non_empty_list" do
-    # The ++ thunk resolves end-to-end: a non-empty proper LHS appended with a
-    # non-list RHS is a non-empty improper list (3-tuple), rendered with the
-    # compiler's `non_empty_list(elem, tail)` spelling. Resolving the `++`
-    # application return needs the expected-type expression API (1.19+); on 1.18
-    # the hint pipeline declines (:skip), so this assertion is gated on `:expr`.
+    # Requires 1.19+ expected-type expression API (gated on `:expr`).
     code = """
     defmodule M do
       def f do
