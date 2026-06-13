@@ -173,6 +173,8 @@ defmodule ElixirSense.Core.ElixirTypesTest do
   end
 
   describe "of_match refinement with expected descriptors and guards" do
+    @describetag :requires_native_types
+
     setup do
       original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
       Application.put_env(:elixir_sense, :use_elixir_types, true)
@@ -181,11 +183,7 @@ defmodule ElixirSense.Core.ElixirTypesTest do
         Application.put_env(:elixir_sense, :use_elixir_types, original_value)
       end)
 
-      if ElixirTypes.available?() do
-        :ok
-      else
-        :skip
-      end
+      :ok
     end
 
     test "guard pattern matching refinement" do
