@@ -19,7 +19,7 @@ defmodule ElixirSense.Providers.Definition.Locator do
   alias ElixirSense.Providers.Plugins.Phoenix.Scope
 
   def definition(code, line, column, options \\ []) do
-    case Code.Fragment.surround_context(code, {line, column}) do
+    case ElixirSense.Core.SurroundContext.Toxic.surround_context(code, {line, column}) do
       :none ->
         nil
 
