@@ -26,6 +26,5 @@
 
   # 2. Pre-existing peripheral logic (vendored tokenizer/parser, normalized helpers)
   {"lib/elixir_sense/core/normalized/tokenizer.ex", :contract_supertype},
-  {"lib/elixir_sense/core/normalized/tokenizer.ex", :pattern_match},
-  {"lib/elixir_sense/core/parser.ex", :guard_fail}
+  {"lib/elixir_sense/core/normalized/tokenizer.ex", :pattern_match}
 ]
