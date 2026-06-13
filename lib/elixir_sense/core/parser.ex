@@ -99,6 +99,31 @@ defmodule ElixirSense.Core.Parser do
     MetadataBuilder.build(ast, cursor_position).cursor_env
   end
 
+  @doc """
+  Public toxic2 parse for consumers that want the raw best-effort AST plus the
+  diagnostic stream, with `{:__error__, ...}` placeholder nodes neutralized so
+  `MetadataBuilder`/`Macro` traversal never crash.
+
+  `keep_range: true` preserves the `range:` metadata toxic2 attaches to every
+  source node (needed by range-aware consumers such as the language server
+  parser and the document-symbol / folding / selection-range providers); the
+  default strips it to keep the classic `line:`/`column:` shape used by metadata
+  building. No `__cursor__` marker is injected - this is a clean recovered tree.
+
+  Returns `{ast, diagnostics}` (the toxic2 diagnostic stream, unmodified).
+  """
+  def parse_to_neutralized_ast(source, opts \\ []) when is_binary(source) do
+    keep_range = Keyword.get(opts, :keep_range, false)
+
+    parser_options =
+      opts
+      |> Keyword.take([:token_metadata, :range, :existing_atoms_only, :literal_encoder])
+      |> Keyword.put_new(:token_metadata, true)
+
+    {ast, diagnostics} = Toxic2.parse_to_ast(source, parser_options)
+    {neutralize_errors(ast, diagnostics, keep_range), diagnostics}
+  end
+
   @doc false
   # Parse with toxic2 and place the cursor marker. Returns `{ast, error}`.
   def tolerant_parse(source, cursor_position \\ nil, opts \\ []) do
@@ -166,27 +191,36 @@ defmodule ElixirSense.Core.Parser do
   # `{:__error__, meta, []}` (its map args crash `Macro` traversal and the
   # compiler). Range metadata, only needed transiently for cursor marking, is
   # stripped here too so the AST keeps the usual `line:`/`column:` shape.
-  defp neutralize_errors(ast, diagnostics) do
+  # `keep_range` (default false) controls whether the `range:` meta survives -
+  # metadata building wants it stripped (classic shape), range-aware consumers
+  # want it kept (see `parse_to_neutralized_ast/2`).
+  def neutralize_errors(ast, diagnostics, keep_range \\ false) do
     by_id = Map.new(diagnostics, fn diagnostic -> {elem(diagnostic, 0), diagnostic} end)
-    neutralize(ast, by_id)
+    neutralize(ast, by_id, keep_range)
   end
 
-  defp neutralize({:__error__, meta, args}, _by_id) when not is_list(args),
-    do: {:__error__, strip_range(meta), []}
+  defp neutralize({:__error__, meta, args}, _by_id, keep_range) when not is_list(args),
+    do: {:__error__, strip_range(meta, keep_range), []}
 
-  defp neutralize({form, meta, args}, by_id) when is_list(args) do
+  defp neutralize({form, meta, args}, by_id, keep_range) when is_list(args) do
     args = if call_form?(form), do: clean_call_args(args, by_id), else: args
-    {neutralize(form, by_id), strip_range(meta), Enum.map(args, &neutralize(&1, by_id))}
+
+    {neutralize(form, by_id, keep_range), strip_range(meta, keep_range),
+     Enum.map(args, &neutralize(&1, by_id, keep_range))}
   end
 
-  defp neutralize({form, meta, args}, by_id),
-    do: {neutralize(form, by_id), strip_range(meta), neutralize(args, by_id)}
+  defp neutralize({form, meta, args}, by_id, keep_range),
+    do:
+      {neutralize(form, by_id, keep_range), strip_range(meta, keep_range),
+       neutralize(args, by_id, keep_range)}
 
-  defp neutralize({left, right}, by_id), do: {neutralize(left, by_id), neutralize(right, by_id)}
+  defp neutralize({left, right}, by_id, keep_range),
+    do: {neutralize(left, by_id, keep_range), neutralize(right, by_id, keep_range)}
 
-  defp neutralize(list, by_id) when is_list(list), do: Enum.map(list, &neutralize(&1, by_id))
+  defp neutralize(list, by_id, keep_range) when is_list(list),
+    do: Enum.map(list, &neutralize(&1, by_id, keep_range))
 
-  defp neutralize(other, _by_id), do: other
+  defp neutralize(other, _by_id, _keep_range), do: other
 
   # Clean a call's argument list of error artifacts so its arity matches user
   # intent: always drop the "missing closing delimiter" sentinel; if the only
@@ -219,8 +253,9 @@ defmodule ElixirSense.Core.Parser do
 
   defp call_form?(_form), do: false
 
-  defp strip_range(meta) when is_list(meta), do: Keyword.delete(meta, :range)
-  defp strip_range(meta), do: meta
+  defp strip_range(meta, true), do: meta
+  defp strip_range(meta, _keep_range) when is_list(meta), do: Keyword.delete(meta, :range)
+  defp strip_range(meta, _keep_range), do: meta
 
   def try_fix_line_not_found_by_inserting_marker(
         source,
