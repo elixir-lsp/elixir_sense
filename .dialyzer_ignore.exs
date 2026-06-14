@@ -22,9 +22,5 @@
   {"lib/elixir_sense/core/compiler.ex", :pattern_match},
   {"lib/elixir_sense/core/compiler/clauses.ex", :pattern_match},
   {"lib/elixir_sense/core/compiler/fn.ex", :pattern_match},
-  {"lib/elixir_sense/core/normalized/macro/env.ex", :pattern_match},
-
-  # 2. Pre-existing peripheral logic (vendored tokenizer/parser, normalized helpers)
-  {"lib/elixir_sense/core/normalized/tokenizer.ex", :contract_supertype},
-  {"lib/elixir_sense/core/normalized/tokenizer.ex", :pattern_match}
+  {"lib/elixir_sense/core/normalized/macro/env.ex", :pattern_match}
 ]
