@@ -116,5 +116,27 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
                "mismatch for #{inspect(source)} @#{col}"
       end
     end
+
+    test "keyword keys classify as :key (and :none on the colon)" do
+      for {source, col} <- [
+            {"[key: 1]", 3},
+            {"[key: 1]", 5},
+            {"%{key: 1}", 4},
+            {"foo(key: 1)", 7},
+            {"[a: 1, bb: 2]", 8}
+          ] do
+        assert Toxic.surround_context(source, {1, col}) ==
+                 Code.Fragment.surround_context(source, {1, col}),
+               "mismatch for #{inspect(source)} @#{col}"
+      end
+    end
+
+    test "bare nil/true/false classify as :keyword, :nil/:true as :unquoted_atom" do
+      for {source, col} <- [{"nil", 1}, {"true", 2}, {"false", 3}, {":nil", 2}, {":true", 3}] do
+        assert Toxic.surround_context(source, {1, col}) ==
+                 Code.Fragment.surround_context(source, {1, col}),
+               "mismatch for #{inspect(source)} @#{col}"
+      end
+    end
   end
 end

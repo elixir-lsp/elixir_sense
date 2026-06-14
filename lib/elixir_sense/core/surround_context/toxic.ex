@@ -241,19 +241,41 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
     end
   end
 
-  # A literal wrapped by the literal_encoder. A bare `:atom` (`{:unquoted_atom, ...}`) is the only
-  # one we classify here; keyword keys (`format: :keyword`) and the keyword-literals nil/true/false
-  # are deferred to Code.Fragment (the `:key`/`:keyword` distinction and `:nil` vs `nil` are lexical).
-  # `:atom`'s range spans the leading colon, so its width is `len(atom) + 1`; nil/true/false have no
-  # colon (width == len), which is how we tell them apart without re-reading the source.
-  defp classify({:__block__, meta, [atom]}, _parent, _cursor) when is_atom(atom) do
-    with false <- Keyword.has_key?(meta, :format),
-         true <- identifier_first_char?(atom),
-         {{sl, sc}, {el, ec}} <- node_range(meta),
-         true <- sl == el and ec - sc == String.length(Atom.to_string(atom)) + 1 do
-      {{:unquoted_atom, atom_charlist(atom)}, {sl, sc}, {el, ec}}
-    else
-      _ -> :fallback
+  # A literal wrapped by the literal_encoder. Three atom shapes are classified from the parse tree;
+  # everything else (quoted/operator atoms, multi-line) defers to Code.Fragment. The kinds are told
+  # apart by their single-line source width (no source re-read needed):
+  #   * keyword key `key:`  - `format: :keyword`; navigable span EXCLUDES the trailing colon
+  #     (Code.Fragment returns :none when the cursor is on the colon), so width-of-name == len(atom)
+  #   * bare `:atom`        - range spans the leading colon, width == len(atom) + 1  -> :unquoted_atom
+  #   * bare nil/true/false - no colon, width == len(atom)                            -> :keyword
+  defp classify({:__block__, meta, [atom]}, _parent, cursor) when is_atom(atom) do
+    name_len = String.length(Atom.to_string(atom))
+
+    case node_range(meta) do
+      {{sl, sc}, {el, ec}} when sl == el ->
+        cond do
+          # keyword key (range covers `name:`); the key itself is `name` (drop the colon)
+          Keyword.get(meta, :format) == :keyword and ec - 1 - sc == name_len ->
+            span = {{sl, sc}, {el, ec - 1}}
+
+            if contains?(span, cursor),
+              do: {{:key, atom_charlist(atom)}, {sl, sc}, {el, ec - 1}},
+              else: :fallback
+
+          # `:atom` (leading colon)
+          identifier_first_char?(atom) and ec - sc == name_len + 1 ->
+            {{:unquoted_atom, atom_charlist(atom)}, {sl, sc}, {el, ec}}
+
+          # bare nil / true / false reserved words (no colon)
+          atom in [nil, true, false] and ec - sc == name_len ->
+            {{:keyword, atom_charlist(atom)}, {sl, sc}, {el, ec}}
+
+          true ->
+            :fallback
+        end
+
+      _ ->
+        :fallback
     end
   end
 
