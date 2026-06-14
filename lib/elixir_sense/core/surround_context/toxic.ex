@@ -108,16 +108,16 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
   # Module attribute - the cursor is on the `@` node itself. Handles both `@attr` and forms with
   # an argument (`@type t :: ...`, `@spec f(...)`, `@moduledoc "..."`). The reported span is
   # `@`..(attribute-name end), matching Code.Fragment.
-  defp classify({:@, ameta, [{attr, _, _}]}, _parent, cursor) when is_atom(attr) do
-    attr_context(attr, ameta, cursor)
+  defp classify({:@, ameta, [{attr, attr_meta, _}]}, _parent, cursor) when is_atom(attr) do
+    attr_context(attr, attr_meta, ameta, cursor)
   end
 
   # Module attribute - the cursor is on the attribute NAME (its parent is the `@` node). This is
   # the deepest node for `@attr`, and also for `@type`/`@spec`/`@doc` whose name carries args.
   # The attribute-name node is the only direct child of an `@` node, so matching the `@` parent is
   # sufficient (an alias/value deeper inside the attribute has the name node as its parent, not @).
-  defp classify({name, _, _}, {:@, ameta, _}, cursor) when is_atom(name) do
-    attr_context(name, ameta, cursor)
+  defp classify({name, nmeta, _}, {:@, ameta, _}, cursor) when is_atom(name) do
+    attr_context(name, nmeta, ameta, cursor)
   end
 
   # Leaf var/name with a disambiguating parent.
@@ -212,10 +212,19 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
           inside ->
             sym_str = Atom.to_string(sym)
             begin_pos = range_begin(cmeta)
-            fin = {dot_line, dot_col + 1 + String.length(sym_str)}
+            # the end is the end of the function NAME. `cmeta` line/column point at the name start
+            # (not the dot), so this stays correct when the name is on a different line than the dot
+            # (`A.\n  bar`); deriving it from `dmeta` would synthesize an impossible same-line end and
+            # break get_call_arity.
+            call_line = Keyword.get(cmeta, :line)
+            call_col = Keyword.get(cmeta, :column)
 
-            if contains?({begin_pos, fin}, cursor) do
-              {{:dot, inside, String.to_charlist(sym_str)}, begin_pos, fin}
+            if begin_pos && call_line && call_col do
+              fin = {call_line, call_col + String.length(sym_str)}
+
+              if contains?({begin_pos, fin}, cursor),
+                do: {{:dot, inside, String.to_charlist(sym_str)}, begin_pos, fin},
+                else: :fallback
             else
               :fallback
             end
@@ -355,14 +364,26 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
 
   # Module-attribute span: `@`..(attribute-name end), i.e. {@line, @col + 1 + len(name)}.
   # Reject non-identifier "names" (`@@` nests `@` nodes; recovery yields `:__error__`) - those are
-  # not real attributes, so let Code.Fragment decide (it returns :none).
-  defp attr_context(attr, ameta, cursor) do
+  # not real attributes, so let Code.Fragment decide (it returns :none). Also require the name to be
+  # contiguous with the `@` (starting exactly one column after it): a spaced `@ attr` is the unary
+  # `@` operator applied to a local var, which Code.Fragment classifies as `:local_or_var`.
+  defp attr_context(attr, name_meta, ameta, cursor) do
     cond do
       not identifier_atom?(attr) ->
         :fallback
 
+      not attr_contiguous?(name_meta, ameta) ->
+        :fallback
+
       true ->
         attr_context_span(attr, ameta, cursor)
+    end
+  end
+
+  defp attr_contiguous?(name_meta, ameta) do
+    case {range_begin(ameta), range_begin(name_meta)} do
+      {{al, ac}, {nl, nc}} -> nl == al and nc == ac + 1
+      _ -> false
     end
   end
 
@@ -385,7 +406,11 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
   defp arity_left?({:/, _, [left, right]}, node), do: left == node and is_integer(right)
   defp arity_left?(_parent, _node), do: false
 
-  defp arity_notation?([{name, _, nil}, int]) when is_atom(name) and is_integer(int), do: true
+  # `<ref>/<int>` is ambiguous from the AST between arity notation (`foo/1`, `A.bar/1`, `&f/1`) and
+  # integer division (`x / 1`); both lower to `{:/, _, [left, int]}`. The distinction is lexical, so
+  # whenever the right operand is an integer we defer the `/` to Code.Fragment (which returns :none
+  # on an arity slash and `:operator` on a division slash). Covers local AND remote arity.
+  defp arity_notation?([_left, int]) when is_integer(int), do: true
   defp arity_notation?(_args), do: false
 
   # A dot node toxic2 synthesized while lowering sugar (no real `.` in the source).

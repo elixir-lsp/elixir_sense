@@ -69,4 +69,32 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
                Code.Fragment.surround_context(source, {2, 8})
     end
   end
+
+  # regressions found by adversarial review (gpt-5.5)
+  describe "surround_context/2 multi-line / lexical edge cases" do
+    # the dot end must come from the callee position (line+col), not the dot - otherwise a remote
+    # call whose name is on the next line gets an impossible same-line end and breaks arity lookup.
+    test "multi-line remote call, cursor on the dot" do
+      source = "A.\n  bar\n"
+
+      assert Toxic.surround_context(source, {1, 2}) ==
+               Code.Fragment.surround_context(source, {1, 2})
+    end
+
+    # `@ attr` (space) is the unary `@` operator on a local var, not a module attribute.
+    test "spaced @ attr is a local var, not a module attribute" do
+      source = "defmodule A do\n  @attr 1\n  def t do\n    attr = 1\n    @ attr\n  end\nend\n"
+
+      assert Toxic.surround_context(source, {5, 7}) ==
+               Code.Fragment.surround_context(source, {5, 7})
+    end
+
+    # the slash of remote arity `A.bar/1` must defer to Code.Fragment (:none), not be a `/` operator.
+    test "remote arity slash defers to Code.Fragment" do
+      source = "A.bar/1\n"
+
+      assert Toxic.surround_context(source, {1, 6}) ==
+               Code.Fragment.surround_context(source, {1, 6})
+    end
+  end
 end
