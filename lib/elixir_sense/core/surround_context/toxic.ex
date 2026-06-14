@@ -22,7 +22,16 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
 
   @spec surround_context(String.t(), {pos_integer, pos_integer}) :: :none | map()
   def surround_context(source, {line, column} = position) when is_binary(source) do
-    {ast, _diagnostics} = Toxic2.parse_to_ast(source, token_metadata: true, range: true)
+    # `literal_encoder` wraps literals (notably bare `:atom`s) in `{:__block__, meta, [literal]}` so
+    # they carry a `range:` and can be classified from the parse tree instead of falling back to the
+    # lexical Code.Fragment. (Alias segments, struct types and attribute names are NOT literals and
+    # stay unwrapped.)
+    {ast, _diagnostics} =
+      Toxic2.parse_to_ast(source,
+        token_metadata: true,
+        range: true,
+        literal_encoder: fn literal, meta -> {:ok, {:__block__, meta, [literal]}} end
+      )
 
     case deepest_at(ast, {line, column}) do
       {node, parent} ->
@@ -232,6 +241,22 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
     end
   end
 
+  # A literal wrapped by the literal_encoder. A bare `:atom` (`{:unquoted_atom, ...}`) is the only
+  # one we classify here; keyword keys (`format: :keyword`) and the keyword-literals nil/true/false
+  # are deferred to Code.Fragment (the `:key`/`:keyword` distinction and `:nil` vs `nil` are lexical).
+  # `:atom`'s range spans the leading colon, so its width is `len(atom) + 1`; nil/true/false have no
+  # colon (width == len), which is how we tell them apart without re-reading the source.
+  defp classify({:__block__, meta, [atom]}, _parent, _cursor) when is_atom(atom) do
+    with false <- Keyword.has_key?(meta, :format),
+         true <- identifier_first_char?(atom),
+         {{sl, sc}, {el, ec}} <- node_range(meta),
+         true <- sl == el and ec - sc == String.length(Atom.to_string(atom)) + 1 do
+      {{:unquoted_atom, atom_charlist(atom)}, {sl, sc}, {el, ec}}
+    else
+      _ -> :fallback
+    end
+  end
+
   # Sigils, operators and local calls (all share the `{atom, meta, list}` shape).
   defp classify({form, meta, args}, _parent, cursor)
        when is_atom(form) and is_list(args) do
@@ -331,6 +356,12 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
     if name == :__MODULE__, do: {:var, ~c"__MODULE__"}, else: {:var, atom_charlist(name)}
   end
 
+  # the literal_encoder wraps a bare-atom dot operand (`:erlang.foo`) - unwrap it (identifier atoms
+  # only; operator atoms like `:%{}` are not navigable)
+  defp inside_dot({:__block__, _, [atom]}) when is_atom(atom) do
+    if identifier_first_char?(atom), do: {:unquoted_atom, atom_charlist(atom)}
+  end
+
   defp inside_dot(atom) when is_atom(atom), do: {:unquoted_atom, atom_charlist(atom)}
 
   # A pure dot PATH `a.b.c` (no call args) - recurse. A dot CALL with args (`build(x).y`) makes the
@@ -403,14 +434,28 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
     end
   end
 
-  defp arity_left?({:/, _, [left, right]}, node), do: left == node and is_integer(right)
+  defp arity_left?({:/, _, [left, right]}, node), do: left == node and int_literal?(right)
   defp arity_left?(_parent, _node), do: false
+
+  # an atom Code.Fragment would treat as a navigable unquoted atom (`:foo`, `:Foo`, `:_x`) - i.e. it
+  # reads as an identifier; operator/special atoms (`:+`, `:%{}`, `:.`) are NOT.
+  defp identifier_first_char?(atom) do
+    case Atom.to_string(atom) do
+      <<c, _::binary>> -> c in ?a..?z or c in ?A..?Z or c == ?_
+      _ -> false
+    end
+  end
+
+  # an integer operand, raw or wrapped by the literal_encoder (`{:__block__, _, [int]}`)
+  defp int_literal?(int) when is_integer(int), do: true
+  defp int_literal?({:__block__, _, [int]}), do: is_integer(int)
+  defp int_literal?(_), do: false
 
   # `<ref>/<int>` is ambiguous from the AST between arity notation (`foo/1`, `A.bar/1`, `&f/1`) and
   # integer division (`x / 1`); both lower to `{:/, _, [left, int]}`. The distinction is lexical, so
   # whenever the right operand is an integer we defer the `/` to Code.Fragment (which returns :none
   # on an arity slash and `:operator` on a division slash). Covers local AND remote arity.
-  defp arity_notation?([_left, int]) when is_integer(int), do: true
+  defp arity_notation?([_left, right]), do: int_literal?(right)
   defp arity_notation?(_args), do: false
 
   # A dot node toxic2 synthesized while lowering sugar (no real `.` in the source).

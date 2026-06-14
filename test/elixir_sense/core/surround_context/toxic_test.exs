@@ -97,4 +97,24 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
                Code.Fragment.surround_context(source, {1, 6})
     end
   end
+
+  # the literal_encoder gives bare `:atom`s a range so they are classified from the parse tree
+  # (not the lexical Code.Fragment fallback). Operator/special atoms (`:%{}`, `:+`) are not navigable.
+  describe "surround_context/2 atom literals (via literal_encoder)" do
+    test "bare :atom and :erlang.foo operand classify natively and match Code.Fragment" do
+      for {source, col} <- [{":atom", 3}, {"x = :ok", 6}, {":erlang.foo", 3}, {":erlang.foo", 9}] do
+        assert Toxic.surround_context(source, {1, col}) ==
+                 Code.Fragment.surround_context(source, {1, col}),
+               "mismatch for #{inspect(source)} @#{col}"
+      end
+    end
+
+    test "operator / special-form atoms are deferred (not classified as unquoted_atom)" do
+      for {source, col} <- [{"[:%{}, :foo]", 3}, {"[:+, :x]", 3}, {"[:., :y]", 3}] do
+        assert Toxic.surround_context(source, {1, col}) ==
+                 Code.Fragment.surround_context(source, {1, col}),
+               "mismatch for #{inspect(source)} @#{col}"
+      end
+    end
+  end
 end
