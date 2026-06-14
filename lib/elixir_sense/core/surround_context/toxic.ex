@@ -28,18 +28,27 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
   # scope and stays on `Code.Fragment`.
 
   @spec surround_context(String.t(), {pos_integer, pos_integer}) :: :none | map()
-  def surround_context(source, {line, column} = position) when is_binary(source) do
-    # `literal_encoder` wraps literals (notably bare `:atom`s) in `{:__block__, meta, [literal]}` so
-    # they carry a `range:` and can be classified from the parse tree instead of falling back to the
-    # lexical Code.Fragment. (Alias segments, struct types and attribute names are NOT literals and
-    # stay unwrapped.)
-    {ast, _diagnostics} =
-      Toxic2.parse_to_ast(source,
-        token_metadata: true,
-        range: true,
-        literal_encoder: fn literal, meta -> {:ok, {:__block__, meta, [literal]}} end
-      )
+  def surround_context(source, position) when is_binary(source) do
+    classify_at(parse(source), source, position)
+  rescue
+    _ -> Code.Fragment.surround_context(source, position)
+  catch
+    _, _ -> Code.Fragment.surround_context(source, position)
+  end
 
+  # Variant for callers that have already parsed `source` with the SAME options (`range:`,
+  # `token_metadata:`, the literal_encoder below) - e.g. `selection_ranges`, which parses once and
+  # reuses the AST across every cursor position instead of triggering a fresh parse per call.
+  @spec surround_context(Macro.t(), String.t(), {pos_integer, pos_integer}) :: :none | map()
+  def surround_context(ast, source, position) when is_binary(source) do
+    classify_at(ast, source, position)
+  rescue
+    _ -> Code.Fragment.surround_context(source, position)
+  catch
+    _, _ -> Code.Fragment.surround_context(source, position)
+  end
+
+  defp classify_at(ast, source, {line, column} = position) do
     case deepest_at(ast, {line, column}) do
       {node, parent} ->
         case classify(node, parent, {line, column}) do
@@ -50,10 +59,21 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
       nil ->
         Code.Fragment.surround_context(source, position)
     end
-  rescue
-    _ -> Code.Fragment.surround_context(source, position)
-  catch
-    _, _ -> Code.Fragment.surround_context(source, position)
+  end
+
+  # `literal_encoder` wraps literals (notably bare `:atom`s) in `{:__block__, meta, [literal]}` so
+  # they carry a `range:` and can be classified from the parse tree instead of falling back to the
+  # lexical Code.Fragment. (Alias segments, struct types and attribute names are NOT literals and
+  # stay unwrapped.)
+  defp parse(source) do
+    {ast, _diagnostics} =
+      Toxic2.parse_to_ast(source,
+        token_metadata: true,
+        range: true,
+        literal_encoder: fn literal, meta -> {:ok, {:__block__, meta, [literal]}} end
+      )
+
+    ast
   end
 
   # --- deepest ranged node containing the cursor (with its structural parent) --------------
@@ -256,26 +276,28 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
   #   * bare `:atom`        - range spans the leading colon, width == len(atom) + 1  -> :unquoted_atom
   #   * bare nil/true/false - no colon, width == len(atom)                            -> :keyword
   defp classify({:__block__, meta, [atom]}, _parent, cursor) when is_atom(atom) do
-    name_len = String.length(Atom.to_string(atom))
+    str = Atom.to_string(atom)
+    name_len = String.length(str)
+    charlist = String.to_charlist(str)
 
     case node_range(meta) do
       {{sl, sc}, {el, ec}} when sl == el ->
         cond do
           # keyword key (range covers `name:`); the key itself is `name` (drop the colon)
           Keyword.get(meta, :format) == :keyword and ec - 1 - sc == name_len ->
-            span = {{sl, sc}, {el, ec - 1}}
+            {key_begin, key_end} = span = {{sl, sc}, {el, ec - 1}}
 
             if contains?(span, cursor),
-              do: {{:key, atom_charlist(atom)}, {sl, sc}, {el, ec - 1}},
+              do: {{:key, charlist}, key_begin, key_end},
               else: :fallback
 
           # `:atom` (leading colon)
           identifier_first_char?(atom) and ec - sc == name_len + 1 ->
-            {{:unquoted_atom, atom_charlist(atom)}, {sl, sc}, {el, ec}}
+            {{:unquoted_atom, charlist}, {sl, sc}, {el, ec}}
 
           # bare nil / true / false reserved words (no colon)
           atom in [nil, true, false] and ec - sc == name_len ->
-            {{:keyword, atom_charlist(atom)}, {sl, sc}, {el, ec}}
+            {{:keyword, charlist}, {sl, sc}, {el, ec}}
 
           true ->
             :fallback
