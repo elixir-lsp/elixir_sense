@@ -96,6 +96,23 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
       assert Toxic.surround_context(source, {1, 6}) ==
                Code.Fragment.surround_context(source, {1, 6})
     end
+
+    # `a..b//c` lowers to a single ternary `:..//` node, but Code.Fragment classifies the `..`
+    # and `//` as two separate operators. The cursor on `..` must report `..` (not the whole
+    # `..//` atom name); the `//` part falls back to Code.Fragment.
+    test "step-range ..// reports `..` on the `..` columns and matches Code.Fragment" do
+      for {source, col} <- [
+            {"1..10//2", 2},
+            {"1..10//2", 3},
+            {"1..10//2", 6},
+            {"x = 1..10//2", 6},
+            {"for i <- 1..10//2, do: i", 11}
+          ] do
+        assert Toxic.surround_context(source, {1, col}) ==
+                 Code.Fragment.surround_context(source, {1, col}),
+               "mismatch for #{inspect(source)} @#{col}"
+      end
+    end
   end
 
   # the literal_encoder gives bare `:atom`s a range so they are classified from the parse tree

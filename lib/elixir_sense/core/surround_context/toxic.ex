@@ -17,6 +17,13 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
   # `Code.Fragment.surround_context/2`. The whole function is wrapped so it is total and never
   # worse than the previous behavior.
   #
+  # A few exotic shapes are classified MORE precisely than `Code.Fragment` (which is purely
+  # lexical) and so intentionally diverge from it: operator-name arity captures `&>=/2`/`&+/2`
+  # resolve to a navigable `:local_arity` (Code.Fragment reports a stray `:operator "/"`),
+  # `&(-&1)` keeps the unary `-`/`&1` classifications (Code.Fragment reports `:none`), and a bare
+  # var in an unspaced step range `a..b//c` stays a `:local_or_var`. These are kept because they
+  # drive better navigation than matching the lexical oracle would.
+  #
   # NOTE: completion (`Code.Fragment.cursor_context` / `container_cursor_to_quoted`) is out of
   # scope and stays on `Code.Fragment`.
 
@@ -326,7 +333,11 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
       Macro.operator?(form, arity) ->
         op_line = Keyword.get(meta, :line)
         op_col = Keyword.get(meta, :column)
-        op_str = Atom.to_string(form)
+        # The step-range operator `a..b//c` lowers to a single ternary `:..//` node whose meta
+        # points at the `..`. Code.Fragment classifies it lexically as two separate operators -
+        # `..` (over the `..`) and `//` (over the `//`). Report `..` for the `..` columns and let
+        # the `//` columns fall back to Code.Fragment (the `..//` node's range does not reach them).
+        op_str = if form == :..//, do: "..", else: Atom.to_string(form)
 
         if op_line && op_col do
           begin_pos = {op_line, op_col}
