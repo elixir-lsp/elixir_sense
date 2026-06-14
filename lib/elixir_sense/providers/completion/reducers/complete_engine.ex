@@ -1,3 +1,9 @@
+# This code has originally been a part of https://github.com/elixir-lsp/elixir_sense
+
+# Copyright (c) 2017 Marlus Saraiva
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the 'Software'), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
 defmodule ElixirSense.Providers.Completion.Reducers.CompleteEngine do
   @moduledoc false
 
@@ -80,6 +86,35 @@ defmodule ElixirSense.Providers.Completion.Reducers.CompleteEngine do
   end
 
   @doc """
+  A reducer that adds suggestions of variable fields.
+
+  Note: requires populate/5.
+  """
+  def add_struct_fields(_hint, _env, _file_metadata, _context, acc) do
+    add_suggestions(:struct_field, acc)
+  end
+
+  @doc """
+  A reducer that adds suggestions of bitstring options.
+
+  Note: requires populate/5.
+  """
+  def add_bitstring_options(_hint, _env, _file_metadata, _context, acc) do
+    add_suggestions(:bitstring_option, acc)
+  end
+
+  @doc """
+  A reducer that adds block-keyword suggestions (do/end/after/catch/else/rescue)
+  produced by the engine for the elixir >= 1.18 block_keyword_or_binary_operator
+  cursor context.
+
+  Note: requires populate/5.
+  """
+  def add_keywords(_hint, _env, _file_metadata, _context, acc) do
+    add_suggestions(:keyword, acc)
+  end
+
+  @doc """
   A reducer that adds suggestions of existing module attributes.
 
   Note: requires populate/5.
@@ -116,7 +151,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.CompleteEngine do
     hint =
       case Source.get_v12_module_prefix(text_before, module) do
         nil ->
-          hint
+          text_before
 
         module_string ->
           # multi alias syntax detected

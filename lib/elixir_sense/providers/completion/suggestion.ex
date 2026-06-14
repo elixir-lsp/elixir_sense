@@ -1,3 +1,9 @@
+# This code has originally been a part of https://github.com/elixir-lsp/elixir_sense
+
+# Copyright (c) 2017 Marlus Saraiva
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the 'Software'), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
 defmodule ElixirSense.Providers.Completion.Suggestion do
   @moduledoc """
   Provider responsible for finding suggestions for auto-completing.
@@ -64,14 +70,12 @@ defmodule ElixirSense.Providers.Completion.Suggestion do
   @type suggestion ::
           generic()
           | Reducers.CompleteEngine.t()
-          | Reducers.Struct.field()
           | Reducers.Record.field()
           | Reducers.Returns.return()
           | Reducers.Callbacks.callback()
           | Reducers.Protocol.protocol_function()
           | Reducers.Params.param_option()
           | Reducers.TypeSpecs.type_spec()
-          | Reducers.Bitstring.bitstring_option()
 
   @type acc :: %{result: [suggestion], reducers: [atom], context: map}
   @type cursor_context :: %{
@@ -82,7 +86,6 @@ defmodule ElixirSense.Providers.Completion.Suggestion do
         }
 
   @reducers [
-    structs_fields: &Reducers.Struct.add_fields/5,
     record_fields: &Reducers.Record.add_fields/5,
     returns: &Reducers.Returns.add_returns/5,
     callbacks: &Reducers.Callbacks.add_callbacks/5,
@@ -96,9 +99,11 @@ defmodule ElixirSense.Providers.Completion.Suggestion do
     functions: &Reducers.CompleteEngine.add_functions/5,
     macros: &Reducers.CompleteEngine.add_macros/5,
     variable_fields: &Reducers.CompleteEngine.add_fields/5,
+    structs_fields: &Reducers.CompleteEngine.add_struct_fields/5,
     attributes: &Reducers.CompleteEngine.add_attributes/5,
-    docs_snippets: &Reducers.DocsSnippets.add_snippets/5,
-    bitstring_options: &Reducers.Bitstring.add_bitstring_options/5
+    bitstring_options: &Reducers.CompleteEngine.add_bitstring_options/5,
+    keywords: &Reducers.CompleteEngine.add_keywords/5,
+    docs_snippets: &Reducers.DocsSnippets.add_snippets/5
   ]
 
   @add_opts_for [:populate_complete_engine]

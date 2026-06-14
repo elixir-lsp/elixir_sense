@@ -22,5 +22,9 @@
   {"lib/elixir_sense/core/compiler.ex", :pattern_match},
   {"lib/elixir_sense/core/compiler/clauses.ex", :pattern_match},
   {"lib/elixir_sense/core/compiler/fn.ex", :pattern_match},
-  {"lib/elixir_sense/core/normalized/macro/env.ex", :pattern_match}
+  {"lib/elixir_sense/core/normalized/macro/env.ex", :pattern_match},
+
+  # 3. Completion engine ported wholesale from elixir-ls (commit 98e983d). The unreachable `:error`
+  #    clauses in expand_dot_path/expand_aliases are upstream-faithful defensive fallbacks.
+  {"lib/elixir_sense/providers/completion/completion_engine.ex", :pattern_match}
 ]
