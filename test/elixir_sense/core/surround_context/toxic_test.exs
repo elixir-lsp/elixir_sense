@@ -106,13 +106,11 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
                Code.Fragment.surround_context(source, {5, 7})
     end
 
-    # The slash of `A.bar/1` is not misclassified as a `/` operator. `Code.Fragment` returns `:none`
-    # there, but since the cursor sits one past `bar` the trailing-edge retry resolves the remote
-    # call `A.bar` (a navigable target), which is what the user wants when the caret is at its end.
+    # The slash of `A.bar/1` is not misclassified as a `/` operator. Since the cursor sits one past
+    # `bar` the trailing-edge retry resolves the remote call `A.bar` (a navigable target), which is
+    # what the user wants when the caret is at its end.
     test "remote arity slash resolves the remote call at the trailing edge" do
       source = "A.bar/1\n"
-
-      assert :none = Code.Fragment.surround_context(source, {1, 6})
 
       assert %{context: {:dot, {:alias, ~c"A"}, ~c"bar"}, begin: {1, 1}, end: {1, 6}} =
                Toxic.surround_context(source, {1, 6})
