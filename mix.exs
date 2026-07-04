@@ -6,8 +6,7 @@ defmodule ElixirSense.MixProject do
     [
       app: :elixir_sense,
       version: "2.0.0",
-      # toxic2 (the parser dependency) requires ~> 1.19
-      elixir: "~> 1.19",
+      elixir: "~> 1.16",
       elixirc_paths: elixirc_paths(Mix.env()),
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
@@ -39,7 +38,7 @@ defmodule ElixirSense.MixProject do
 
   defp deps do
     [
-      {:toxic2, github: "lukaszsamson/toxic2", ref: "6fde2f89acf94e9231e28245bf0c61f4fd4e0422"},
+      {:toxic2, github: "lukaszsamson/toxic2", ref: "c47c911dac5aafa860206d222a781c3d71afc843"},
       {:credo, "~> 1.7", only: [:dev], runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.18", only: [:dev], runtime: false}
