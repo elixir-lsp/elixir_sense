@@ -234,6 +234,21 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
                Toxic.surround_context("defmodule Foo.Bar", {1, 18})
     end
 
+    test "#1027 override applies to qualified aliases too" do
+      # end of `__MODULE__.Foo` (on the `.` before `bar`) resolves the qualified module
+      assert %{context: {:alias, {:local_or_var, ~c"__MODULE__"}, ~c"Foo"}} =
+               Toxic.surround_context("__MODULE__.Foo.bar", {1, 15})
+    end
+
+    test "the override is limited to the dot case: operators and atoms are preserved" do
+      # `Foo` ends at column 4, but the caret is on an operator, not a `.` - keep the operator
+      assert %{context: {:operator, ~c"+"}} = Toxic.surround_context("Foo+1", {1, 4})
+      assert %{context: {:operator, ~c"=="}} = Toxic.surround_context("Foo==Bar", {1, 4})
+      # a bare-atom LHS of a dot keeps the remote call (the function), not the module
+      assert %{context: {:dot, {:unquoted_atom, ~c"timer"}, ~c"sleep"}} =
+               Toxic.surround_context(":timer.sleep(1000)", {1, 7})
+    end
+
     test "no false positives: whitespace, separators and non-navigable trailing edges stay :none" do
       # two columns past the symbol (a gap) - must not reach back to it
       assert :none = Toxic.surround_context("foo", {1, 5})
