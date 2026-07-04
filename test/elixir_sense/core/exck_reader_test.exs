@@ -15,6 +15,7 @@ defmodule ElixirSense.Core.ExCkReaderTest do
 
     on_exit(fn ->
       Application.delete_env(:elixir_sense, :exck_cache_ttl)
+      Application.delete_env(:elixir_sense, :exck_negative_cache_ttl)
 
       if :ets.info(@table) != :undefined do
         :ets.delete_all_objects(@table)
@@ -61,6 +62,43 @@ defmodule ElixirSense.Core.ExCkReaderTest do
     assert {:ok, refreshed} = ExCkReader.read_chunk(Enum)
     assert refreshed != stale
     assert map_size(refreshed) > 0
+  end
+
+  test "negative results expire on the (shorter) negative TTL" do
+    # Long success TTL, instantly-expiring negative TTL: a cached failure must
+    # not be served once the negative TTL has passed, even though the success
+    # TTL is still fresh. Regression: a module queried before compilation used
+    # to pin {:error, :beam_not_found} for the full success TTL.
+    Application.put_env(:elixir_sense, :exck_cache_ttl, 60_000)
+    Application.put_env(:elixir_sense, :exck_negative_cache_ttl, 0)
+
+    module = :exck_reader_negative_ttl_test_module
+    assert {:error, _} = ExCkReader.read_chunk(module)
+    assert [{^module, {:error, _}, inserted_1}] = :ets.lookup(@table, module)
+
+    # Re-read after the negative TTL: must re-probe rather than serve the
+    # cached negative. The module still doesn't exist, so the result is again
+    # an error — but freshly computed, observable via the refreshed insert
+    # timestamp.
+    Process.sleep(5)
+    assert {:error, _} = ExCkReader.read_chunk(module)
+    assert [{^module, {:error, _}, inserted_2}] = :ets.lookup(@table, module)
+    assert inserted_2 > inserted_1
+  end
+
+  test "negative TTL does not shorten success entries" do
+    Application.put_env(:elixir_sense, :exck_cache_ttl, 60_000)
+    Application.put_env(:elixir_sense, :exck_negative_cache_ttl, 0)
+
+    assert {:ok, _} = ExCkReader.read_chunk(Enum)
+    [{Enum, {:ok, _}, inserted_1}] = :ets.lookup(@table, Enum)
+
+    Process.sleep(5)
+    assert {:ok, _} = ExCkReader.read_chunk(Enum)
+    [{Enum, {:ok, _}, inserted_2}] = :ets.lookup(@table, Enum)
+
+    # Served from cache — the entry was not rewritten.
+    assert inserted_2 == inserted_1
   end
 
   describe "version mismatch" do
