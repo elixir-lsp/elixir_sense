@@ -1487,6 +1487,35 @@ defmodule ElixirSense.Core.ElixirTypes do
     to_shape_eager(descr)
   end
 
+  # Descr delegation
+  #
+  # The sanctioned way for modules outside this adaptor to perform
+  # set-theoretic operations on descrs. Callers must not touch
+  # `Module.Types.Descr` directly — funneling every use through these
+  # delegates keeps the private-API coupling confined to this module, so a
+  # future switch to a public typesystem API (or an internals drift) is a
+  # single-file change. Plain delegation, no availability gating: callers
+  # already run behind `enabled?`/`available?` guards, matching the previous
+  # direct-call behavior.
+
+  @doc "Delegates to `Module.Types.Descr.dynamic/0`."
+  def descr_dynamic, do: Descr.dynamic()
+
+  @doc "True when `descr` is exactly the unconstrained `dynamic()` descr."
+  def descr_dynamic?(descr), do: descr == Descr.dynamic()
+
+  @doc "Delegates to `Module.Types.Descr.union/2`."
+  def descr_union(a, b), do: Descr.union(a, b)
+
+  @doc "Delegates to `Module.Types.Descr.intersection/2`."
+  def descr_intersection(a, b), do: Descr.intersection(a, b)
+
+  @doc "Delegates to `Module.Types.Descr.empty?/1`."
+  def descr_empty?(descr), do: Descr.empty?(descr)
+
+  @doc "Delegates to `Module.Types.Descr.subtype?/2`."
+  def descr_subtype?(a, b), do: Descr.subtype?(a, b)
+
   @doc """
   Renders a `Module.Types.Descr` to the compiler's own type string.
 

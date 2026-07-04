@@ -187,10 +187,6 @@ defmodule ElixirSense.Core.Binding do
   alias ElixirSense.Core.State
   alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
-  # The set-theoretic type backend. Coupled to unstable compiler internals — every
-  # use is guarded by `ElixirTypes.enabled?()` + try/rescue so API drift degrades
-  # gracefully to the custom algebra.
-  alias Module.Types.Descr
 
   # TODO refactor to use env
   defstruct structs: %{},
@@ -990,7 +986,7 @@ defmodule ElixirSense.Core.Binding do
 
   defp descr_backed_covers?(subsumer, member) do
     with_descr_backing(subsumer, member, fn descr_subsumer, descr_member ->
-      Descr.subtype?(descr_member, descr_subsumer)
+      ElixirTypes.descr_subtype?(descr_member, descr_subsumer)
     end)
   end
 
@@ -2787,9 +2783,9 @@ defmodule ElixirSense.Core.Binding do
 
   defp descr_backed_intersection(a, b) do
     with_descr_backing(a, b, fn descr_a, descr_b ->
-      result = Descr.intersection(descr_a, descr_b)
+      result = ElixirTypes.descr_intersection(descr_a, descr_b)
 
-      if Descr.empty?(result) do
+      if ElixirTypes.descr_empty?(result) do
         :none
       else
         case ElixirTypes.to_shape(result) do
@@ -2830,6 +2826,21 @@ defmodule ElixirSense.Core.Binding do
     do: Enum.all?(members, &descr_exact?/1)
 
   defp descr_exact?(_other), do: false
+
+  # Property-test surface (test/elixir_sense/core/binding_descr_property_test.exs).
+  # Exposes the private shape algebra so it can be checked against the native
+  # Descr ground truth. Not part of the public API.
+  @doc false
+  def __combine_intersection__(a, b), do: combine_intersection(a, b)
+
+  @doc false
+  def __normalize_union__(members), do: normalize_union(members)
+
+  @doc false
+  def __covers__?(a, b), do: covers?(a, b)
+
+  @doc false
+  def __descr_exact__?(shape), do: descr_exact?(shape)
 
   # NOTE intersection is not strict and does an union on map keys
 

@@ -931,7 +931,7 @@ defmodule ElixirSense.Core.Compiler.State do
 
         [{first_args, _} | rest] ->
           Enum.zip_with([first_args | Enum.map(rest, fn {args, _} -> args end)], fn descrs ->
-            Enum.reduce(descrs, &Module.Types.Descr.union/2)
+            Enum.reduce(descrs, &ElixirTypes.descr_union/2)
           end)
 
         _ ->
@@ -1079,7 +1079,7 @@ defmodule ElixirSense.Core.Compiler.State do
         "spec_return_to_descr failed for #{inspect(type_ast)}: #{Exception.format(:error, e, __STACKTRACE__)}"
       )
 
-      Module.Types.Descr.dynamic()
+      ElixirTypes.descr_dynamic()
   end
 
   defp substitute_spec_vars(type_ast, guards) when is_list(guards) do

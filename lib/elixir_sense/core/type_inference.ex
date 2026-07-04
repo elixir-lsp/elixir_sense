@@ -27,7 +27,6 @@ defmodule ElixirSense.Core.TypeInference do
   """
   alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.State.VarInfo
-  alias Module.Types.Descr
 
   def type_of(
         {:%, _struct_meta,
@@ -895,7 +894,7 @@ defmodule ElixirSense.Core.TypeInference do
       Enum.reduce(vars, %{}, fn
         %VarInfo{name: name, version: version, elixir_types_descr: descr}, acc
         when is_atom(name) and is_integer(version) ->
-          descr = descr || Descr.dynamic()
+          descr = descr || ElixirTypes.descr_dynamic()
           Map.put(acc, {name, version}, descr)
 
         _, acc ->

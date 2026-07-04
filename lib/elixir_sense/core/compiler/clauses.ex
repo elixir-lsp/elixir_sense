@@ -898,7 +898,7 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
         # coerce_var_type returns dynamic() for unrecognized shapes — treat as
         # nil so we don't pass uninformative constraints to native matching.
-        if descr == Module.Types.Descr.dynamic() do
+        if ElixirTypes.descr_dynamic?(descr) do
           nil
         else
           descr
