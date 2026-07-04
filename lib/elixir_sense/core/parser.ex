@@ -78,8 +78,9 @@ defmodule ElixirSense.Core.Parser do
   """
   def string_to_ast(source, options \\ []) when is_binary(source) do
     errors_threshold = Keyword.get(options, :errors_threshold, 6)
+    parse_opts = [parser_options: Keyword.get(options, :parser_options, [])]
 
-    case tolerant_parse(source) do
+    case tolerant_parse(source, nil, parse_opts) do
       {ast, nil} -> {:ok, ast, source, nil}
       {ast, error} when errors_threshold > 0 -> {:ok, ast, source, error}
       {_ast, error} -> error
@@ -133,8 +134,19 @@ defmodule ElixirSense.Core.Parser do
         _ -> nil
       end
 
+    # honor caller-supplied parser options that toxic2 understands (e.g.
+    # `:existing_atoms_only`, `:literal_encoder`); the rest of the classic
+    # `Code.string_to_quoted` options have no toxic2 equivalent and are dropped,
+    # as toxic2 itself ignores them. token_metadata/range are managed here.
+    extra_parser_options =
+      opts
+      |> Keyword.get(:parser_options, [])
+      |> Keyword.take([:existing_atoms_only, :literal_encoder])
+
     parser_options =
       if cursor, do: [token_metadata: true, range: true], else: [token_metadata: true]
+
+    parser_options = Keyword.merge(parser_options, extra_parser_options)
 
     {ast, diagnostics} = Toxic2.parse_to_ast(source, parser_options)
 

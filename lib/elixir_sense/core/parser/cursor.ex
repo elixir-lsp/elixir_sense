@@ -264,6 +264,14 @@ defmodule ElixirSense.Core.Parser.Cursor do
           # token is missing) - treat them as extending to the cursor
           before_or_at?(start_position, cursor)
         else
+          # The end check is intentionally inclusive even though toxic2 ranges are
+          # end-exclusive. A completion/nav cursor sits one column past the last
+          # character of the token being typed (`Enum.ma|` places the cursor at the
+          # exclusive end of the `ma` token's range), so cursor == end_position must
+          # still resolve to that token - it owns the insertion point. The same
+          # applies to a cursor at the trailing edge of an incomplete construct at
+          # end-of-input. Exclusive-end here regresses completion and cursor-in-
+          # malformed-do placement (see parser_test / completion suites).
           before_or_at?(start_position, cursor) and before_or_at?(cursor, end_position)
         end
 
