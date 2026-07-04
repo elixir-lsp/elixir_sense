@@ -4,6 +4,28 @@ Status assessment and forward plan for the `Module.Types` (native set-theoretic
 typesystem) integration. Written 2026-07-04, at the point where PR #334 is
 feature-complete and green across the Elixir 1.16–1.20 CI matrix.
 
+## Architecture contract
+
+These invariants are the merge-time agreement; the first two are enforced by
+CI boundary tests, the rest by review:
+
+1. **Native descriptors are authoritative when available.** Where a descr and
+   a shape disagree, the descr wins (trust ranking in `TypeHints`:
+   `:native_exck > :native_inferred > :spec > :shape`).
+2. **`ElixirTypes` is the only allowed native adaptor.** No module outside it
+   may call `Module.Types.*` — enforced by
+   `test/elixir_sense/core/elixir_types_boundary_test.exs` against compiled
+   BEAM import tables.
+3. **`TypeHints` is the only LSP-facing type API.** elixir-ls providers must
+   not reach into `Binding` or `TypePresentation` — enforced by
+   `inlay_hints_boundary_test.exs` on the elixir-ls side.
+4. **Shapes are an editor approximation** for uncompiled/incomplete code and
+   pre-1.18 Elixirs — a fallback, not a parallel type system.
+5. **Translation is lossy by design and must degrade to weaker hints, never
+   stronger claims.** `to_shape/1` returns `nil` rather than guess; the shape
+   algebra over-approximates rather than fabricate disjointness (checked by
+   the property harness, I1/I2/U1/C1).
+
 ## Where we are
 
 The integration deliberately runs **two data models**:
@@ -50,6 +72,11 @@ Known structural debts:
   fields, map tail markers, and improper lists (T1). This validates exactly
   the code paths production uses when native types are unavailable
   (Elixir < 1.18) or shapes are not descr-exact. Tunable via `PROP_MAX_RUNS`.
+- [x] **CI boundary checks** — beam-import-table tests enforcing contract
+  items 2 and 3 above (one per repo).
+- [x] **Short negative-cache TTL in ExCkReader** — failures expire after 1s
+  (`:exck_negative_cache_ttl`) so a module compiled seconds after being
+  queried isn't hidden for the full 5-minute success TTL.
 
 ## Next (post-merge, in priority order)
 
@@ -66,7 +93,18 @@ Known structural debts:
 3. **Stop chasing `to_quoted_string` textual parity** in `TypePresentation`.
    Treat rendering mismatches as acceptable drift, not bugs; keep parity tests
    as non-blocking documentation of divergence.
-4. **Deletion map.** When Elixir < 1.18 support is dropped: the shape-only
+4. **Expand the property harness to lossy cases.** The current properties pin
+   the exact fragment; add explicit tests that lossy translations degrade the
+   right way — `to_shape/1` returning `nil` (not a wrong shape) for
+   unconvertible descrs, non-exact operands falling to the custom algebra
+   rather than a spurious descr verdict, and trust downgrades to `:shape`
+   where native info is absent.
+5. **Split the big files once behavior is pinned** (no behavior changes,
+   separate PRs): `ElixirTypes` into capability probing / descriptor
+   conversion+rendering / apply semantics / local signatures / pattern typing;
+   the Binding shape algebra into its own module. The property harness and
+   boundary tests make these refactors safe to verify.
+6. **Deletion map.** When Elixir < 1.18 support is dropped: the shape-only
    fallback paths, the pre-1.18 signature-tuple shims, and much of the custom
    combine algebra become dead. When a public types API arrives: the
    version-gated `of_match`/`apply` shims and `descr_exact?` gating collapse
