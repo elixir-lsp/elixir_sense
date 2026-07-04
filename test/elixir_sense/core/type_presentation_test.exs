@@ -1,5 +1,7 @@
 defmodule ElixirSense.Core.TypePresentationTest do
-  use ExUnit.Case, async: true
+  # async: false — some tests mutate the global :use_elixir_types app env,
+  # which would race with concurrently-running modules that read the flag.
+  use ExUnit.Case, async: false
 
   alias ElixirSense.Core.Binding
   alias ElixirSense.Core.State.VarInfo

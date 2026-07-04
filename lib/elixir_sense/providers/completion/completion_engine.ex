@@ -1400,7 +1400,8 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
 
   # `type_spec` here is a quoted type AST (to_entries renders it with
   # Macro.to_string). TypePresentation renders to text, so parse it back to an
-  # AST; the rendered forms are always valid type expressions.
+  # AST — best-effort: some rendered forms (e.g. open-map `...` markers) are
+  # not parseable, in which case we fall back to nil.
   defp rendered_field_type(value) do
     with {:ok, text} <- TypePresentation.render(value),
          {:ok, ast} <- Code.string_to_quoted(text) do

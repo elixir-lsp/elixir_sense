@@ -709,6 +709,18 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       assert type_of("<<x::binary-size(4)>>") == {:binary, nil}
       assert type_of("<<x::utf8>>") == {:binary, nil}
     end
+
+    test "bitstring vs binary: unit multiplies size for effective bit width" do
+      # size(1)-unit(8) is 8 bits — byte-aligned binary, not a bitstring
+      assert type_of("<<1::size(1)-unit(8)>>") == {:binary, nil}
+      assert type_of("<<x::integer-size(2)-unit(8)>>") == {:binary, nil}
+      # 2*4 shorthand (size 2, unit 4) is 8 bits — binary
+      assert type_of("<<1::2*4>>") == {:binary, nil}
+      # size(3)-unit(2) is 6 bits — sub-byte
+      assert type_of("<<1::size(3)-unit(2)>>") == :bitstring
+      # unit without a literal size stays conservative (binary)
+      assert type_of("<<x::size(n)-unit(8)>>") == {:binary, nil}
+    end
   end
 
   describe "special forms" do

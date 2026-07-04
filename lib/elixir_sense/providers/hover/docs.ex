@@ -44,21 +44,21 @@ defmodule ElixirSense.Providers.Hover.Docs do
         }
 
   @type variable_doc :: %{
-          name: atom(),
+          name: String.t(),
           kind: :variable,
           # Rendered inferred type (best-effort), or nil when nothing useful.
           type: String.t() | nil
         }
 
   @type attribute_doc :: %{
-          name: atom(),
+          name: String.t(),
           kind: :attribute,
           docs: markdown()
         }
 
   @type keyword_doc :: %{
-          name: atom(),
-          kind: :attribute,
+          name: String.t(),
+          kind: :keyword,
           docs: markdown()
         }
 

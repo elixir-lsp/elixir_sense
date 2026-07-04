@@ -727,22 +727,47 @@ defmodule ElixirSense.Core.TypeInference do
     cond do
       Enum.any?(parts, &(&1 in [:binary, :bytes, :utf8, :utf16, :utf32, :float])) -> false
       Enum.any?(parts, &(&1 in [:bitstring, :bits])) -> true
-      true -> Enum.any?(parts, &(is_integer(&1) and rem(&1, 8) != 0))
+      true -> sub_byte_width?(parts)
     end
   end
 
   # A segment without `::` is the default (integer, 8 bits — byte-aligned).
   defp sub_byte_segment?(_other), do: false
 
+  # The effective bit width is size * unit (unit defaults to 1 for integer
+  # segments), so `<<1::size(1)-unit(8)>>` is a byte-aligned 8-bit segment,
+  # not a sub-byte one. Non-literal sizes yield no `{:size, _}` entry and stay
+  # conservative (not sub-byte).
+  defp sub_byte_width?(parts) do
+    size =
+      Enum.find_value(parts, fn
+        {:size, n} -> n
+        _other -> nil
+      end)
+
+    unit =
+      Enum.find_value(parts, fn
+        {:unit, n} -> n
+        _other -> nil
+      end) || 1
+
+    is_integer(size) and rem(size * unit, 8) != 0
+  end
+
   defp flatten_segment_spec({:-, _, [left, right]}),
     do: flatten_segment_spec(left) ++ flatten_segment_spec(right)
+
+  # `size*unit` shorthand (`<<x::2*4>>` is size 2, unit 4).
+  defp flatten_segment_spec({:*, _, [size, unit]}) when is_integer(size) and is_integer(unit),
+    do: [{:size, size}, {:unit, unit}]
 
   defp flatten_segment_spec({:*, _, [left, right]}),
     do: flatten_segment_spec(left) ++ flatten_segment_spec(right)
 
-  defp flatten_segment_spec({:size, _, [n]}) when is_integer(n), do: [n]
+  defp flatten_segment_spec({:size, _, [n]}) when is_integer(n), do: [{:size, n}]
+  defp flatten_segment_spec({:unit, _, [n]}) when is_integer(n), do: [{:unit, n}]
   defp flatten_segment_spec({name, _, _}) when is_atom(name), do: [name]
-  defp flatten_segment_spec(n) when is_integer(n), do: [n]
+  defp flatten_segment_spec(n) when is_integer(n), do: [{:size, n}]
   defp flatten_segment_spec(_other), do: []
 
   # The result type of a `for` from its (last-clause) opts. `:reduce` wins over

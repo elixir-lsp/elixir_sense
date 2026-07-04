@@ -249,7 +249,10 @@ defmodule ElixirSense.Core.TypeHints do
           :skip | {:ok, hint}
   def type_hint_at(%Context{} = ctx, position, var_name, opts \\ [])
       when is_atom(var_name) do
-    cached({__MODULE__, ctx.ref, :hint_at, position, var_name}, fn ->
+    # `opts` affect rendering (e.g. max_length, widen_literals), so they must
+    # be part of the key — otherwise the first caller's formatting poisons
+    # later calls with different options.
+    cached({__MODULE__, ctx.ref, :hint_at, position, var_name, Enum.sort(opts)}, fn ->
       compute_hint_at(ctx, position, var_name, opts)
     end)
   end

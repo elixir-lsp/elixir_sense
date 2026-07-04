@@ -514,15 +514,29 @@ defmodule ElixirSense.Core.TypeHintsTest do
              "Flow-sensitivity not observable: both positions returned #{inspect(result_narrow)}"
     end
 
-    test "result is cached per {ref, :hint_at, position, var_name}" do
+    test "result is cached per {ref, :hint_at, position, var_name, opts}" do
       md = metadata(@flow_code, {5, 9})
       pos = {5, 9}
       ctx = TypeHints.request_context(md)
-      cache_key = {TypeHints, ctx.ref, :hint_at, pos, :x}
+      cache_key = {TypeHints, ctx.ref, :hint_at, pos, :x, []}
 
       assert Process.get(cache_key) == nil
       result = TypeHints.type_hint_at(ctx, pos, :x, [])
       assert Process.get(cache_key) == result
+    end
+
+    test "different render opts do not poison each other's cache entries" do
+      md = metadata(@flow_code, {5, 9})
+      pos = {5, 9}
+      ctx = TypeHints.request_context(md)
+
+      {:ok, default_hint} = TypeHints.type_hint_at(ctx, pos, :x, [])
+      {:ok, truncated_hint} = TypeHints.type_hint_at(ctx, pos, :x, max_length: 3)
+
+      # The truncated call must not return the earlier default rendering...
+      assert truncated_hint.label != default_hint.label
+      # ...and the default entry must survive the truncated call unchanged.
+      assert {:ok, ^default_hint} = TypeHints.type_hint_at(ctx, pos, :x, [])
     end
 
     test "discard/1 also erases hint_at cache entries" do
@@ -531,7 +545,7 @@ defmodule ElixirSense.Core.TypeHintsTest do
       ctx = TypeHints.request_context(md)
 
       TypeHints.type_hint_at(ctx, pos, :x, [])
-      cache_key = {TypeHints, ctx.ref, :hint_at, pos, :x}
+      cache_key = {TypeHints, ctx.ref, :hint_at, pos, :x, []}
       assert Process.get(cache_key) != nil
 
       TypeHints.discard(ctx)
