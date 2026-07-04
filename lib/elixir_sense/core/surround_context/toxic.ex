@@ -94,19 +94,16 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
     end
   end
 
-  # `r1` is a name-like leaf whose source range ends exactly at `position` (so the cursor sits one
-  # column past its last character). Only name leaves get to override a non-`:none` result at the
-  # cursor - dot / call / operator trailing edges are left to the `:none` retry so we never turn a
-  # remote-call cursor into its bare function-name leaf.
-  defp trailing_name_leaf?(%{context: context, end: ending}, position) when ending == position do
-    case context do
-      {:alias, _} -> true
-      {:local_or_var, _} -> true
-      {:unquoted_atom, _} -> true
-      {:module_attribute, _} -> true
-      _ -> false
-    end
-  end
+  # `r1` is an ALIAS leaf whose source range ends exactly at `position` (so the cursor sits one column
+  # past its last character). This is the only leaf that gets to override a non-`:none` result at the
+  # cursor, and it is deliberately restricted to `:alias` (uppercase Elixir modules) - that is exactly
+  # what #1027 / elixir-lang/elixir#13150 is about: the end of `Foo` in `Foo.bar()` should be the
+  # module `Foo`. It must NOT fire for a bare-atom / var / attribute LHS of a dot (e.g. `:timer` in
+  # `:timer.sleep(...)`, where the user wants the function), so those only resolve via the `:none`
+  # retry below - i.e. when they are NOT shadowing a remote call.
+  defp trailing_name_leaf?(%{context: {:alias, _}, end: ending}, position)
+       when ending == position,
+       do: true
 
   defp trailing_name_leaf?(_r1, _position), do: false
 
