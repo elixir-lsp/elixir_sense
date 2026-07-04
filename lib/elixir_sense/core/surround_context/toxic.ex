@@ -24,12 +24,19 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
   # var in an unspaced step range `a..b//c` stays a `:local_or_var`. These are kept because they
   # drive better navigation than matching the lexical oracle would.
   #
+  # It also intentionally resolves the TRAILING EDGE of a symbol - the cursor one column past the
+  # last character, where `Code.Fragment` returns `:none` (bare symbol) or the enclosing remote call
+  # (an alias before a `.`). Both broke navigation: goto-definition/references/hover failed at the
+  # end of a name (elixir-lsp/elixir-ls#1038) and an alias resolved to the function rather than the
+  # module (#1027 / the reverted elixir-lang/elixir#13150). Because every node carries an exact
+  # end-exclusive range we can do this precisely; see `resolve/3`.
+  #
   # NOTE: completion (`Code.Fragment.cursor_context` / `container_cursor_to_quoted`) is out of
   # scope and stays on `Code.Fragment`.
 
   @spec surround_context(String.t(), {pos_integer, pos_integer}) :: :none | map()
   def surround_context(source, position) when is_binary(source) do
-    classify_at(parse(source), source, position)
+    resolve(parse(source), source, position)
   rescue
     _ -> Code.Fragment.surround_context(source, position)
   catch
@@ -41,12 +48,88 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
   # reuses the AST across every cursor position instead of triggering a fresh parse per call.
   @spec surround_context(Macro.t(), String.t(), {pos_integer, pos_integer}) :: :none | map()
   def surround_context(ast, source, position) when is_binary(source) do
-    classify_at(ast, source, position)
+    resolve(ast, source, position)
   rescue
     _ -> Code.Fragment.surround_context(source, position)
   catch
     _, _ -> Code.Fragment.surround_context(source, position)
   end
+
+  # Trailing-edge resolution. `Code.Fragment.surround_context/2` (and, mirroring it, `classify_at/3`)
+  # returns `:none` when the cursor sits one column PAST the last character of a bare symbol, and
+  # returns the enclosing remote call when it sits at the end of the alias before a `.`. Both make
+  # navigation (goto-definition / references / hover) fail or point at the wrong thing when the user
+  # places the caret at the visual end of a name - elixir-lsp/elixir-ls#1038 and #1027 (upstream
+  # elixir-lang/elixir#13150, whose lexical fix was reverted). Because toxic2 gives every node an
+  # exact end-exclusive range, we can resolve this precisely: classify at the cursor and one column
+  # to its left, and
+  #
+  #   * if the character just left of the cursor is the last character of an alias / var / bare-atom /
+  #     module-attribute leaf, that leaf wins - so the end of `Foo` in `Foo.bar()` resolves to the
+  #     module `Foo`, not the remote call (#1027);
+  #   * otherwise, if the cursor itself resolves to nothing, retry one column left (#1038 - the
+  #     trailing edge of a bare symbol or of a whole remote call, e.g. before `,` / `)` / end-of-line).
+  #
+  # This only ever reaches the token whose range ENDS exactly at the cursor: if `classify_at/3` is
+  # `:none` at the cursor, any node found one column left cannot extend past the cursor (contiguous
+  # integer ranges), so it must end there. It never reaches across whitespace or a separator.
+  defp resolve(ast, source, {line, column} = position) do
+    r0 = classify_at(ast, source, position)
+
+    if column > 1 do
+      r1 = classify_at(ast, source, {line, column - 1})
+
+      cond do
+        # #1027: at the trailing edge of a name leaf, the leaf wins even over an enclosing dot
+        trailing_name_leaf?(r1, position) -> r1
+        # otherwise keep whatever the cursor itself resolved to
+        r0 != :none -> r0
+        # #1038: the cursor resolved to nothing - retry one column left, but only surface a genuine
+        # navigation target (a `key:` / operator / sigil trailing edge stays `:none`, as before)
+        navigable_result?(r1) -> r1
+        true -> :none
+      end
+    else
+      r0
+    end
+  end
+
+  # `r1` is a name-like leaf whose source range ends exactly at `position` (so the cursor sits one
+  # column past its last character). Only name leaves get to override a non-`:none` result at the
+  # cursor - dot / call / operator trailing edges are left to the `:none` retry so we never turn a
+  # remote-call cursor into its bare function-name leaf.
+  defp trailing_name_leaf?(%{context: context, end: ending}, position) when ending == position do
+    case context do
+      {:alias, _} -> true
+      {:local_or_var, _} -> true
+      {:unquoted_atom, _} -> true
+      {:module_attribute, _} -> true
+      _ -> false
+    end
+  end
+
+  defp trailing_name_leaf?(_r1, _position), do: false
+
+  # The context shapes the navigation providers can actually act on (via `SurroundContext.to_binding`).
+  # Lexical-only shapes (`:key`, `:keyword`, `:operator`, `:sigil`) are excluded so the `:none` retry
+  # never turns an empty position into a non-navigable result.
+  defp navigable_result?(%{context: context}) do
+    case context do
+      {:alias, _} -> true
+      {:alias, _, _} -> true
+      {:dot, _, _} -> true
+      {:local_or_var, _} -> true
+      {:local_call, _} -> true
+      {:local_arity, _} -> true
+      {:capture_arg, _} -> true
+      {:module_attribute, _} -> true
+      {:unquoted_atom, _} -> true
+      {:struct, _} -> true
+      _ -> false
+    end
+  end
+
+  defp navigable_result?(_r1), do: false
 
   defp classify_at(ast, source, {line, column} = position) do
     case deepest_at(ast, {line, column}) do

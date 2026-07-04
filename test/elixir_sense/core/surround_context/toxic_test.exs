@@ -84,13 +84,18 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
 
   # regressions found by adversarial review (gpt-5.5)
   describe "surround_context/2 multi-line / lexical edge cases" do
-    # the dot end must come from the callee position (line+col), not the dot - otherwise a remote
-    # call whose name is on the next line gets an impossible same-line end and breaks arity lookup.
-    test "multi-line remote call, cursor on the dot" do
+    # At the end of the alias `A` (the cursor sits on the dot, one past `A`) the trailing-edge rule
+    # resolves the module `A`, not the remote call (elixir-lsp/elixir-ls#1027). On the name `bar`
+    # itself it is still the remote call, whose end comes from the callee position (line+col) - so a
+    # name on the next line does not get an impossible same-line end that would break arity lookup.
+    test "multi-line remote call: end of alias is the module, on the name is the remote call" do
       source = "A.\n  bar\n"
 
-      assert Toxic.surround_context(source, {1, 2}) ==
-               Code.Fragment.surround_context(source, {1, 2})
+      assert %{context: {:alias, ~c"A"}, begin: {1, 1}, end: {1, 2}} =
+               Toxic.surround_context(source, {1, 2})
+
+      assert %{context: {:dot, {:alias, ~c"A"}, ~c"bar"}, begin: {1, 1}, end: {2, 6}} =
+               Toxic.surround_context(source, {2, 4})
     end
 
     # `@ attr` (space) is the unary `@` operator on a local var, not a module attribute.
@@ -101,12 +106,16 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
                Code.Fragment.surround_context(source, {5, 7})
     end
 
-    # the slash of remote arity `A.bar/1` must defer to Code.Fragment (:none), not be a `/` operator.
-    test "remote arity slash defers to Code.Fragment" do
+    # The slash of `A.bar/1` is not misclassified as a `/` operator. `Code.Fragment` returns `:none`
+    # there, but since the cursor sits one past `bar` the trailing-edge retry resolves the remote
+    # call `A.bar` (a navigable target), which is what the user wants when the caret is at its end.
+    test "remote arity slash resolves the remote call at the trailing edge" do
       source = "A.bar/1\n"
 
-      assert Toxic.surround_context(source, {1, 6}) ==
-               Code.Fragment.surround_context(source, {1, 6})
+      assert :none = Code.Fragment.surround_context(source, {1, 6})
+
+      assert %{context: {:dot, {:alias, ~c"A"}, ~c"bar"}, begin: {1, 1}, end: {1, 6}} =
+               Toxic.surround_context(source, {1, 6})
     end
 
     # `a..b//c` lowers to a single ternary `:..//` node, but Code.Fragment classifies the `..`
@@ -181,6 +190,63 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
                  Code.Fragment.surround_context(source, {1, col}),
                "mismatch for #{inspect(source)} @#{col}"
       end
+    end
+  end
+
+  # Cursor placed at the *end* of a symbol (one column past its last character). `Code.Fragment`
+  # (and, mirroring it, the mid-token classification) returns `:none`, or the enclosing remote call
+  # for an alias before a `.`, which breaks goto-definition/references/hover (elixir-lsp/elixir-ls
+  # #1038) and points an alias at the function instead of the module (#1027 / elixir-lang/elixir
+  # #13150). The trailing-edge rule resolves these from the exact toxic2 ranges.
+  describe "surround_context/2 trailing edge (#1038 / #1027)" do
+    test "#1038: a bare symbol resolves at its end (one past the last char)" do
+      assert %{context: {:local_or_var, ~c"foo_bar"}, begin: {1, 1}, end: {1, 8}} =
+               Toxic.surround_context("foo_bar", {1, 8})
+
+      assert %{context: {:alias, ~c"Test"}, begin: {1, 1}, end: {1, 5}} =
+               Toxic.surround_context("Test", {1, 5})
+
+      assert %{context: {:module_attribute, ~c"my_attr"}} =
+               Toxic.surround_context("@my_attr", {1, 9})
+
+      assert %{context: {:unquoted_atom, ~c"my_atom"}} =
+               Toxic.surround_context(":my_atom", {1, 9})
+    end
+
+    test "#1038: the end of a whole remote call resolves to the call" do
+      assert %{context: {:dot, {:alias, ~c"Enum"}, ~c"count"}} =
+               Toxic.surround_context("x = Enum.count", {1, 15})
+    end
+
+    test "#1027: end of an alias before `.` is the module, not the remote call" do
+      # cursor one past `Test`, i.e. on the `.` / `,` / `)` / `/` that follows it
+      for {source, col} <- [
+            {"Test.test()", 5},
+            {"&Test.test/0", 6},
+            {"[Test, :abc]", 6},
+            {"List.wrap(Test)", 15}
+          ] do
+        assert %{context: {:alias, ~c"Test"}} = Toxic.surround_context(source, {1, col}),
+               "expected module Test at #{inspect(source)} @#{col}"
+      end
+    end
+
+    test "compound alias resolves at its end" do
+      assert %{context: {:alias, ~c"Foo.Bar"}} =
+               Toxic.surround_context("defmodule Foo.Bar", {1, 18})
+    end
+
+    test "no false positives: whitespace, separators and non-navigable trailing edges stay :none" do
+      # two columns past the symbol (a gap) - must not reach back to it
+      assert :none = Toxic.surround_context("foo", {1, 5})
+      # cursor in whitespace between two symbols
+      assert :none = Toxic.surround_context("foo   bar", {1, 5})
+      # end of a keyword key (`:` column) is a non-navigable `:key`, so stays :none
+      assert :none = Toxic.surround_context("[key: 1]", {1, 5})
+      # trailing edge of a number literal is not navigable
+      assert :none = Toxic.surround_context("x = 123", {1, 8})
+      # past end of line / empty
+      assert :none = Toxic.surround_context("", {1, 1})
     end
   end
 end
