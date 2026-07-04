@@ -361,18 +361,51 @@ defmodule ElixirSense.Providers.Definition.Locator do
   # Does the recorded definition sit on a `use Foo` / `Kernel.use(Foo)` line?
   defp use_site?(location, metadata, line) do
     with source when is_binary(source) <- location_source(location, metadata),
-         text when is_binary(text) <- Enum.at(Source.split_lines(source), line - 1),
-         {:ok, ast} <- Code.string_to_quoted(text) do
-      case ast do
-        {:use, _, [_ | _]} -> true
-        {{:., _, [{:__aliases__, _, [:Kernel]}, :use]}, _, [_ | _]} -> true
-        {{:., _, [Kernel, :use]}, _, [_ | _]} -> true
-        _ -> false
+         text when is_binary(text) <- Enum.at(Source.split_lines(source), line - 1) do
+      case Code.string_to_quoted(text, emit_warnings: false) do
+        {:ok, ast} ->
+          use_ast?(ast)
+
+        {:error, _} ->
+          source
+          |> Source.text_before(line, String.length(text) + 1)
+          |> use_fragment?(line)
       end
     else
       _ -> false
     end
   end
+
+  defp use_fragment?(prefix, line) do
+    case Code.Fragment.container_cursor_to_quoted(prefix, columns: true) do
+      {:ok, ast} -> use_ast_on_line?(ast, line)
+      _ -> false
+    end
+  end
+
+  defp use_ast_on_line?(ast, line) do
+    {_ast, found?} =
+      Macro.prewalk(ast, false, fn
+        node, true -> {node, true}
+        node, false -> {node, use_ast?(node, line)}
+      end)
+
+    found?
+  end
+
+  defp use_ast?({:use, meta, [_ | _]}, line), do: meta[:line] == line
+
+  defp use_ast?({{:., _, [{:__aliases__, _, [:Kernel]}, :use]}, meta, [_ | _]}, line),
+    do: meta[:line] == line
+
+  defp use_ast?({{:., _, [Kernel, :use]}, meta, [_ | _]}, line), do: meta[:line] == line
+
+  defp use_ast?(_ast, _line), do: false
+
+  defp use_ast?({:use, _, [_ | _]}), do: true
+  defp use_ast?({{:., _, [{:__aliases__, _, [:Kernel]}, :use]}, _, [_ | _]}), do: true
+  defp use_ast?({{:., _, [Kernel, :use]}, _, [_ | _]}), do: true
+  defp use_ast?(_ast), do: false
 
   # Modules `mod` uses, resolved at expansion time. For the current buffer they
   # are in `metadata.uses`; for an external module we parse its source (only
