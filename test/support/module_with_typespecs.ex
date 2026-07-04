@@ -185,8 +185,36 @@ defmodule ElixirSenseExample.ModuleWithTypespecs do
     end
 
     @spec macro_with_options(options_t) :: Macro.t()
-    defmacro macro_with_options(options) do
+    defmacro macro_with_options(_options) do
+      # IO.inspect(_options)
       {:asd, [], nil}
     end
+
+    @spec fun_with_default(atom, [{:foo, integer()} | {:bar, String.t()}]) :: :ok
+    def fun_with_default(_a \\ nil, _options), do: :ok
+
+    @spec multiple_functions([{:foo, integer()}]) :: :ok
+    def multiple_functions(_options), do: :ok
+
+    @spec multiple_functions([{:bar, String.t()}]) :: :ok
+    def multiple_functions(_options, _a), do: :ok
+  end
+
+  defmodule Behaviour do
+    @callback some([{:foo, integer()} | {:bar, String.t()}]) :: :ok
+  end
+
+  defmodule Impl do
+    @behaviour Behaviour
+    def some(_a), do: :ok
+  end
+
+  defmodule MacroBehaviour do
+    @macrocallback some([{:foo, integer()} | {:bar, String.t()}]) :: Macro.t()
+  end
+
+  defmodule MacroImpl do
+    @behaviour MacroBehaviour
+    defmacro some(_a), do: :ok
   end
 end

@@ -21,7 +21,7 @@ defmodule ElixirSense.Providers.References.Locator do
           keyword()
         ) :: [reference_info()]
   def references(code, line, column, trace, options \\ []) do
-    case Code.Fragment.surround_context(code, {line, column}) do
+    case ElixirSense.Core.SurroundContext.Toxic.surround_context(code, {line, column}) do
       :none ->
         []
 

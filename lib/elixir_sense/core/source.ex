@@ -4,7 +4,6 @@ defmodule ElixirSense.Core.Source do
   """
 
   alias ElixirSense.Core.Binding
-  alias ElixirSense.Core.Normalized.Tokenizer
 
   @line_break ["\n", "\r\n", "\r"]
   @empty_graphemes [" ", "\t"] ++ @line_break
@@ -736,39 +735,40 @@ defmodule ElixirSense.Core.Source do
   def concat_module_parts([], _, _), do: :error
 
   def bitstring_options(prefix) do
-    tokens = Tokenizer.tokenize(prefix)
+    case Code.Fragment.container_cursor_to_quoted(prefix, columns: true) do
+      {:ok, quoted} ->
+        path = Macro.path(quoted, &match?({:__cursor__, _, []}, &1))
 
-    case scan_bitstring(tokens, nil) do
-      nil ->
+        case path do
+          [cursor | tail] ->
+            case bitstring_remove_operators(tail, cursor) do
+              [{:"::", _, [_, _]}, {:<<>>, _, [_ | _]} | _] ->
+                # Cursor is in bitstring modifier position.
+                # Extract text after the last "::" on the last line of the prefix.
+                prefix
+                |> split_lines()
+                |> List.last("")
+                |> String.split("::")
+                |> List.last()
+
+              _ ->
+                nil
+            end
+
+          _ ->
+            nil
+        end
+
+      {:error, _} ->
         nil
-
-      {line, column, _} ->
-        prefix
-        |> split_lines
-        |> Enum.at(line - 1, "")
-        |> String.slice((column + 1)..-1//1)
     end
   end
 
-  defp scan_bitstring([], acc), do: acc
+  # Strip binary `-` operator wrappers introduced when typing `big-uns` etc.
+  # Mirrors remove_operators/2 from elixir-ls completion_engine.ex (commit 98e983d).
+  defp bitstring_remove_operators([{op, _, [_, previous]} = head | tail], previous)
+       when op in [:-],
+       do: bitstring_remove_operators(tail, head)
 
-  defp scan_bitstring([{:type_op, candidate, :"::"}, {:identifier, _, _} | rest], _acc) do
-    scan_bitstring(rest, candidate)
-  end
-
-  defp scan_bitstring([{:"<<", _} | _rest], acc) when not is_nil(acc) do
-    acc
-  end
-
-  defp scan_bitstring([{:",", _} | _rest], acc) when not is_nil(acc) do
-    acc
-  end
-
-  defp scan_bitstring([{:">>", _} | _rest], _acc) do
-    nil
-  end
-
-  defp scan_bitstring([_token | rest], acc) do
-    scan_bitstring(rest, acc)
-  end
+  defp bitstring_remove_operators(tail, _previous), do: tail
 end

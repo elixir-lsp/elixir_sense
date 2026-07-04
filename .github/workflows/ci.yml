@@ -69,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Same matrix as mix_test (Linux). See above for compatibility notes.
+        # Same matrix as mix_test (Linux).
         include:
           - elixir: 1.16.x
             otp: 26.x

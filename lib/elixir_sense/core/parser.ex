@@ -1,11 +1,17 @@
 defmodule ElixirSense.Core.Parser do
   @moduledoc """
   Core Parser
+
+  Parsing is delegated to the error tolerant toxic2 parser. It always returns a
+  best effort AST (with `{:__error__, meta, %{}}` placeholder nodes on
+  unparsable parts) plus a diagnostic stream. The cursor position, when given,
+  is located via toxic2's `range:` metadata and marked with a `__cursor__` node
+  (see `ElixirSense.Core.Parser.Cursor`).
   """
 
   alias ElixirSense.Core.Metadata
   alias ElixirSense.Core.MetadataBuilder
-  alias ElixirSense.Core.Normalized.Tokenizer
+  alias ElixirSense.Core.Parser.Cursor
   alias ElixirSense.Core.Source
   require Logger
 
@@ -33,144 +39,251 @@ defmodule ElixirSense.Core.Parser do
 
   @spec parse_string(String.t(), boolean, boolean, {pos_integer, pos_integer} | nil) ::
           Metadata.t()
-  def parse_string(source, try_to_fix_parse_error, try_to_fix_line_not_found, cursor_position) do
+  def parse_string(source, _try_to_fix_parse_error, try_to_fix_line_not_found, cursor_position) do
     unless String.valid?(source) do
       raise ArgumentError, message: "invalid string passed to parse_string"
     end
 
-    string_to_ast_options = [
-      errors_threshold: if(try_to_fix_parse_error, do: 6, else: 0),
-      cursor_position: cursor_position,
-      fallback_to_container_cursor_to_quoted: try_to_fix_parse_error
-    ]
+    # parse a CLEAN tree (no `__cursor__` marker) so the metadata - calls, vars,
+    # references, lines_to_env - reflects the real code. The precise cursor
+    # environment is derived separately in `Metadata.get_cursor_env/3` (a marked
+    # parse), exactly so the marker never corrupts this metadata.
+    {ast, error} = tolerant_parse(source)
+    acc = MetadataBuilder.build(ast, cursor_position)
 
-    # source_with_cursor = inject_cursor(source, cursor_position)
-    source_with_cursor = source
+    if cursor_position == nil or acc.cursor_env != nil or
+         Map.has_key?(acc.lines_to_env, elem(cursor_position, 0)) or
+         !try_to_fix_line_not_found do
+      create_metadata(source, {:ok, acc, error})
+    else
+      case try_fix_line_not_found_by_inserting_marker(source, cursor_position) do
+        {:ok, acc} ->
+          create_metadata(source, {:ok, acc, error || {:error, :env_not_found}})
 
-    case string_to_ast(source_with_cursor, string_to_ast_options) do
-      {:ok, ast, modified_source, error} ->
-        acc = MetadataBuilder.build(ast, cursor_position)
-
-        if cursor_position == nil or acc.cursor_env != nil or
-             Map.has_key?(acc.lines_to_env, elem(cursor_position, 0)) or
-             !try_to_fix_line_not_found do
-          create_metadata(source, {:ok, acc, error})
-        else
-          case try_fix_line_not_found_by_inserting_marker(modified_source, cursor_position) do
-            {:ok, acc} ->
-              create_metadata(source, {:ok, acc, error || {:error, :env_not_found}})
-
-            _ ->
-              create_metadata(source, {:ok, acc, error || {:error, :env_not_found}})
-          end
-        end
-
-      {:error, _reason} = error ->
-        create_metadata(source, error)
+        _ ->
+          create_metadata(source, {:ok, acc, error || {:error, :env_not_found}})
+      end
     end
   end
 
-  @default_parser_options [columns: true, token_metadata: true, emit_warnings: false]
+  @doc """
+  Error tolerant parse via toxic2. Returns `{:ok, ast, source, error}` where
+  `error` is `nil` or `{:error, :parse_error}`. With `errors_threshold: 0`
+  (strict) a parse error is returned as `{:error, :parse_error}` instead.
 
+  The returned AST is the clean recovered tree - no `__cursor__` marker is
+  injected even when a `:cursor_position` is given (the marker is only relevant
+  to environment building, see `parse_string/4`). This keeps the AST safe for
+  general consumers such as code transforms / `Macro.to_string/1`.
+  """
   def string_to_ast(source, options \\ []) when is_binary(source) do
     errors_threshold = Keyword.get(options, :errors_threshold, 6)
-    cursor_position = Keyword.get(options, :cursor_position)
+    parse_opts = [parser_options: Keyword.get(options, :parser_options, [])]
 
-    parser_options =
-      Keyword.get(options, :parser_options, [])
-      |> Keyword.merge(@default_parser_options)
-
-    fallback_to_container_cursor_to_quoted =
-      Keyword.get(options, :fallback_to_container_cursor_to_quoted, true)
-
-    do_string_to_ast(
-      source,
-      errors_threshold,
-      fallback_to_container_cursor_to_quoted,
-      cursor_position,
-      source,
-      nil,
-      parser_options
-    )
-  end
-
-  defp do_string_to_ast(
-         source,
-         errors_threshold,
-         fallback_to_container_cursor_to_quoted,
-         cursor_position,
-         original_source,
-         original_error,
-         parser_options
-       )
-       when is_binary(source) do
-    case Code.string_to_quoted(source, parser_options) do
-      {:ok, ast} ->
-        {:ok, ast, source, original_error}
-
-      error ->
-        error_to_report = original_error || {:error, :parse_error}
-        # dbg(error)
-
-        modified_source =
-          if(errors_threshold > 0,
-            do: fix_parse_error(source, cursor_position, error),
-            else: error
-          )
-
-        if is_binary(modified_source) do
-          do_string_to_ast(
-            modified_source,
-            errors_threshold - 1,
-            fallback_to_container_cursor_to_quoted,
-            cursor_position,
-            original_source,
-            error_to_report,
-            parser_options
-          )
-        else
-          case {fallback_to_container_cursor_to_quoted, cursor_position} do
-            {true, {cursor_line, cursor_column}} ->
-              prefix = Source.text_before(original_source, cursor_line, cursor_column)
-
-              case Code.Fragment.container_cursor_to_quoted(prefix, parser_options) do
-                {:ok, ast} ->
-                  {:ok, ast, prefix, error_to_report}
-
-                _ ->
-                  error_to_report
-              end
-
-            _ ->
-              error_to_report
-          end
-        end
+    case tolerant_parse(source, nil, parse_opts) do
+      {ast, nil} -> {:ok, ast, source, nil}
+      {ast, error} when errors_threshold > 0 -> {:ok, ast, source, error}
+      {_ast, error} -> error
     end
   end
 
+  @doc false
+  # Parse `source` with the cursor marked at `cursor_position` and return the
+  # `{meta, env}` cursor environment (or `nil`). Used by
+  # `ElixirSense.Core.Metadata.get_cursor_env/3`.
+  #
+  # `preserve_token: true` keeps the identifier under the cursor (for
+  # navigation - definition/hover/references), otherwise a half-typed token is
+  # dropped (for completion).
+  def cursor_env(source, {_line, _column} = cursor_position, opts \\ []) do
+    {ast, _error} = tolerant_parse(source, cursor_position, opts)
+    MetadataBuilder.build(ast, cursor_position).cursor_env
+  end
+
+  @doc """
+  Public toxic2 parse for consumers that want the raw best-effort AST plus the
+  diagnostic stream, with `{:__error__, ...}` placeholder nodes neutralized so
+  `MetadataBuilder`/`Macro` traversal never crash.
+
+  `keep_range: true` preserves the `range:` metadata toxic2 attaches to every
+  source node (needed by range-aware consumers such as the language server
+  parser and the document-symbol / folding / selection-range providers); the
+  default strips it to keep the classic `line:`/`column:` shape used by metadata
+  building. No `__cursor__` marker is injected - this is a clean recovered tree.
+
+  Returns `{ast, diagnostics}` (the toxic2 diagnostic stream, unmodified).
+  """
+  def parse_to_neutralized_ast(source, opts \\ []) when is_binary(source) do
+    keep_range = Keyword.get(opts, :keep_range, false)
+
+    parser_options =
+      opts
+      |> Keyword.take([:token_metadata, :range, :existing_atoms_only, :literal_encoder])
+      |> Keyword.put_new(:token_metadata, true)
+
+    {ast, diagnostics} = Toxic2.parse_to_ast(source, parser_options)
+    {neutralize_errors(ast, diagnostics, keep_range), diagnostics}
+  end
+
+  @doc false
+  # Parse with toxic2 and place the cursor marker. Returns `{ast, error}`.
+  def tolerant_parse(source, cursor_position \\ nil, opts \\ []) do
+    cursor =
+      case cursor_position do
+        {line, column} when is_integer(line) and is_integer(column) -> cursor_position
+        _ -> nil
+      end
+
+    # honor caller-supplied parser options that toxic2 understands (e.g.
+    # `:existing_atoms_only`, `:literal_encoder`); the rest of the classic
+    # `Code.string_to_quoted` options have no toxic2 equivalent and are dropped,
+    # as toxic2 itself ignores them. token_metadata/range are managed here.
+    extra_parser_options =
+      opts
+      |> Keyword.get(:parser_options, [])
+      |> Keyword.take([:existing_atoms_only, :literal_encoder])
+
+    parser_options =
+      if cursor, do: [token_metadata: true, range: true], else: [token_metadata: true]
+
+    parser_options = Keyword.merge(parser_options, extra_parser_options)
+
+    {ast, diagnostics} = Toxic2.parse_to_ast(source, parser_options)
+
+    ast =
+      if cursor do
+        ast |> position_error_nodes(diagnostics) |> Cursor.mark(cursor, opts)
+      else
+        ast
+      end
+
+    ast = neutralize_errors(ast, diagnostics)
+
+    error = if Enum.any?(diagnostics, &(elem(&1, 2) == :error)), do: {:error, :parse_error}
+
+    {ast, error}
+  end
+
+  # Attach a source range to each `{:__error__, meta, %{diag_ids: ids}}` node
+  # from its diagnostic span (toxic2 error nodes carry no position of their own).
+  # This lets the cursor walk locate a hole even when it is nested where the
+  # surrounding node's range does not reach (e.g. `@type x :: [`).
+  defp position_error_nodes(ast, diagnostics) do
+    by_id = Map.new(diagnostics, fn diagnostic -> {elem(diagnostic, 0), diagnostic} end)
+    position_error_nodes(ast, by_id, :walk)
+  end
+
+  defp position_error_nodes({:__error__, meta, %{diag_ids: diag_ids} = args}, by_id, :walk) do
+    case Map.get(by_id, List.first(diag_ids || [])) do
+      {_id, _phase, _severity, _code, sl, sc, el, ec, _details} ->
+        {:__error__, [range: {{sl, sc}, {el, ec}}, line: sl, column: sc] ++ meta, args}
+
+      _ ->
+        {:__error__, meta, args}
+    end
+  end
+
+  defp position_error_nodes({form, meta, args}, by_id, :walk),
+    do: {position_error_nodes(form, by_id, :walk), meta, position_error_nodes(args, by_id, :walk)}
+
+  defp position_error_nodes({left, right}, by_id, :walk),
+    do: {position_error_nodes(left, by_id, :walk), position_error_nodes(right, by_id, :walk)}
+
+  defp position_error_nodes(list, by_id, :walk) when is_list(list),
+    do: Enum.map(list, &position_error_nodes(&1, by_id, :walk))
+
+  defp position_error_nodes(other, _by_id, :walk), do: other
+
+  # toxic2 `{:__error__, meta, %{diag_ids: ids}}` nodes are placeholders for
+  # "expected more input here". They are recovery artifacts, never real AST, so
+  # we drop them from any list (argument lists, containers, statement blocks) -
+  # keeping them would inflate call/definition arities. A cursor that needs to
+  # live in such a hole has already been substituted by `Cursor.mark/3` before
+  # this runs. Any stray error node not in a list is rewritten to a harmless
+  # `{:__error__, meta, []}` (its map args crash `Macro` traversal and the
+  # compiler). Range metadata, only needed transiently for cursor marking, is
+  # stripped here too so the AST keeps the usual `line:`/`column:` shape.
+  # `keep_range` (default false) controls whether the `range:` meta survives -
+  # metadata building wants it stripped (classic shape), range-aware consumers
+  # want it kept (see `parse_to_neutralized_ast/2`).
+  def neutralize_errors(ast, diagnostics, keep_range \\ false) do
+    by_id = Map.new(diagnostics, fn diagnostic -> {elem(diagnostic, 0), diagnostic} end)
+    neutralize(ast, by_id, keep_range)
+  end
+
+  defp neutralize({:__error__, meta, args}, _by_id, keep_range) when not is_list(args),
+    do: {:__error__, strip_range(meta, keep_range), []}
+
+  defp neutralize({form, meta, args}, by_id, keep_range) when is_list(args) do
+    args = if call_form?(form), do: clean_call_args(args, by_id), else: args
+
+    {neutralize(form, by_id, keep_range), strip_range(meta, keep_range),
+     Enum.map(args, &neutralize(&1, by_id, keep_range))}
+  end
+
+  defp neutralize({form, meta, args}, by_id, keep_range),
+    do:
+      {neutralize(form, by_id, keep_range), strip_range(meta, keep_range),
+       neutralize(args, by_id, keep_range)}
+
+  defp neutralize({left, right}, by_id, keep_range),
+    do: {neutralize(left, by_id, keep_range), neutralize(right, by_id, keep_range)}
+
+  defp neutralize(list, by_id, keep_range) when is_list(list),
+    do: Enum.map(list, &neutralize(&1, by_id, keep_range))
+
+  defp neutralize(other, _by_id, _keep_range), do: other
+
+  # Clean a call's argument list of error artifacts so its arity matches user
+  # intent: always drop the "missing closing delimiter" sentinel; if the only
+  # remaining args are error placeholders (an empty `foo(`) drop them too so the
+  # arity is 0. A nascent argument after real ones (a trailing comma, `foo(a,`)
+  # is kept so the arity reflects the slot being typed.
+  defp clean_call_args(args, by_id) do
+    args = Enum.reject(args, &missing_close_error?(&1, by_id))
+    if args != [] and Enum.all?(args, &error_node?/1), do: [], else: args
+  end
+
+  defp missing_close_error?({:__error__, _meta, %{diag_ids: diag_ids}}, by_id) do
+    case Map.get(by_id, List.first(diag_ids || [])) do
+      {_id, _phase, _severity, :expected_comma_or_close, _sl, _sc, _el, _ec, _details} -> true
+      _ -> false
+    end
+  end
+
+  defp missing_close_error?(_node, _by_id), do: false
+
+  defp error_node?({:__error__, _meta, _args}), do: true
+  defp error_node?(_node), do: false
+
+  defp call_form?({:., _meta, _args}), do: true
+
+  defp call_form?(form) when is_atom(form),
+    do:
+      form not in [:__block__, :__aliases__, :__cursor__, :%{}, :{}, :<<>>, :%, :^] and
+        not Macro.operator?(form, 1) and not Macro.operator?(form, 2)
+
+  defp call_form?(_form), do: false
+
+  defp strip_range(meta, true), do: meta
+  defp strip_range(meta, _keep_range) when is_list(meta), do: Keyword.delete(meta, :range)
+  defp strip_range(meta, _keep_range), do: meta
+
   def try_fix_line_not_found_by_inserting_marker(
-        modified_source,
+        source,
         {cursor_line_number, _} = cursor_position
       )
       when is_integer(cursor_line_number) do
-    with {:ok, ast, _modified_source, _error} <-
-           modified_source
-           |> fix_line_not_found(cursor_line_number)
-           |> do_string_to_ast(
-             0,
-             false,
-             cursor_position,
-             modified_source,
-             nil,
-             @default_parser_options
-           ) do
-      acc = MetadataBuilder.build(ast)
+    # last resort when the cursor lands on a line with no environment: append a
+    # textual marker to that line so a `__cursor__` node is produced there
+    modified_source = fix_line_not_found(source, cursor_line_number)
+    {ast, _error} = tolerant_parse(modified_source)
+    acc = MetadataBuilder.build(ast, cursor_position)
 
-      if Map.has_key?(acc.lines_to_env, cursor_line_number) do
-        {:ok, acc}
-      else
-        :not_found
-      end
+    if acc.cursor_env != nil or Map.has_key?(acc.lines_to_env, cursor_line_number) do
+      {:ok, acc}
+    else
+      :not_found
     end
   end
 
@@ -201,322 +314,6 @@ defmodule ElixirSense.Core.Parser do
     }
   end
 
-  defp fix_parse_error(
-         source,
-         _cursor_position,
-         {:error, {meta, {"\"" <> <<_::bytes-size(1)>> <> "\" is missing terminator" <> _, _}, _}}
-       ) do
-    line = get_line_from_meta(meta)
-
-    source
-    |> replace_line_with_marker(line)
-  end
-
-  defp fix_parse_error(
-         source,
-         _cursor_position,
-         {:error, {meta, {message, _}, "do"}}
-       )
-       when message in ["unexpected reserved word: "] do
-    line_number = get_line_from_meta(meta)
-
-    source
-    |> Source.split_lines()
-    |> List.update_at(line_number - 1, fn line ->
-      # try to replace token do with do: marker
-      line
-      |> String.replace("do", "do: " <> marker(), global: false)
-    end)
-    |> Enum.join("\n")
-  end
-
-  defp fix_parse_error(
-         source,
-         {cursor_line_number, _},
-         {:error, {meta, "unexpected reserved word: ", "end"}}
-       )
-       when is_integer(cursor_line_number) do
-    # try to insert closing before end
-    end_line = Keyword.fetch!(meta, :end_line)
-
-    closing_delimiter =
-      case Keyword.fetch!(meta, :opening_delimiter) do
-        :"<<" -> ">>"
-        :"{" -> "}"
-        :"[" -> "]"
-        :"(" -> ")"
-      end
-
-    source
-    |> Source.split_lines()
-    |> List.insert_at(end_line - 1, closing_delimiter)
-    |> Enum.join("\n")
-  end
-
-  defp fix_parse_error(
-         source,
-         {cursor_line_number, _},
-         {:error, {meta, {message, text}, token}}
-       )
-       when is_integer(cursor_line_number) and
-              message in ["unexpected token: ", "unexpected reserved word: "] do
-    line_number = get_line_from_meta(meta)
-
-    terminator =
-      case Regex.run(~r/terminator\s\"([^\s\"]+)/u, text) do
-        [_, terminator] -> terminator
-        nil -> nil
-      end
-
-    if terminator != nil do
-      source
-      |> Source.split_lines()
-      |> List.update_at(cursor_line_number - 1, fn line ->
-        if cursor_line_number != line_number do
-          # try to close the line with missing terminator
-          line <> " " <> terminator
-        else
-          # try to prepend first occurrence of unexpected token with missing terminator
-          line
-          |> String.replace(token, terminator <> " " <> token, global: false)
-        end
-      end)
-      |> Enum.join("\n")
-    else
-      source
-      |> Source.split_lines()
-      |> List.update_at(line_number - 1, fn line ->
-        # drop unexpected token
-        line
-        |> String.replace(token, "", global: false)
-      end)
-      |> Enum.join("\n")
-    end
-  end
-
-  defp fix_parse_error(
-         source,
-         _cursor_position,
-         {:error, {meta, "unexpected token: ", terminator}}
-       )
-       when terminator in [")", "]", "}", ">>"] do
-    case Keyword.get(meta, :opening_delimiter) do
-      :fn ->
-        end_line = Keyword.fetch!(meta, :end_line)
-
-        source
-        |> Source.split_lines()
-        |> List.update_at(end_line - 1, fn line ->
-          # try to prepend unexpected terminator with end
-          line
-          |> String.replace(terminator, " end" <> terminator, global: false)
-        end)
-        |> Enum.join("\n")
-
-      _ ->
-        source
-    end
-  end
-
-  defp fix_parse_error(
-         source,
-         _cursor_position,
-         {:error, {meta, "syntax" <> _, terminator_quoted}}
-       )
-       when terminator_quoted in ["'end'", "')'", "']'", "'}'", "'>>'"] do
-    line_number = get_line_from_meta(meta)
-    terminator = Regex.replace(~r/[\"\']/u, terminator_quoted, "")
-
-    source
-    |> Source.split_lines()
-    |> List.update_at(line_number - 1, fn line ->
-      # try to prepend unexpected terminator with marker
-      line
-      |> String.replace(terminator, marker() <> " " <> terminator, global: false)
-    end)
-    |> Enum.join("\n")
-  end
-
-  defp fix_parse_error(
-         source,
-         _cursor_position,
-         {:error, {meta, "unexpected expression after keyword list" <> _, token}}
-       ) do
-    line_number = get_line_from_meta(meta)
-    token = Regex.replace(~r/[\"\']/u, token, "")
-
-    source
-    |> Source.split_lines()
-    |> List.update_at(line_number - 1, fn line ->
-      # drop unexpected token
-      line
-      |> String.replace(token, "", global: false)
-    end)
-    |> Enum.join("\n")
-  end
-
-  defp fix_parse_error(source, _cursor_position, {:error, {meta, "syntax" <> _, token}}) do
-    line = get_line_from_meta(meta)
-
-    case source
-         |> Source.split_lines()
-         |> Enum.at(line - 1, "")
-         |> Tokenizer.tokenize()
-         |> Enum.at(-1) do
-      {:identifier, _, ident} when ident in [:with, :for] ->
-        # strip_before(source, line, token |> String.replace("'", ""))
-        source
-        |> Source.split_lines()
-        |> List.replace_at(line - 1, "#{ident} \\")
-        |> Enum.join("\n")
-
-      _ ->
-        if Regex.match?(~r/^[\p{L}_][\p{L}\p{N}_@]*[?!]?$/u, token) do
-          remove_line(source, line)
-        else
-          replace_line_with_marker(source, line)
-        end
-    end
-  end
-
-  defp fix_parse_error(
-         source,
-         _cursor_position,
-         {:error, {meta, "unexpected operator" <> _, _token}}
-       ) do
-    line = get_line_from_meta(meta)
-    remove_line(source, line)
-  end
-
-  defp fix_parse_error(_, nil, error) do
-    error
-  end
-
-  defp fix_parse_error(
-         source,
-         {cursor_line_number, _},
-         {:error, {meta, text = "missing terminator: " <> _, _}}
-       )
-       when is_integer(cursor_line_number) do
-    line_end = get_line_from_meta(meta)
-
-    terminator =
-      case Regex.run(~r/terminator:\s([^\s]+)/u, text) do
-        [_, terminator] -> terminator
-      end
-
-    line_start =
-      case Regex.run(~r/line\s(\d+)/u, text) do
-        [_, line] -> line |> String.to_integer()
-        nil -> 1
-      end
-
-    if terminator in ["\"", "'", ")", "]", "}", ">>"] do
-      source
-      |> Source.split_lines()
-      |> List.update_at(max(cursor_line_number, line_start) - 1, fn line ->
-        # try to close line with terminator
-        line <> terminator
-      end)
-      |> Enum.join("\n")
-    else
-      compare_mode =
-        case terminator do
-          "\"\"\"" -> :lt
-          _ -> :eq
-        end
-
-      line_indentations =
-        source
-        |> Source.split_lines()
-        |> Enum.map(fn line ->
-          line = normalize_indentation(line)
-          {line, get_indentation_level(line)}
-        end)
-
-      line_indentation_at_start = line_indentations |> Enum.at(line_start - 1) |> elem(1)
-
-      {source, _, missing_end} =
-        line_indentations
-        |> Enum.reduce({[], 1, true}, fn {line, indentation},
-                                         {source_acc, current_line, missing_end} ->
-          {modified_lines, missing_end} =
-            cond do
-              source_acc == [] ->
-                {[line | source_acc], true}
-
-              current_line <= line_start ->
-                {[line | source_acc], true}
-
-              missing_end and line != "" and
-                compare_indentation(compare_mode, indentation, line_indentation_at_start) and
-                  current_line < line_end ->
-                [previous | rest] = source_acc
-
-                replaced_line =
-                  case terminator do
-                    "end" -> previous <> "; " <> marker() <> "; end"
-                    _ -> previous <> " " <> terminator
-                  end
-
-                {[line, replaced_line | rest], false}
-
-              true ->
-                {[line | source_acc], missing_end}
-            end
-
-          {modified_lines, current_line + 1, missing_end}
-        end)
-
-      if missing_end do
-        [terminator | source]
-      else
-        source
-      end
-      |> Enum.reverse()
-      |> Enum.join("\n")
-    end
-  end
-
-  defp fix_parse_error(
-         source,
-         {cursor_line_number, _},
-         {:error, {_meta, text = "missing interpolation terminator: \"}\"" <> _, _}}
-       )
-       when is_integer(cursor_line_number) do
-    line_start =
-      case Regex.run(~r/line\s(\d+)/u, text) do
-        [_, line] -> line |> String.to_integer()
-      end
-
-    source
-    |> Source.split_lines()
-    |> List.update_at(max(cursor_line_number, line_start) - 1, fn line ->
-      # try to close line with terminator
-      line <> "}"
-    end)
-    |> Enum.join("\n")
-  end
-
-  defp fix_parse_error(source, {cursor_line_number, _}, _error)
-       when is_integer(cursor_line_number) do
-    source
-    |> replace_line_with_marker(cursor_line_number)
-  end
-
-  defp compare_indentation(:eq, left, right), do: left == right
-  defp compare_indentation(:lt, left, right), do: left < right
-
-  defp normalize_indentation(line) do
-    line
-    |> String.replace_leading("\t", "  ")
-  end
-
-  def get_indentation_level(line) do
-    trimmed_line = String.trim_leading(line)
-    String.length(line) - String.length(trimmed_line)
-  end
-
   defp fix_line_not_found(source, line_number) when is_integer(line_number) do
     source
     |> Source.split_lines()
@@ -526,24 +323,5 @@ defmodule ElixirSense.Core.Parser do
     |> Enum.join("\n")
   end
 
-  defp replace_line_with_marker(source, line_number) when is_integer(line_number) do
-    # IO.puts :stderr, "REPLACING LINE: #{line}"
-    source
-    |> Source.split_lines()
-    |> List.replace_at(line_number - 1, marker())
-    |> Enum.join("\n")
-  end
-
-  defp remove_line(source, line_number) when is_integer(line_number) do
-    # IO.puts :stderr, "REMOVING LINE: #{line}"
-    source
-    |> Source.split_lines()
-    |> List.delete_at(line_number - 1)
-    |> Enum.join("\n")
-  end
-
   defp marker, do: "(__cursor__())"
-
-  defp get_line_from_meta(meta) when is_integer(meta), do: meta
-  defp get_line_from_meta(meta), do: Keyword.fetch!(meta, :line)
 end

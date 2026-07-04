@@ -24,8 +24,7 @@
   {"lib/elixir_sense/core/compiler/fn.ex", :pattern_match},
   {"lib/elixir_sense/core/normalized/macro/env.ex", :pattern_match},
 
-  # 2. Pre-existing peripheral logic (vendored tokenizer/parser, normalized helpers)
-  {"lib/elixir_sense/core/normalized/tokenizer.ex", :contract_supertype},
-  {"lib/elixir_sense/core/normalized/tokenizer.ex", :pattern_match},
-  {"lib/elixir_sense/core/parser.ex", :guard_fail}
+  # 3. Completion engine ported wholesale from elixir-ls (commit 98e983d). The unreachable `:error`
+  #    clauses in expand_dot_path/expand_aliases are upstream-faithful defensive fallbacks.
+  {"lib/elixir_sense/providers/completion/completion_engine.ex", :pattern_match}
 ]
