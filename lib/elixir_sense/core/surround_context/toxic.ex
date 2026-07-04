@@ -64,9 +64,10 @@ defmodule ElixirSense.Core.SurroundContext.Toxic do
   # exact end-exclusive range, we can resolve this precisely: classify at the cursor and one column
   # to its left, and
   #
-  #   * if the character just left of the cursor is the last character of an alias / var / bare-atom /
-  #     module-attribute leaf, that leaf wins - so the end of `Foo` in `Foo.bar()` resolves to the
-  #     module `Foo`, not the remote call (#1027);
+  #   * if the character just left of the cursor is the last character of an ALIAS leaf, that alias
+  #     wins even over an enclosing dot - so the end of `Foo` in `Foo.bar()` resolves to the module
+  #     `Foo`, not the remote call (#1027). Restricted to aliases so an atom/var LHS such as `:timer`
+  #     in `:timer.sleep(...)` keeps resolving the function;
   #   * otherwise, if the cursor itself resolves to nothing, retry one column left (#1038 - the
   #     trailing edge of a bare symbol or of a whole remote call, e.g. before `,` / `)` / end-of-line).
   #
