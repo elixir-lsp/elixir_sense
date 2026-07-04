@@ -74,16 +74,6 @@ defmodule ElixirSense.Core.Metadata do
     }
   end
 
-  if Version.match?(System.version(), "< 1.18.0-dev") do
-    def container_cursor_to_quoted_options(_trailing_fragment) do
-      [columns: true, token_metadata: true]
-    end
-  else
-    def container_cursor_to_quoted_options(trailing_fragment) do
-      [columns: true, token_metadata: true, trailing_fragment: trailing_fragment]
-    end
-  end
-
   def get_cursor_env(
         metadata,
         position,
@@ -95,57 +85,17 @@ defmodule ElixirSense.Core.Metadata do
         {line, column},
         surround
       ) do
-    {{prefix, needle, suffix}, source_with_cursor} =
-      case surround do
-        {{begin_line, begin_column}, {end_line, end_column}} ->
-          [prefix, needle, suffix] =
-            ElixirSense.Core.Source.split_at(metadata.source, [
-              {begin_line, begin_column},
-              {end_line, end_column}
-            ])
+    # the cursor environment is derived by marking the AST node at the cursor
+    # (located via toxic2's source ranges) - a separate parse from the one that
+    # produced `metadata`, so the marker never pollutes the calls/vars/references
+    # metadata. A `surround` range means the caller is navigating an existing
+    # symbol (definition/hover/references), so we keep that token in the tree.
+    opts = if surround == nil, do: [], else: [preserve_token: true]
 
-          source_with_cursor = prefix <> "__cursor__(#{needle})" <> suffix
-
-          {{prefix, needle, suffix}, source_with_cursor}
-
-        nil ->
-          [prefix, suffix] =
-            ElixirSense.Core.Source.split_at(metadata.source, [
-              {line, column}
-            ])
-
-          source_with_cursor = prefix <> "__cursor__()" <> suffix
-
-          {{prefix, "", suffix}, source_with_cursor}
-      end
-
-    {meta, cursor_env} =
-      case Code.string_to_quoted(source_with_cursor,
-             columns: true,
-             token_metadata: true,
-             emit_warnings: false
-           ) do
-        {:ok, ast} ->
-          MetadataBuilder.build(ast).cursor_env || {[], nil}
-
-        _ ->
-          {[], nil}
-      end
-
-    {_meta, cursor_env} =
-      if cursor_env != nil do
-        {meta, cursor_env}
-      else
-        # IO.puts(prefix <> "|")
-        options = container_cursor_to_quoted_options(needle <> suffix)
-
-        case Code.Fragment.container_cursor_to_quoted(prefix, options) do
-          {:ok, ast} ->
-            MetadataBuilder.build(ast).cursor_env || {[], nil}
-
-          _ ->
-            {[], nil}
-        end
+    cursor_env =
+      case ElixirSense.Core.Parser.cursor_env(metadata.source, {line, column}, opts) do
+        {_meta, env} -> env
+        nil -> nil
       end
 
     if cursor_env != nil do

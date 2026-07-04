@@ -1784,6 +1784,21 @@ defmodule ElixirSense.Core.Compiler do
          meta,
          Kernel,
          :defmodule,
+         [alias, {:__cursor__, _, cursor_args} = cursor],
+         callback,
+         state,
+         env
+       )
+       when is_list(cursor_args) do
+    # tolerant parsers may produce a cursor in place of the do block
+    # expand as if the cursor was the module body
+    expand_macro(meta, Kernel, :defmodule, [alias, [do: cursor]], callback, state, env)
+  end
+
+  defp expand_macro(
+         meta,
+         Kernel,
+         :defmodule,
          [alias, [do: block]] = _args,
          _callback,
          state,

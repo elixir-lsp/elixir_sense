@@ -38,7 +38,9 @@ defmodule ElixirSense.Providers.Completion.Reducers.Record do
           :functions,
           :macros,
           :variables,
-          :attributes
+          :attributes,
+          :structs_fields,
+          :bitstring_options
         ]
 
         {:cont, %{acc | result: fields, reducers: reducers}}
@@ -59,9 +61,6 @@ defmodule ElixirSense.Providers.Completion.Reducers.Record do
 
     # check if we are inside local or remote call arguments and parameter is 0, 1 or 2
     # record fields can specified on 0, 1 and 2 position in the argument list
-    # TODO implement retrieval from docs chunks on 1.18
-    # right now only local buffer records are supported as there is no suitable API for introspection
-    # @__records__ is compile time only attribute and accessing it would require a tracer
     with %{
            candidate: {m, f},
            npar: npar,
@@ -142,7 +141,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.Record do
     with %TypeInfo{specs: [spec | _]} <-
            types[{module, record, 0}] || types[{module, :"#{record}_t", 0}] ||
              types[{module, :t, 0}],
-         {:ok, ast} <- Code.string_to_quoted(spec, emit_warnings: false),
+         {:ok, ast} <- Code.string_to_quoted(spec),
          {:@, _,
           [
             {kind, _,
@@ -158,7 +157,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.Record do
                 ]}
              ]}
           ]}
-         when kind in [:type, :typep, :opaque] <- ast do
+         when kind in [:type, :typep, :opaque, :nominal] <- ast do
       field_types
     else
       _ ->
@@ -172,7 +171,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.Record do
           end
 
         with [info | _] <- candidates,
-             {:ok, ast} <- Code.string_to_quoted(info.spec, emit_warnings: false),
+             {:ok, ast} <- Code.string_to_quoted(info.spec),
              {:@, _,
               [
                 {kind, _,
@@ -188,7 +187,7 @@ defmodule ElixirSense.Providers.Completion.Reducers.Record do
                     ]}
                  ]}
               ]}
-             when kind in [:type, :typep, :opaque] <- ast do
+             when kind in [:type, :typep, :opaque, :nominal] <- ast do
           field_types
           |> Enum.map(fn
             {:"::", _, [{name, _, context}, type]} when is_atom(name) and is_atom(context) ->

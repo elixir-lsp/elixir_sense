@@ -74,7 +74,7 @@ defmodule ElixirSense.Providers.Hover.Docs do
 
   @spec docs(String.t(), pos_integer, pos_integer, keyword()) :: docs_info | nil
   def docs(code, line, column, options \\ []) do
-    case Code.Fragment.surround_context(code, {line, column}) do
+    case ElixirSense.Core.SurroundContext.Toxic.surround_context(code, {line, column}) do
       :none ->
         nil
 

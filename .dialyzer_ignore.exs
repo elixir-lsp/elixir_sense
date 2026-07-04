@@ -46,6 +46,10 @@
   {"lib/elixir_sense/core/normalized/tokenizer.ex", :pattern_match},
   {"lib/elixir_sense/core/parser.ex", :guard_fail},
 
+  # 3b. Completion engine ported wholesale from elixir-ls (commit 98e983d). The unreachable `:error`
+  #     clauses in expand_dot_path/expand_aliases are upstream-faithful defensive fallbacks.
+  {"lib/elixir_sense/providers/completion/completion_engine.ex", :pattern_match},
+
   # 4. ETS opaque-type boundary (see note above)
   {"lib/elixir_sense/core/elixir_types.ex", :call_without_opaque}
 ]
