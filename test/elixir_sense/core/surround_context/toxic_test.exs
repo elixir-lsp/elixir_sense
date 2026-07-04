@@ -25,7 +25,6 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
       {":erlang.foo", 9},
       {"a.b.c", 3},
       {"a.b.c", 5},
-      {"&1", 2},
       {"foo(1, 2)", 2},
       {"String.length(s)", 9},
       {"@attr.method", 9},
@@ -48,6 +47,19 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
 
         assert Toxic.surround_context(source, {1, column}) ==
                  Code.Fragment.surround_context(source, {1, column})
+      end
+    end
+
+    # `Code.Fragment.surround_context/2` gained the `:capture_arg` context in Elixir 1.18. toxic2
+    # parses `&1` structurally, so Toxic returns it on every supported version; only assert parity
+    # with the (version-dependent) oracle where the oracle also produces it.
+    test "&1 capture arg" do
+      assert %{context: {:capture_arg, ~c"&1"}, begin: {1, 1}, end: {1, 3}} =
+               Toxic.surround_context("&1", {1, 2})
+
+      if Version.match?(System.version(), ">= 1.18.0") do
+        assert Toxic.surround_context("&1", {1, 2}) ==
+                 Code.Fragment.surround_context("&1", {1, 2})
       end
     end
   end
@@ -135,16 +147,31 @@ defmodule ElixirSense.Core.SurroundContext.ToxicTest do
     end
 
     test "keyword keys classify as :key (and :none on the colon)" do
-      for {source, col} <- [
-            {"[key: 1]", 3},
-            {"[key: 1]", 5},
-            {"%{key: 1}", 4},
-            {"foo(key: 1)", 7},
-            {"[a: 1, bb: 2]", 8}
-          ] do
-        assert Toxic.surround_context(source, {1, col}) ==
-                 Code.Fragment.surround_context(source, {1, col}),
-               "mismatch for #{inspect(source)} @#{col}"
+      # Each entry: {source, column, expected Toxic context}. `Code.Fragment` only classifies
+      # keyword keys as `{:key, _}` from Elixir 1.18 on, so Toxic's own classification is asserted on
+      # every version and parity with the oracle is only checked on >= 1.18.
+      cases = [
+        {"[key: 1]", 3, {:key, ~c"key"}},
+        {"[key: 1]", 5, :none},
+        {"%{key: 1}", 4, {:key, ~c"key"}},
+        {"foo(key: 1)", 7, {:key, ~c"key"}},
+        {"[a: 1, bb: 2]", 8, {:key, ~c"bb"}}
+      ]
+
+      modern? = Version.match?(System.version(), ">= 1.18.0")
+
+      for {source, col, expected} <- cases do
+        result = Toxic.surround_context(source, {1, col})
+
+        case expected do
+          :none -> assert result == :none, "expected :none for #{inspect(source)} @#{col}"
+          ctx -> assert %{context: ^ctx} = result, "mismatch for #{inspect(source)} @#{col}"
+        end
+
+        if modern? do
+          assert result == Code.Fragment.surround_context(source, {1, col}),
+                 "oracle mismatch for #{inspect(source)} @#{col}"
+        end
       end
     end
 

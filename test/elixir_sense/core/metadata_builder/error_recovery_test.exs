@@ -453,30 +453,16 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
-      if Version.match?(System.version(), ">= 1.18.0") do
-        test "cursor in left side of catch clause after type" do
-          code = """
-          try do
-            bar()
-          catch
-            x, \
-          """
+      test "cursor in left side of catch clause after type" do
+        code = """
+        try do
+          bar()
+        catch
+          x, \
+        """
 
-          assert {_meta, env} = get_cursor_env(code, false, " -> :ok\nend")
-          assert Enum.any?(env.vars, &(&1.name == :x))
-        end
-      else
-        test "cursor in left side of catch clause after type" do
-          code = """
-          try do
-            bar()
-          catch
-            x, \
-          """
-
-          assert {_meta, env} = get_cursor_env(code)
-          assert Enum.any?(env.vars, &(&1.name == :x))
-        end
+        assert {_meta, env} = get_cursor_env(code, false, " -> :ok\nend")
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
@@ -931,37 +917,19 @@ defmodule ElixirSense.Core.MetadataBuilder.ErrorRecoveryTest do
       fn \
       """
 
-      if Version.match?(System.version(), ">= 1.18.0") do
-        assert {_meta, env} = get_cursor_env(code, false, " -> :ok end")
-        assert Enum.any?(env.vars, &(&1.name == :x))
-      else
-        assert {_meta, env} = get_cursor_env(code)
-
-        assert Enum.any?(env.vars, &(&1.name == :x))
-      end
+      assert {_meta, env} = get_cursor_env(code, false, " -> :ok end")
+      assert Enum.any?(env.vars, &(&1.name == :x))
     end
 
     if Version.match?(System.version(), ">= 1.17.0") do
-      if Version.match?(System.version(), ">= 1.18.0") do
-        test "incomplete clause left side guard" do
-          code = """
-          fn
-            x when \
-          """
+      test "incomplete clause left side guard" do
+        code = """
+        fn
+          x when \
+        """
 
-          assert {_meta, env} = get_cursor_env(code, false, " -> :ok\nend")
-          assert Enum.any?(env.vars, &(&1.name == :x))
-        end
-      else
-        test "incomplete clause left side guard" do
-          code = """
-          fn
-            x when \
-          """
-
-          assert {_meta, env} = get_cursor_env(code)
-          assert Enum.any?(env.vars, &(&1.name == :x))
-        end
+        assert {_meta, env} = get_cursor_env(code, false, " -> :ok\nend")
+        assert Enum.any?(env.vars, &(&1.name == :x))
       end
     end
 
