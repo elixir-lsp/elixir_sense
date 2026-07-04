@@ -75,6 +75,7 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
   alias ElixirSense.Core.State.StructInfo
   alias ElixirSense.Core.Struct
   alias ElixirSense.Core.TypeInfo
+  alias ElixirSense.Core.TypePresentation
 
   alias ElixirSense.Providers.Utils.Matcher
 
@@ -375,8 +376,9 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
          opts
        ) do
     filter = struct_module_filter(only_structs, env, metadata)
+    binding = Binding.from_env(env, metadata, cursor_position)
 
-    case expand_dot_path(path, env, metadata, cursor_position) do
+    case expand_dot_path(path, binding, env, metadata) do
       {:ok, {:atom, mod}} when hint == "" ->
         if match?({:module_attribute, _attribute}, path) and not match?({_, _}, env.function) do
           expand_require(mod, hint, exact?, env, metadata, cursor_position)
@@ -408,11 +410,14 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
     end
   end
 
+  # Expand a dot-path to a resolved shape. Accepts a pre-built `Binding.t()` so
+  # the caller (expand_dot/8) builds Binding.from_env exactly once per request,
+  # even for deeply-nested paths like `a.b.c` that recurse through this function.
   defp expand_dot_path(
          {:var, ~c"__MODULE__"},
+         _binding,
          %State.Env{} = env,
-         %Metadata{} = _metadata,
-         _cursor_position
+         %Metadata{} = _metadata
        ) do
     if env.module != nil and Introspection.elixir_module?(env.module) do
       {:ok, {:atom, env.module}}
@@ -421,24 +426,24 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
     end
   end
 
-  defp expand_dot_path({:var, var}, %State.Env{} = env, %Metadata{} = metadata, cursor_position) do
-    value_from_binding({:variable, List.to_atom(var), :any}, env, metadata, cursor_position)
+  defp expand_dot_path({:var, var}, binding, %State.Env{} = _env, %Metadata{} = _metadata) do
+    expand_with_binding({:variable, List.to_atom(var), :any}, binding)
   end
 
   defp expand_dot_path(
          {:module_attribute, attribute},
-         %State.Env{} = env,
-         %Metadata{} = metadata,
-         cursor_position
+         binding,
+         %State.Env{} = _env,
+         %Metadata{} = _metadata
        ) do
-    value_from_binding({:attribute, List.to_atom(attribute)}, env, metadata, cursor_position)
+    expand_with_binding({:attribute, List.to_atom(attribute)}, binding)
   end
 
   defp expand_dot_path(
          {:alias, hint},
+         _binding,
          %State.Env{} = env,
-         %Metadata{} = _metadata,
-         _cursor_position
+         %Metadata{} = _metadata
        ) do
     # value_from_alias/2 always returns {:alias, _} (its internal :error case maps to
     # {:alias, Module.concat(list)}), so there is no :error branch to handle here.
@@ -454,9 +459,9 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
 
   defp expand_dot_path(
          {:alias, {:local_or_var, var}, hint},
+         _binding,
          %State.Env{} = env,
-         %Metadata{} = _metadata,
-         _cursor_position
+         %Metadata{} = _metadata
        ) do
     if var == ~c"__MODULE__" and env.module != nil and Introspection.elixir_module?(env.module) do
       alias_suffix = hint |> List.to_string() |> String.split(".") |> Enum.map(&String.to_atom/1)
@@ -469,18 +474,14 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
 
   defp expand_dot_path(
          {:alias, {:module_attribute, attribute}, hint},
-         %State.Env{} = env,
-         %Metadata{} = metadata,
-         cursor_position
+         binding,
+         %State.Env{} = _env,
+         %Metadata{} = _metadata
        ) do
-    with true <- match?({_, _}, env.function),
-         {:ok, {:atom, atom}} <-
-           value_from_binding(
-             {:attribute, List.to_atom(attribute)},
-             env,
-             metadata,
-             cursor_position
-           ),
+    # Resolve the attribute value through the Binding engine (works both inside
+    # and outside function context), then extend the alias with the hint suffix.
+    with {:ok, {:atom, atom}} <-
+           expand_with_binding({:attribute, List.to_atom(attribute)}, binding),
          true <- Introspection.elixir_module?(atom) do
       alias_suffix =
         hint |> List.to_string() |> String.split(".") |> Enum.map(&String.to_atom/1)
@@ -494,45 +495,49 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
 
   defp expand_dot_path(
          {:alias, _, _hint},
+         _binding,
          %State.Env{} = _env,
-         %Metadata{} = _metadata,
-         _cursor_position
+         %Metadata{} = _metadata
        ) do
     :error
   end
 
   defp expand_dot_path(
          {:unquoted_atom, var},
+         _binding,
          %State.Env{} = _env,
-         %Metadata{} = _metadata,
-         _cursor_position
+         %Metadata{} = _metadata
        ) do
     {:ok, {:atom, List.to_atom(var)}}
   end
 
   defp expand_dot_path(
          {:dot, parent, call},
+         binding,
          %State.Env{} = env,
-         %Metadata{} = metadata,
-         cursor_position
+         %Metadata{} = metadata
        ) do
-    case expand_dot_path(parent, env, metadata, cursor_position) do
+    case expand_dot_path(parent, binding, env, metadata) do
       {:ok, expanded} ->
-        value_from_binding(
-          {:call, expanded, List.to_atom(call), []},
-          env,
-          metadata,
-          cursor_position
-        )
+        expand_with_binding({:call, expanded, List.to_atom(call), []}, binding)
 
       :error ->
         :error
     end
   end
 
-  defp expand_dot_path(:expr, %State.Env{} = _env, %Metadata{} = _metadata, _cursor_position) do
+  defp expand_dot_path(:expr, _binding, %State.Env{} = _env, %Metadata{} = _metadata) do
     # TODO expand expression
     :error
+  end
+
+  # Expand a binding_ast using a pre-built Binding struct. Returns {:ok, value} or :error.
+  defp expand_with_binding(binding_ast, %Binding{} = binding) do
+    case Binding.expand(binding, binding_ast) do
+      :none -> :error
+      nil -> :error
+      other -> {:ok, other}
+    end
   end
 
   defp expand_expr(%State.Env{} = env, %Metadata{} = metadata, cursor_position, opts) do
@@ -2011,7 +2016,7 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
           raise "unexpected #{inspect(other)} for hint #{inspect(hint)}"
       end
 
-    for {key, value} when is_atom(key) <- fields,
+    for {key, value} when is_atom(key) and value != :not_set <- fields,
         key_str = Atom.to_string(key),
         not Regex.match?(~r/^[A-Z]/u, key_str),
         Matcher.match?(key_str, hint) do
@@ -2029,12 +2034,27 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
         value_is_map: value_is_map,
         origin: if(subtype == :struct_field and origin != nil, do: inspect(origin)),
         call?: true,
-        type_spec: map_field_spec(key, types, origin),
+        # Prefer the declared typespec; fall back to the inferred field type
+        # rendered from the resolved receiver shape (e.g. for plain maps, or
+        # struct fields without a @type).
+        type_spec: map_field_spec(key, types, origin) || rendered_field_type(value),
         summary: doc,
         metadata: meta
       }
     end
     |> Enum.sort_by(& &1.name)
+  end
+
+  # Best-effort fallback field type rendered from the resolved receiver shape
+  # (plain maps, or struct fields without a declared @type). map_field_spec/3
+  # produces a string, so render to text here as well; nil when the shape
+  # carries nothing renderable or only uninformative noise (term()/none()/
+  # dynamic()), matching the inlay-hint suppression policy.
+  defp rendered_field_type(value) do
+    case TypePresentation.render(value) do
+      {:ok, text} when text not in ["term()", "none()", "dynamic()"] -> text
+      _ -> nil
+    end
   end
 
   # Returns {doc, metadata} for a struct module so struct-field completions can

@@ -100,6 +100,20 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       assert result == %{{:x, 0} => {:atom, :foo}}
     end
 
+    test "infers type from strict equality: === atom (Erlang =:=)" do
+      # `===` expands to the Erlang `=:=` BIF; it must refine like `==`.
+      guard_expr = quote(do: x === :foo) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:atom, :foo}}
+    end
+
+    test "infers union type from membership: x in [atoms]" do
+      # In guards `in` expands to an `orelse` chain of `=:=` comparisons.
+      guard_expr = quote(do: x in [:a, :b]) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:union, [atom: :a, atom: :b]}}
+    end
+
     test "infers type from simple guard: == alias" do
       guard_expr = quote(do: x == Some.Mod) |> expand()
       result = Guard.type_information_from_guards(guard_expr)
@@ -121,7 +135,9 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
     test "infers type from simple guard: == map" do
       guard_expr = quote(do: x == %{a: :b}) |> expand()
       result = Guard.type_information_from_guards(guard_expr)
-      assert result == %{{:x, 0} => {:map, [a: {:atom, :b}], nil}}
+      # `%{a: :b}` here is an EXPRESSION (the RHS of `==`), so it is `:closed`
+      # (literal-complete): x equals exactly that map.
+      assert result == %{{:x, 0} => {:map, [a: {:atom, :b}], :closed}}
     end
 
     test "infers type from simple guard: == tuple empty" do
@@ -164,6 +180,49 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       assert result == %{{:x, 0} => :list}
     end
 
+    test "length(x) > 0 infers a non-empty list" do
+      assert Guard.type_information_from_guards(quote(do: length(x) > 0) |> expand()) ==
+               %{{:x, 0} => {:nonempty_list, nil}}
+
+      assert Guard.type_information_from_guards(quote(do: length(x) >= 1) |> expand()) ==
+               %{{:x, 0} => {:nonempty_list, nil}}
+
+      # A plain length comparison that doesn't imply non-empty stays a list.
+      # Returns {:list, nil} (not bare :list) because it now hits the direct
+      # comparison clause rather than falling through to the is_list/length base
+      # case. {:list, nil} and :list both represent "any proper list"; the change
+      # in representation is a side-effect of the task-#4 operator-coverage fix.
+      assert Guard.type_information_from_guards(quote(do: length(x) < 3) |> expand()) ==
+               %{{:x, 0} => {:list, nil}}
+    end
+
+    # Regression for task #4: flipped comparisons must invert the operator.
+    # `5 > length(x)` means length(x) < 5, which does NOT imply non-empty.
+    # Bug was: the flip clause delegated `guard_predicate_type(:>, [length(x), 5])`
+    # without inversion, so nonempty_length?(:>, 5) returned true → wrong.
+    test "5 > length(x) does NOT produce non-empty (just {:list, nil})" do
+      # size on left, should be treated as length(x) < 5 — not non-empty
+      result = Guard.type_information_from_guards(quote(do: 5 > length(x)) |> expand())
+      assert result == %{{:x, 0} => {:list, nil}}
+    end
+
+    test "0 < length(x) produces non-empty list (common spelling)" do
+      # `0 < length(x)` is equivalent to `length(x) > 0`, must infer non-empty
+      result = Guard.type_information_from_guards(quote(do: 0 < length(x)) |> expand())
+      assert result == %{{:x, 0} => {:nonempty_list, nil}}
+    end
+
+    test "length(x) >= 0 does not produce non-empty (zero is allowed)" do
+      result = Guard.type_information_from_guards(quote(do: length(x) >= 0) |> expand())
+      assert result == %{{:x, 0} => {:list, nil}}
+    end
+
+    test "1 <= length(x) produces non-empty list" do
+      # `1 <= length(x)` flips to `length(x) >= 1` which implies non-empty
+      result = Guard.type_information_from_guards(quote(do: 1 <= length(x)) |> expand())
+      assert result == %{{:x, 0} => {:nonempty_list, nil}}
+    end
+
     test "infers type from guard with list: hd/1 and tl/1" do
       guard_expr = quote(do: hd(x) == 1 and tl(x) == [2]) |> expand
       result = Guard.type_information_from_guards(guard_expr)
@@ -192,6 +251,25 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       result = Guard.type_information_from_guards(guard_expr)
       assert result == %{{:x, 0} => {:map, [{:key, nil}], nil}}
     end
+
+    # Regression for task #28: non-atom map keys must be stored with the
+    # `{:domain, key_type}` encoding matching type_inference.ex get_fields_type,
+    # so that covers?/same_keys?/map_key lookup see a single spelling.
+    # Bug was: guard.ex stored raw `{"a", nil}` / `{1, nil}` while the rest
+    # of the codebase uses `{{:domain, {:binary, "a"}}, nil}` etc.
+    test "is_map_key with string key produces domain-key encoding" do
+      guard_expr = quote(do: is_map_key(x, "akey")) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      # Must match get_fields_type encoding: {{:domain, {:binary, "akey"}}, nil}
+      assert result == %{{:x, 0} => {:map, [{{:domain, {:binary, "akey"}}, nil}], nil}}
+    end
+
+    test "is_map_key with integer key produces domain-key encoding" do
+      guard_expr = quote(do: is_map_key(x, 42)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      # Must match get_fields_type encoding: {{:domain, {:integer, 42}}, nil}
+      assert result == %{{:x, 0} => {:map, [{{:domain, {:integer, 42}}, nil}], nil}}
+    end
   end
 
   describe "type_information_from_guards not" do
@@ -199,6 +277,20 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       guard_expr = quote(do: not is_number(x)) |> expand()
       result = Guard.type_information_from_guards(guard_expr)
       assert result == %{{:x, 0} => nil}
+    end
+
+    test "negative is_map_key records the key as :not_set" do
+      guard_expr = quote(do: not is_map_key(x, :foo)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:map, [foo: :not_set], nil}}
+    end
+
+    # Regression for task #28: not is_map_key with non-atom key must also
+    # produce the domain-key encoding for :not_set facts.
+    test "negative is_map_key with string key uses domain-key encoding" do
+      guard_expr = quote(do: not is_map_key(x, "foo")) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:map, [{{:domain, {:binary, "foo"}}, :not_set}], nil}}
     end
 
     # for simplicity we do not traverse not guards in the guard tree
@@ -240,7 +332,23 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
 
       result = Guard.type_information_from_guards(guard)
 
-      assert result == %{{:x, 1} => :number, {:y, 0} => :binary}
+      assert result == %{{:x, 1} => :integer, {:y, 0} => :binary}
+    end
+
+    test "div constrains both arguments to integer" do
+      guard = quote(do: div(x, y) == 0) |> expand()
+
+      result = Guard.type_information_from_guards(guard)
+
+      assert result == %{{:x, 1} => :integer, {:y, 0} => :integer}
+    end
+
+    test "rem constrains both arguments to integer" do
+      guard = quote(do: rem(x, y) == 0) |> expand()
+
+      result = Guard.type_information_from_guards(guard)
+
+      assert result == %{{:x, 1} => :integer, {:y, 0} => :integer}
     end
   end
 
@@ -249,7 +357,7 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       guard = quote(do: is_integer(x) or is_binary(x)) |> expand()
 
       result = Guard.type_information_from_guards(guard)
-      assert result == %{{:x, 0} => {:union, [:number, :binary]}}
+      assert result == %{{:x, 0} => {:union, [:integer, :binary]}}
     end
 
     test "handles nested or" do
@@ -277,7 +385,7 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
       guard = quote(do: is_integer(x) when is_binary(x)) |> expand()
 
       result = Guard.type_information_from_guards(guard)
-      assert result == %{{:x, 0} => {:union, [:number, :binary]}}
+      assert result == %{{:x, 0} => {:union, [:integer, :binary]}}
     end
   end
 
@@ -318,6 +426,80 @@ defmodule ElixirSense.Core.TypeInference.GuardTest do
 
       result = Guard.type_information_from_guards(guard)
       assert result == %{{:x, 0} => {:map, [{:foo, {:integer, 1}}], []}}
+    end
+  end
+
+  # Round-4 precision improvements
+
+  describe "is_function/2 arity narrowing (task 1)" do
+    test "is_function(x, 2) narrows to {:fun, 2}" do
+      guard_expr = quote(do: is_function(x, 2)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:fun, 2}}
+    end
+
+    test "is_function(x, 0) narrows to {:fun, 0}" do
+      guard_expr = quote(do: is_function(x, 0)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:fun, 0}}
+    end
+
+    test "is_function(x, 5) narrows to {:fun, 5}" do
+      guard_expr = quote(do: is_function(x, 5)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:fun, 5}}
+    end
+
+    test "is_function(x) without arity stays :fun" do
+      guard_expr = quote(do: is_function(x)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => :fun}
+    end
+  end
+
+  describe "is_exception narrowing (task 2)" do
+    test "is_exception(x) narrows to intersection with struct and __exception__ key" do
+      guard_expr = quote(do: is_exception(x)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      # The intersection contains a struct shape and a map with __exception__ key
+      {:intersection, members} = result[{:x, 0}]
+      assert {:struct, [], nil, nil} in members
+      assert {:map, [], nil} in members
+    end
+
+    test "is_exception(x, RuntimeError) puts struct-with-module first in intersection" do
+      guard_expr = quote(do: is_exception(x, RuntimeError)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      {:intersection, [first | _]} = result[{:x, 0}]
+      # The concrete struct must come first for correct TypePresentation rendering
+      assert {:struct, [], {:atom, RuntimeError}, nil} = first
+    end
+
+    test "is_exception(x, ArgumentError) intersection includes struct-with-module" do
+      guard_expr = quote(do: is_exception(x, ArgumentError)) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      {:intersection, members} = result[{:x, 0}]
+      assert {:struct, [], {:atom, ArgumentError}, nil} in members
+    end
+  end
+
+  describe "tuple_size narrowing (task 4 verification)" do
+    test "tuple_size(x) == 2 narrows to 2-tuple with nil element types" do
+      guard_expr = quote(do: tuple_size(x) == 2) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:tuple, 2, [nil, nil]}}
+    end
+
+    test "tuple_size(x) == 0 narrows to 0-tuple" do
+      guard_expr = quote(do: tuple_size(x) == 0) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => {:tuple, 0, []}}
+    end
+
+    test "tuple_size(x) >= 1 falls back to plain :tuple (non-equality)" do
+      guard_expr = quote(do: tuple_size(x) >= 1) |> expand()
+      result = Guard.type_information_from_guards(guard_expr)
+      assert result == %{{:x, 0} => :tuple}
     end
   end
 end

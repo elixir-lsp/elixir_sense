@@ -1,12 +1,14 @@
 defmodule ElixirSense.Core.BindingTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   alias ElixirSense.Core.Binding
+  alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.State.AttributeInfo
   alias ElixirSense.Core.State.VarInfo
   alias ElixirSense.Core.State.ModFunInfo
   alias ElixirSense.Core.State.SpecInfo
   alias ElixirSense.Core.State.StructInfo
   alias ElixirSense.Core.State.TypeInfo
+  alias Module.Types.Descr
 
   @env %Binding{
     functions: __ENV__.functions,
@@ -40,7 +42,8 @@ defmodule ElixirSense.Core.BindingTest do
       safe_fetchers = [:get_env, :compile_env]
 
       Enum.each(unsafe_fetchers, fn fetcher ->
-        assert :none ==
+        # Failed fetch returns nil (unknown) not :none
+        assert nil ==
                  Binding.expand(
                    build_dependency_injection_binding(fetcher),
                    {:attribute, :some_module}
@@ -113,12 +116,173 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "map update" do
-      assert {:map, [{:efg, {:atom, :a}}, {:abc, nil}, {:cde, {:variable, :a, 1}}], nil} ==
+      # Updated keys keep the base map's declaration order; new keys append.
+      assert {:map, [{:abc, nil}, {:cde, {:variable, :a, 1}}, {:efg, {:atom, :a}}], nil} ==
                Binding.expand(
                  @env,
                  {:map, [abc: nil, cde: {:variable, :a, 1}],
                   {:map, [abc: nil, cde: nil, efg: {:atom, :a}], nil}}
                )
+    end
+
+    test "map update with an UNKNOWN base yields an OPEN map" do
+      # Unresolved base must mark result :open (full base type preserved)
+      assert {:map, [a: {:integer, 1}], :open} ==
+               Binding.expand(
+                 @env,
+                 {:map, [a: {:integer, 1}], {:variable, :m, 1}}
+               )
+    end
+
+    test "map update with a KNOWN partial base stays partial (nil tail preserved)" do
+      assert {:map, [a: {:integer, 9}, b: {:integer, 2}], nil} ==
+               Binding.expand(
+                 @env,
+                 {:map, [a: {:integer, 9}], {:map, [a: {:integer, 1}, b: {:integer, 2}], nil}}
+               )
+    end
+
+    test "map update on a :closed base stays :closed" do
+      assert {:map, [a: {:integer, 9}, b: {:integer, 2}], :closed} ==
+               Binding.expand(
+                 @env,
+                 {:map, [a: {:integer, 9}], {:map, [a: {:integer, 1}, b: {:integer, 2}], :closed}}
+               )
+    end
+
+    test "nil-tail (partial) map literal is preserved as-is" do
+      assert {:map, [a: {:integer, 1}], nil} ==
+               Binding.expand(@env, {:map, [a: {:integer, 1}], nil})
+    end
+
+    test ":closed map literal is preserved as-is" do
+      assert {:map, [a: {:integer, 1}], :closed} ==
+               Binding.expand(@env, {:map, [a: {:integer, 1}], :closed})
+    end
+
+    test "map update with a non-atom (domain) key does not crash" do
+      assert {:map, fields, nil} =
+               Binding.expand(
+                 @env,
+                 {:map, [{{:domain, {:binary, "k"}}, {:integer, 1}}], {:map, [abc: nil], nil}}
+               )
+
+      assert {{:domain, {:binary, "k"}}, {:integer, 1}} in fields
+      assert {:abc, nil} in fields
+    end
+
+    test "union-merging two maps with a non-atom (domain) key does not crash" do
+      # Domain-keyed fields are merged with field_get, not Keyword.get
+      a = {:map, [{{:domain, {:binary, "k"}}, {:integer, 1}}], nil}
+      b = {:map, [{{:domain, {:binary, "k"}}, {:atom, :x}}], nil}
+
+      assert {:map, [{{:domain, {:binary, "k"}}, merged}], nil} =
+               Binding.expand(@env, {:union, [a, b]})
+
+      assert merged == {:union, [{:integer, 1}, {:atom, :x}]}
+    end
+
+    test "intersecting two maps with a non-atom (domain) key does not crash" do
+      a = {:map, [{{:domain, {:binary, "k"}}, {:integer, nil}}], :closed}
+      b = {:map, [{{:domain, {:binary, "k"}}, {:integer, nil}}], :closed}
+
+      assert {:map, [{{:domain, {:binary, "k"}}, {:integer, nil}}], :closed} =
+               Binding.expand(@env, {:intersection, [a, b]})
+    end
+
+    test "intersecting a generic struct with a domain-keyed map does not crash" do
+      # Domain-keyed fields are looked up tolerantly in union-of-keys branch
+      str = {:struct, [field: {:integer, nil}], nil, nil}
+      map = {:map, [{{:domain, {:binary, "k"}}, {:integer, 1}}], nil}
+
+      assert match?(
+               {:struct, _fields, nil, nil},
+               Binding.expand(@env, {:intersection, [str, map]})
+             )
+    end
+
+    test "tuple_nth out-of-bounds index resolves to :none, not nil" do
+      tuple = {:tuple, 2, [{:atom, :a}, {:integer, 1}]}
+      assert Binding.expand(@env, {:tuple_nth, tuple, 1}) == {:integer, 1}
+      # index == size is out of bounds (0-based) -> :none, not a silent nil
+      assert Binding.expand(@env, {:tuple_nth, tuple, 2}) == :none
+    end
+
+    test "intersection of two unions collects all overlaps" do
+      a = {:union, [{:atom, :a}, {:atom, :b}, {:atom, :c}]}
+      b = {:union, [{:atom, :b}, {:atom, :c}]}
+
+      assert Binding.expand(@env, {:intersection, [a, b]}) ==
+               {:union, [{:atom, :b}, {:atom, :c}]}
+
+      # disjoint unions intersect to :none (not nil)
+      assert Binding.expand(@env, {:intersection, [{:atom, :a}, {:union, [{:atom, :b}]}]}) ==
+               :none
+    end
+
+    test "union subsumption: list/nonempty/:list, bitstring/binary, map top" do
+      int = {:integer, nil}
+      assert Binding.expand(@env, {:union, [{:list, int}, {:nonempty_list, int}]}) == {:list, int}
+      assert Binding.expand(@env, {:union, [:list, {:list, int}]}) == :list
+      assert Binding.expand(@env, {:union, [:bitstring, {:binary, nil}]}) == :bitstring
+
+      assert Binding.expand(@env, {:union, [{:map, [], nil}, {:map, [a: {:integer, 1}], nil}]}) ==
+               {:map, [], nil}
+
+      # Map top (`%{}`) also subsumes an OPEN map.
+      assert Binding.expand(@env, {:union, [{:map, [], nil}, {:map, [a: {:integer, 1}], :open}]}) ==
+               {:map, [], nil}
+    end
+
+    test "open vs closed map: union keeps both (conservative covers?)" do
+      # A closed map is NOT subsumed by a non-empty open map and vice versa, so
+      # neither member is dropped from the union. (covers?/2 stays conservative.)
+      open = {:map, [a: {:integer, 1}], :open}
+      closed = {:map, [a: {:integer, 1}], nil}
+
+      result = Binding.expand(@env, {:union, [open, closed]})
+      assert match?({:union, members} when length(members) == 2, result)
+    end
+
+    test "difference output is normalized" do
+      assert Binding.expand(
+               @env,
+               {:difference, {:union, [{:integer, 5}, {:integer, nil}]}, {:integer, 5}}
+             ) == {:integer, nil}
+    end
+
+    test "case_result drops clauses whose pattern can't match the scrutinee" do
+      # scrutinee is a map; the tuple clause is unreachable -> :none (the case
+      # raises rather than returning that body).
+      assert :none ==
+               Binding.expand(@env, {
+                 :case_result,
+                 {:map, [a: {:integer, 1}], nil},
+                 [{{:tuple, 2, [{:atom, :ok}, nil]}, {:atom, Enum}}]
+               })
+
+      # an unknown/unresolvable scrutinee keeps every clause (can't rule any out)
+      assert {:union, [{:integer, 1}, {:integer, 2}]} ==
+               Binding.expand(@env, {
+                 :case_result,
+                 nil,
+                 [{{:atom, :ok}, {:integer, 1}}, {{:atom, :error}, {:integer, 2}}]
+               })
+
+      # a matching clause survives
+      assert {:atom, :result} ==
+               Binding.expand(@env, {
+                 :case_result,
+                 {:map, [a: {:integer, 1}], nil},
+                 [{{:map, [a: nil], nil}, {:atom, :result}}]
+               })
+    end
+
+    test "map_key projects a non-atom (domain) key" do
+      m = {:map, [{{:domain, {:binary, "a"}}, {:integer, 1}}], nil}
+      assert Binding.expand(@env, {:map_key, m, {:binary, "a"}}) == {:integer, 1}
+      # a key shape that doesn't match any domain key -> unknown
+      assert Binding.expand(@env, {:map_key, m, {:binary, "z"}}) == nil
     end
 
     test "introspection struct" do
@@ -355,9 +519,13 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "unknown variable" do
-      assert :none == Binding.expand(@env, {:variable, :v, 1})
+      # A *versioned* var not in scope is unknown (nil), not :none. Previously it
+      # fell back to a same-named 0-arity local call which resolved to :none here;
+      # that fallback now only applies to the `version == :any` (Code.Fragment
+      # misclassification) case.
+      assert nil == Binding.expand(@env, {:variable, :v, 1})
 
-      assert :none ==
+      assert nil ==
                Binding.expand(
                  @env
                  |> Map.put(:vars, [%VarInfo{version: 1, name: :v, type: {:integer, 1}}]),
@@ -1273,6 +1441,108 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    @tag :requires_native_types
+    test "shape conversion recognizes pid/port/reference subtype-compatible descriptors" do
+      assert ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.pid()) == :pid
+      assert ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.port()) == :port
+      assert ElixirSense.Core.ElixirTypes.to_shape(Module.Types.Descr.reference()) == :reference
+    end
+
+    test "remote type expansion resolves __MODULE__ and module attributes" do
+      env =
+        @env
+        |> Map.merge(%{
+          module: ElixirSenseExample.FunctionsWithReturnSpec,
+          attributes: [
+            %AttributeInfo{
+              name: :remote_mod,
+              type: {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}
+            }
+          ],
+          vars: [
+            %VarInfo{
+              version: 1,
+              name: :from_module,
+              type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f3, []}
+            },
+            %VarInfo{
+              version: 2,
+              name: :from_attr,
+              type: {:call, {:atom, ElixirSenseExample.FunctionsWithReturnSpec}, :f4, []}
+            }
+          ]
+        })
+
+      assert {:struct,
+              [
+                {:__struct__, {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}},
+                {:abc, nil}
+              ], {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}, nil} =
+               Binding.expand(env, {:variable, :from_module, 1})
+
+      assert {:map, [abc: nil], nil} = Binding.expand(env, {:variable, :from_attr, 2})
+    end
+
+    test "remote type expansion resolves module-valued variables" do
+      env =
+        @env
+        |> Map.merge(%{
+          module: ElixirSenseExample.FunctionsWithReturnSpec,
+          vars: [
+            %VarInfo{
+              version: 1,
+              name: :remote_module,
+              type: {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}
+            }
+          ]
+        })
+
+      assert {:struct,
+              [
+                abc: nil
+              ], {:atom, ElixirSenseExample.FunctionsWithReturnSpec.Remote}, nil} ==
+               Binding.expand_type(
+                 env,
+                 {:., [], [{:remote_module, [], nil}, :t]},
+                 [],
+                 false,
+                 []
+               )
+    end
+
+    test "remote type expansion resolves nested module aliases" do
+      env = %Binding{
+        module: ElixirSenseExample.ModuleWithTypespecs,
+        aliases: [{Elixir.Remote, ElixirSenseExample.ModuleWithTypespecs.Remote}],
+        vars: [],
+        attributes: []
+      }
+
+      # remote_t :: atom — atom is a built-in type so expands to nil (unknown),
+      # but the alias resolution path is still exercised
+      assert nil ==
+               Binding.expand_type(
+                 env,
+                 {{:., [], [{:__aliases__, [], [:Remote]}, :remote_t]}, [], []},
+                 [],
+                 false,
+                 []
+               )
+
+      # __MODULE__.Remote resolves to ElixirSenseExample.ModuleWithTypespecs.Remote
+      # remote_list_t :: [remote_t] — remote_t resolves to nil, so list element is nil
+      assert {:list, nil} ==
+               Binding.expand_type(
+                 env,
+                 {{:., [],
+                   [{{:., [], [{:__MODULE__, [], nil}, :Remote]}, [], []}, :remote_list_t]}, [],
+                  []},
+                 [],
+                 false,
+                 []
+               )
+    end
+
     test "remote call fun with spec parametrized map" do
       assert {:map, [abc: nil], nil} ==
                Binding.expand(
@@ -1674,6 +1944,7 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    @tag :requires_native_types
     test "local call metadata fun with default args returning struct" do
       env =
         @env
@@ -1682,7 +1953,22 @@ defmodule ElixirSense.Core.BindingTest do
           function: {:some, 0},
           specs: %{
             {MyMod, :fun, 3} => %SpecInfo{
-              specs: ["@spec fun(integer(), integer(), any()) :: %MyMod{}"]
+              specs: ["@spec fun(integer(), integer(), any()) :: %MyMod{}"],
+              elixir_types_sig: {
+                :strong,
+                nil,
+                [
+                  {[
+                     Module.Types.Descr.integer(),
+                     Module.Types.Descr.integer(),
+                     Module.Types.Descr.dynamic()
+                   ],
+                   Module.Types.Descr.closed_map([
+                     {:__struct__, Module.Types.Descr.atom([MyMod])},
+                     {:abc, Module.Types.Descr.dynamic()}
+                   ])}
+                ]
+              }
             }
           },
           mods_funs_to_positions: %{
@@ -1713,7 +1999,10 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref, 1}
                )
 
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
+      expected =
+        {:struct, [__struct__: {:atom, MyMod}, abc: nil], {:atom, MyMod}, nil}
+
+      assert expected ==
                Binding.expand(
                  env
                  |> Map.put(:vars, [
@@ -1722,7 +2011,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref, 1}
                )
 
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
+      assert expected ==
                Binding.expand(
                  env
                  |> Map.put(:vars, [
@@ -1731,7 +2020,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:variable, :ref, 1}
                )
 
-      assert {:struct, [{:__struct__, {:atom, MyMod}}, {:abc, nil}], {:atom, MyMod}, nil} ==
+      assert expected ==
                Binding.expand(
                  env
                  |> Map.put(:vars, [
@@ -1756,6 +2045,86 @@ defmodule ElixirSense.Core.BindingTest do
                  ]),
                  {:variable, :ref, 1}
                )
+    end
+
+    if ElixirSense.Core.ElixirTypes.available?() do
+      test "local call metadata multi-clause overload selection by arg type" do
+        env =
+          @env
+          |> Map.merge(%{
+            module: MyMod,
+            function: {:some, 0},
+            specs: %{
+              {MyMod, :classify, 1} => %SpecInfo{
+                specs: [
+                  "@spec classify(integer()) :: :int",
+                  "@spec classify(atom()) :: :atom_type"
+                ],
+                elixir_types_sig: {
+                  :strong,
+                  nil,
+                  [
+                    {[Module.Types.Descr.integer()], Module.Types.Descr.atom([:int])},
+                    {[Module.Types.Descr.atom()], Module.Types.Descr.atom([:atom_type])}
+                  ]
+                }
+              }
+            },
+            mods_funs_to_positions: %{
+              {MyMod, :classify, 1} => %ModFunInfo{
+                params: [[{:x, [], []}]],
+                type: :def
+              }
+            }
+          })
+
+        # Call with integer arg → should return :int (not union)
+        assert {:atom, :int} ==
+                 Binding.expand(
+                   env
+                   |> Map.put(:vars, [
+                     %VarInfo{
+                       version: 1,
+                       name: :ref,
+                       type: {:local_call, :classify, {1, 1}, [{:integer, 42}]}
+                     }
+                   ]),
+                   {:variable, :ref, 1}
+                 )
+
+        # Call with atom arg → should return :atom_type (not union)
+        assert {:atom, :atom_type} ==
+                 Binding.expand(
+                   env
+                   |> Map.put(:vars, [
+                     %VarInfo{
+                       version: 1,
+                       name: :ref,
+                       type: {:local_call, :classify, {1, 1}, [{:atom, :foo}]}
+                     }
+                   ]),
+                   {:variable, :ref, 1}
+                 )
+
+        # Call with nil arg (unknown type) → should return union of both
+        result =
+          Binding.expand(
+            env
+            |> Map.put(:vars, [
+              %VarInfo{
+                version: 1,
+                name: :ref,
+                type: {:local_call, :classify, {1, 1}, [nil]}
+              }
+            ]),
+            {:variable, :ref, 1}
+          )
+
+        assert result in [
+                 {:union, [{:atom, :int}, {:atom, :atom_type}]},
+                 {:union, [{:atom, :atom_type}, {:atom, :int}]}
+               ]
+      end
     end
 
     test "remote call fun with default args" do
@@ -1832,6 +2201,32 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
+    @tag :requires_native_types
+    test "metadata spec signatures are preferred for remote call return typing" do
+      env =
+        @env
+        |> Map.put(:specs, %{
+          {String, :split, 2} => %SpecInfo{
+            specs: ["@spec split(binary(), binary()) :: [binary()]"],
+            elixir_types_sig: {
+              :strong,
+              nil,
+              [
+                {[
+                   Module.Types.Descr.binary(),
+                   Module.Types.Descr.binary()
+                 ], Module.Types.Descr.list(Module.Types.Descr.binary())}
+              ]
+            }
+          }
+        })
+
+      assert {:ok, sig} =
+               ElixirSense.Core.ElixirTypes.spec_signature_from_metadata(env, String, :split, 2)
+
+      assert is_map(ElixirSense.Core.ElixirTypes.extract_return_type_from_sig(sig))
+    end
+
     test "local call imported fun with spec t expanding to atom" do
       assert {:atom, :asd} ==
                Binding.expand(
@@ -1860,7 +2255,25 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "local call no parens imported fun with spec t expanding to atom" do
+      # A no-parens call misclassified as a variable carries `version == :any`
+      # (Code.Fragment / surround_context spelling). Only that case falls back to a
+      # 0-arity local/imported call. A *versioned* out-of-scope var would be nil.
       assert {:atom, :asd} ==
+               Binding.expand(
+                 @env
+                 |> Map.merge(%{
+                   vars: [
+                     %VarInfo{version: 1, name: :ref, type: {:variable, :f02, :any}}
+                   ],
+                   functions: [{ElixirSenseExample.FunctionsWithReturnSpec, [{:f02, 0}]}]
+                 }),
+                 {:variable, :ref, 1}
+               )
+    end
+
+    test "versioned out-of-scope var does not resolve to a 0-arity local function" do
+      # Versioned var not in scope is unknown (nil), not a same-named function call
+      assert nil ==
                Binding.expand(
                  @env
                  |> Map.merge(%{
@@ -1959,8 +2372,54 @@ defmodule ElixirSense.Core.BindingTest do
   end
 
   describe "Kernel functions" do
+    defp expand_call_type(call) do
+      Binding.expand(
+        %{
+          @env
+          | vars: [
+              %VarInfo{version: 1, name: :a, type: nil},
+              %VarInfo{version: 1, name: :b, type: nil}
+            ]
+        },
+        call
+      )
+    end
+
+    test "arithmetic / bitwise / boolean operator result types" do
+      a = {:variable, :a, 1}
+      b = {:variable, :b, 1}
+      erl = {:atom, :erlang}
+
+      # integer-only: bitwise + div/rem
+      for fun <- [:band, :bor, :bxor, :bsl, :bsr, :div, :rem] do
+        assert {:integer, nil} == expand_call_type({:call, erl, fun, [a, b]})
+      end
+
+      assert {:integer, nil} == expand_call_type({:call, erl, :bnot, [a]})
+
+      # float division
+      assert {:float, nil} == expand_call_type({:call, erl, :/, [a, b]})
+
+      # number tower for +,-,*
+      assert {:integer, nil} ==
+               expand_call_type({:call, erl, :+, [{:integer, 1}, {:integer, 2}]})
+
+      assert {:float, nil} == expand_call_type({:call, erl, :*, [{:float, 1.0}, {:integer, 2}]})
+      assert :number == expand_call_type({:call, erl, :-, [a, b]})
+
+      # comparisons / boolean ops / type guards -> boolean()
+      for fun <- [:==, :"/=", :<, :>=, :"=:=", :not, :is_integer, :is_map] do
+        assert :boolean == expand_call_type({:call, erl, fun, [a]})
+      end
+
+      # raising functions -> :none (drop out of result unions)
+      assert :none == expand_call_type({:call, erl, :error, [a]})
+      assert :none == expand_call_type({:call, erl, :throw, [a]})
+    end
+
     test "++" do
-      assert {:list, {:integer, 1}} ==
+      # `++` unions both operands' element types.
+      assert {:list, {:union, [{:integer, 1}, {:integer, 2}]}} ==
                Binding.expand(
                  @env
                  |> Map.put(:vars, [
@@ -1970,7 +2429,7 @@ defmodule ElixirSense.Core.BindingTest do
                  {:local_call, :++, {1, 1}, [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
                )
 
-      assert {:list, {:integer, 1}} ==
+      assert {:list, {:union, [{:integer, 1}, {:integer, 2}]}} ==
                Binding.expand(
                  @env
                  |> Map.put(:vars, [
@@ -1979,6 +2438,13 @@ defmodule ElixirSense.Core.BindingTest do
                  ]),
                  {:call, {:atom, :erlang}, :++,
                   [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
+               )
+
+      # `a ++ b` is a list even when the left element type is unknown.
+      assert {:list, nil} ==
+               Binding.expand(
+                 @env |> Map.put(:vars, [%VarInfo{version: 1, name: :a, type: nil}]),
+                 {:call, {:atom, :erlang}, :++, [{:variable, :a, 1}, {:list, {:integer, 0}}]}
                )
     end
 
@@ -2336,16 +2802,18 @@ defmodule ElixirSense.Core.BindingTest do
                )
     end
 
-    test "put not a map" do
-      assert {:map, [cde: {:atom, :b}], nil} =
+    test "put on an unknown base yields an open map" do
+      # Unknown base (`nil`): the result must stay OPEN — `Map.put` only adds
+      # the one key we can see; other keys may already exist on the base.
+      assert {:map, [cde: {:atom, :b}], :open} =
                Binding.expand(
                  @env,
                  {:call, {:atom, Map}, :put, [nil, {:atom, :cde}, {:atom, :b}]}
                )
     end
 
-    test "put not an atom key" do
-      assert {:map, [], nil} =
+    test "put with an unknown key on an unknown base yields an open map" do
+      assert {:map, [], :open} =
                Binding.expand(@env, {:call, {:atom, Map}, :put, [nil, nil, {:atom, :b}]})
     end
 
@@ -2391,7 +2859,8 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "from_struct" do
-      assert {:map, [other: nil, typed_field: nil], nil} =
+      # A resolved struct is literal-complete, so the resulting map is `:closed`.
+      assert {:map, [other: nil, typed_field: nil], :closed} =
                Binding.expand(
                  @env,
                  {:call, {:atom, Map}, :from_struct,
@@ -2400,7 +2869,7 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "from_struct atom arg" do
-      assert {:map, [other: nil, typed_field: nil], nil} =
+      assert {:map, [other: nil, typed_field: nil], :closed} =
                Binding.expand(
                  @env,
                  {:call, {:atom, Map}, :from_struct,
@@ -2515,7 +2984,8 @@ defmodule ElixirSense.Core.BindingTest do
     end
 
     test "new" do
-      assert {:map, [], nil} = Binding.expand(@env, {:call, {:atom, Map}, :new, []})
+      # `Map.new/0` constructs the empty, literal-complete (`:closed`) map.
+      assert {:map, [], :closed} = Binding.expand(@env, {:call, {:atom, Map}, :new, []})
     end
   end
 
@@ -2896,6 +3366,382 @@ defmodule ElixirSense.Core.BindingTest do
     end
   end
 
+  describe "descr-backed intersection (native on, exact shapes)" do
+    @describetag :requires_native_types
+    # When native typing enabled, intersection delegates to Descr.intersection/2
+    setup do
+      prev = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+
+      on_exit(fn ->
+        Application.put_env(:elixir_sense, :use_elixir_types, prev)
+      end)
+
+      # The gate only fires when the native backend is available; assert it is so
+      # these descr-faithful expectations are actually exercised.
+      assert ElixirTypes.enabled?()
+
+      :ok
+    end
+
+    test "boolean ∩ {:atom, true} narrows to true" do
+      assert {:atom, true} ==
+               Binding.expand(@env, {:intersection, [:boolean, {:atom, true}]})
+
+      assert {:atom, true} ==
+               Binding.expand(@env, {:intersection, [{:atom, true}, :boolean]})
+    end
+
+    test "overlapping atom unions intersect to the shared member" do
+      assert {:atom, :b} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:union, [atom: :a, atom: :b]}, {:union, [atom: :b, atom: :c]}]}
+               )
+    end
+
+    test "disjoint exact atoms intersect to :none" do
+      assert :none == Binding.expand(@env, {:intersection, [{:atom, :a}, {:atom, :b}]})
+    end
+
+    test "integer ∩ number narrows to integer" do
+      # `to_shape` renders the `integer()` descr as the abstract literal shape
+      # `{:integer, nil}` (nil payload = any integer).
+      assert {:integer, nil} == Binding.expand(@env, {:intersection, [:integer, :number]})
+    end
+
+    test "tuple intersects elementwise via Descr" do
+      assert {:tuple, 2, [{:integer, nil}, {:atom, true}]} ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [{:tuple, 2, [:integer, :boolean]}, {:tuple, 2, [:integer, {:atom, true}]}]}
+               )
+    end
+
+    test "list element intersection narrows the element type" do
+      assert {:list, {:atom, true}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:list, :boolean}, {:list, {:atom, true}}]}
+               )
+    end
+
+    test "nonempty_list element intersection narrows; disjoint elements -> :none" do
+      assert {:nonempty_list, {:atom, true}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:nonempty_list, :boolean}, {:nonempty_list, {:atom, true}}]}
+               )
+
+      assert :none ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:nonempty_list, {:atom, :a}}, {:nonempty_list, {:atom, :b}}]}
+               )
+    end
+
+    test "non-exact kinds (maps) still take the custom path" do
+      # Maps are excluded from descr_exact? (coercion makes them open), so this
+      # must produce the SAME result as the native-off custom path: a key union.
+      assert {:map, [{:a, nil}, {:b, {:atom, B}}, {:c, {:atom, C}}], nil} ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [
+                    {:map, [a: nil, b: {:atom, B}], nil},
+                    {:map, [c: {:atom, C}], nil}
+                  ]}
+               )
+    end
+
+    test "literal scalars (excluded from whitelist) keep custom disjointness" do
+      # {:integer, _} widens on coercion, so it is excluded — custom path applies.
+      assert :none == Binding.expand(@env, {:intersection, [{:integer, 1}, {:integer, 2}]})
+    end
+  end
+
+  describe "descr-backed intersection (native off, custom path preserved)" do
+    setup do
+      prev = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, false)
+      on_exit(fn -> Application.put_env(:elixir_sense, :use_elixir_types, prev) end)
+      :ok
+    end
+
+    test "boolean ∩ {:atom, true} via custom subsumption still narrows to true" do
+      assert {:atom, true} ==
+               Binding.expand(@env, {:intersection, [:boolean, {:atom, true}]})
+    end
+
+    test "disjoint atoms intersect to :none on the custom path" do
+      assert :none == Binding.expand(@env, {:intersection, [{:atom, A}, {:atom, B}]})
+    end
+
+    test "tuple elementwise intersection unchanged on the custom path" do
+      assert {:tuple, 2, [{:atom, B}, {:atom, A}]} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:tuple, 2, [nil, {:atom, A}]}, {:tuple, 2, [{:atom, B}, nil]}]}
+               )
+    end
+  end
+
+  describe "intersection overlap matrix (soundness regressions)" do
+    # Task #3: the fallback used `covers?/2` (subsumption) to decide disjointness,
+    # so any non-subsuming pair collapsed to :none even when the value sets overlap.
+
+    test "nonempty_list ∩ list intersects elements and stays nonempty" do
+      # Both contain [] for the list side, but a nonempty side forces nonempty;
+      # element types intersect.
+      assert {:nonempty_list, {:integer, nil}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:nonempty_list, nil}, {:list, {:integer, nil}}]}
+               )
+
+      assert {:nonempty_list, {:integer, nil}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:list, {:integer, nil}}, {:nonempty_list, nil}]}
+               )
+    end
+
+    test "list ∩ list with overlapping element types" do
+      assert {:list, {:integer, 1}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:list, :integer}, {:list, {:integer, 1}}]}
+               )
+    end
+
+    test "list(:a) ∩ list(:b) is the empty list, not :none (both contain [])" do
+      # Disjoint element types still leave `[]` reachable -> {:list, :empty}.
+      assert {:list, :empty} ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:list, {:atom, :a}}, {:list, {:atom, :b}}]}
+               )
+    end
+
+    test "generic :list ∩ concrete list yields the concrete list" do
+      assert {:list, {:integer, nil}} ==
+               Binding.expand(@env, {:intersection, [:list, {:list, {:integer, nil}}]})
+
+      assert {:nonempty_list, {:integer, nil}} ==
+               Binding.expand(@env, {:intersection, [{:nonempty_list, {:integer, nil}}, :list]})
+    end
+
+    test "provably-disjoint top-level kinds are :none" do
+      # atom vs list, integer vs binary, tuple vs map, etc.
+      assert :none ==
+               Binding.expand(@env, {:intersection, [{:atom, :a}, {:list, {:integer, nil}}]})
+
+      assert :none ==
+               Binding.expand(@env, {:intersection, [{:integer, 1}, {:binary, nil}]})
+
+      assert :none ==
+               Binding.expand(@env, {:intersection, [:tuple, {:map, [], nil}]})
+
+      assert :none == Binding.expand(@env, {:intersection, [:list, {:integer, nil}]})
+    end
+
+    test "different-arity tuples are disjoint" do
+      assert :none ==
+               Binding.expand(
+                 @env,
+                 {:intersection, [{:tuple, 2, [nil, nil]}, {:tuple, 1, [nil]}]}
+               )
+    end
+
+    test "distinct concrete literals of the same kind are disjoint" do
+      assert :none == Binding.expand(@env, {:intersection, [{:atom, :a}, {:atom, :b}]})
+      assert :none == Binding.expand(@env, {:intersection, [{:integer, 1}, {:integer, 2}]})
+      assert :none == Binding.expand(@env, {:intersection, [{:binary, "a"}, {:binary, "b"}]})
+    end
+
+    test "structs of different concrete modules are disjoint" do
+      assert :none ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [{:struct, [], {:atom, Foo}, nil}, {:struct, [], {:atom, Bar}, nil}]}
+               )
+    end
+
+    test "same-kind, non-subsuming, non-literal pair is unknown (nil), never :none" do
+      # integer() ∩ float() both live in the number tower: we do not assert these
+      # disjoint (conservative). Result is unknown rather than a false :none.
+      assert nil == Binding.expand(@env, {:intersection, [{:integer, nil}, {:float, nil}]})
+    end
+  end
+
+  describe "++ operator (improper / non-list RHS soundness)" do
+    # Task #5: `++` returned {:list, _} unconditionally. Ground truth
+    # (:erlang.++): `[] ++ x` is `x`; `[1|_] ++ x` may be improper.
+
+    test "proper-list RHS yields a proper list of unioned elements" do
+      assert {:list, {:integer, nil}} ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :++,
+                  [{:list, {:integer, nil}}, {:list, {:integer, nil}}]}
+               )
+    end
+
+    test "non-empty LHS with unknown RHS is unknown (may be improper)" do
+      assert nil ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :++, [{:nonempty_list, {:integer, nil}}, nil]}
+               )
+    end
+
+    test "non-empty proper LHS with known non-list RHS is an improper non-empty list" do
+      # `[1, ...] ++ :a` is a non-empty IMPROPER list: proper prefix of the LHS
+      # element type, final tail = the RHS shape. Modeled by the 3-tuple (was
+      # conservatively `nil` before the improper-list shape existed).
+      assert {:nonempty_list, {:integer, nil}, {:atom, :a}} ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :++, [{:nonempty_list, {:integer, nil}}, {:atom, :a}]}
+               )
+    end
+
+    test "possibly-empty LHS with non-list RHS stays unknown (could be the bare RHS)" do
+      # `list ++ :a` could be exactly `:a` when the LHS is `[]`, which the
+      # prefix-bearing 3-tuple can't model, so we stay conservative (`nil`).
+      assert nil ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :++, [{:list, {:integer, nil}}, {:atom, :a}]}
+               )
+    end
+
+    test "empty-list LHS yields exactly the RHS" do
+      assert {:atom, :a} ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :++, [{:list, :empty}, {:atom, :a}]}
+               )
+    end
+
+    test "-- stays a proper list of the left element type" do
+      assert {:list, {:integer, nil}} ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :--, [{:list, {:integer, nil}}, {:atom, :a}]}
+               )
+    end
+  end
+
+  describe "improper non-empty list shape ({:nonempty_list, elem, tail})" do
+    # The 3-tuple = non-empty, possibly-improper list: proper prefix of `elem`
+    # elements terminated by a non-list `tail`. It is its OWN kind variant —
+    # neither subsumed by nor subsuming proper list shapes.
+
+    test "do_expand expands both components" do
+      assert {:nonempty_list, {:integer, nil}, {:atom, :a}} ==
+               Binding.expand(@env, {:nonempty_list, :integer, {:atom, :a}})
+    end
+
+    test "is NOT covered by a proper list union member (improper not subsumed)" do
+      # A union of a proper list and the improper 3-tuple does NOT collapse —
+      # `covers?` keeps both (the proper shape does not subsume the improper one).
+      improper = {:nonempty_list, {:integer, nil}, {:atom, :a}}
+
+      assert {:union, members} =
+               Binding.expand(@env, {:union, [{:list, {:integer, nil}}, improper]})
+
+      assert improper in members
+    end
+
+    test "two equal-shaped 3-tuples in a union dedupe via covers?" do
+      improper = {:nonempty_list, {:integer, nil}, {:atom, :a}}
+      assert improper == Binding.expand(@env, {:union, [improper, improper]})
+    end
+
+    test "intersection of two 3-tuples is elementwise" do
+      # prefix: {:integer, nil} ∩ nil = {:integer, nil}; tail: boolean ∩ true = true
+      assert {:nonempty_list, {:integer, nil}, {:atom, true}} ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [
+                    {:nonempty_list, {:integer, nil}, :boolean},
+                    {:nonempty_list, nil, {:atom, true}}
+                  ]}
+               )
+    end
+
+    test "intersection bottoms out when the tails are disjoint" do
+      assert :none ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [
+                    {:nonempty_list, {:integer, nil}, {:atom, :a}},
+                    {:nonempty_list, {:integer, nil}, {:atom, :b}}
+                  ]}
+               )
+    end
+
+    test "intersection with a proper list stays conservative (nil), not :none" do
+      # An improper list and a proper list are not provably disjoint in the
+      # coarse `shape_kind` classifier (both `:list`), so the intersection is
+      # `nil` (unknown) rather than an unsound `:none`.
+      assert nil ==
+               Binding.expand(
+                 @env,
+                 {:intersection,
+                  [{:nonempty_list, {:integer, nil}, {:atom, :a}}, {:list, {:integer, nil}}]}
+               )
+    end
+  end
+
+  describe "numeric operators on known non-numeric operands" do
+    # Task #27: numeric_result over-claimed :number for non-numeric operands.
+
+    test "+ with a known non-numeric operand is unknown, not :number" do
+      assert nil ==
+               Binding.expand(@env, {:call, {:atom, Kernel}, :+, [{:integer, 1}, {:atom, :a}]})
+
+      assert nil ==
+               Binding.expand(@env, {:call, {:atom, Kernel}, :*, [{:binary, "x"}, {:integer, 2}]})
+    end
+
+    test "+ with an unknown operand may still be numeric (number())" do
+      assert :number ==
+               Binding.expand(@env, {:call, {:atom, Kernel}, :+, [{:integer, 1}, nil]})
+    end
+
+    test "+ of two integers is integer()" do
+      assert {:integer, nil} ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Kernel}, :+, [{:integer, 1}, {:integer, 2}]}
+               )
+    end
+  end
+
+  describe "andalso/orelse are not boolean-typed" do
+    test "andalso/orelse do not resolve to :boolean" do
+      refute :boolean ==
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, :erlang}, :andalso, [:boolean, {:integer, 5}]}
+               )
+
+      refute :boolean ==
+               Binding.expand(@env, {:call, {:atom, :erlang}, :orelse, [:boolean, {:integer, 5}]})
+    end
+
+    test "strict and/or still resolve to :boolean" do
+      assert :boolean ==
+               Binding.expand(@env, {:call, {:atom, :erlang}, :and, [:boolean, :boolean]})
+    end
+  end
+
   describe "from_var" do
     defmodule Elixir.BindingTest.Some do
       defstruct [:asd]
@@ -2931,6 +3777,524 @@ defmodule ElixirSense.Core.BindingTest do
         {:struct, [{:__struct__, {:atom, BindingTest.Some}}, {:asd, {:integer, 123}}],
          {:atom, BindingTest.Some}, nil}
       )
+    end
+  end
+
+  describe "terminal shape expansion" do
+    test "primitive type atoms are preserved through expand" do
+      assert Binding.expand(@env, :atom) == :atom
+      assert Binding.expand(@env, :integer) == {:integer, nil}
+      assert Binding.expand(@env, :binary) == {:binary, nil}
+      assert Binding.expand(@env, :float) == {:float, nil}
+      assert Binding.expand(@env, :number) == :number
+      assert Binding.expand(@env, :pid) == :pid
+      assert Binding.expand(@env, :port) == :port
+      assert Binding.expand(@env, :reference) == :reference
+      assert Binding.expand(@env, :fun) == :fun
+      assert Binding.expand(@env, :tuple) == :tuple
+    end
+
+    test ":none is preserved through expand" do
+      assert Binding.expand(@env, :none) == :none
+    end
+
+    test "tagged terminal shapes are preserved through expand" do
+      assert Binding.expand(@env, {:binary, nil}) == {:binary, nil}
+      assert Binding.expand(@env, {:float, nil}) == {:float, nil}
+      assert Binding.expand(@env, {:fun, 2}) == {:fun, 2}
+    end
+
+    test "fun with args and return is expanded recursively" do
+      assert Binding.expand(@env, {:fun, [nil, nil], nil}) == {:fun, [nil, nil], nil}
+
+      assert Binding.expand(@env, {:fun, [{:atom, :ok}], {:integer, nil}}) ==
+               {:fun, [{:atom, :ok}], {:integer, nil}}
+    end
+
+    test "fun_clauses are expanded recursively" do
+      assert Binding.expand(@env, {:fun_clauses, [{[nil], {:atom, :ok}}]}) ==
+               {:fun_clauses, [{[nil], {:atom, :ok}}]}
+    end
+  end
+
+  describe "difference (cross-clause subtraction)" do
+    defp union_env(type) do
+      %Binding{
+        functions: __ENV__.functions,
+        macros: __ENV__.macros,
+        vars: [%VarInfo{version: 1, name: :x, type: type}]
+      }
+    end
+
+    test "drops the subtracted member from a union base" do
+      env = union_env({:union, [{:atom, :a}, {:atom, :b}, {:atom, :c}]})
+
+      assert Binding.expand(env, {:difference, {:variable, :x, 1}, {:atom, :a}}) ==
+               {:union, [{:atom, :b}, {:atom, :c}]}
+    end
+
+    test "collapses to the single remaining member" do
+      env = union_env({:union, [{:binary, nil}, {:atom, nil}]})
+
+      # the flagship: `binary() | nil` minus `nil` is `binary()`
+      assert Binding.expand(env, {:difference, {:variable, :x, 1}, {:atom, nil}}) ==
+               {:binary, nil}
+    end
+
+    test "subtracts a tagged-tuple family (element-wise, _ as wildcard)" do
+      ok = {:tuple, 2, [{:atom, :ok}, {:integer, nil}]}
+      error = {:tuple, 2, [{:atom, :error}, {:atom, :reason}]}
+      env = union_env({:union, [ok, error]})
+
+      # `{:ok, _}` subtracts the whole :ok branch, leaving the :error branch
+      assert Binding.expand(
+               env,
+               {:difference, {:variable, :x, 1}, {:tuple, 2, [{:atom, :ok}, nil]}}
+             ) == error
+    end
+
+    test "a generic subtracted type removes all matching literals" do
+      env = union_env({:union, [{:atom, :a}, {:integer, 1}, {:integer, 2}]})
+
+      assert Binding.expand(env, {:difference, {:variable, :x, 1}, :integer}) ==
+               {:atom, :a}
+    end
+
+    test "subtracting everything yields :none" do
+      env = union_env({:union, [{:atom, :a}, {:atom, :b}]})
+
+      assert Binding.expand(
+               env,
+               {:difference, {:variable, :x, 1}, {:union, [{:atom, :a}, {:atom, :b}]}}
+             ) == :none
+    end
+
+    test "is conservative for a non-union base (returns it unchanged)" do
+      env = union_env({:atom, :a})
+
+      assert Binding.expand(env, {:difference, {:variable, :x, 1}, {:atom, :b}}) ==
+               {:atom, :a}
+    end
+
+    test "a versioned out-of-scope base var is unknown (nil), not a 0-arity local call" do
+      # Previously a versioned var not in `env.vars` fell back to a same-named
+      # 0-arity local call (yielding :none here). That injected unrelated function
+      # return types into difference/feasibility thunks; a versioned var that is
+      # not in scope is simply unknown, so the difference is unknown (nil).
+      assert Binding.expand(@env, {:difference, {:variable, :missing, 9}, {:atom, :a}}) == nil
+    end
+  end
+
+  describe "union / intersection normalization" do
+    test "drops union members subsumed by a more general sibling" do
+      # `:integer` expands to the generic `{:integer, nil}`, which subsumes `5`
+      assert Binding.expand(@env, {:union, [{:integer, 5}, :integer]}) == {:integer, nil}
+      assert Binding.expand(@env, {:union, [{:atom, :ok}, :atom]}) == :atom
+    end
+
+    test "flattens nested unions and drops :none" do
+      assert Binding.expand(@env, {:union, [{:atom, :a}, {:union, [{:atom, :b}, :none]}]}) ==
+               {:union, [{:atom, :a}, {:atom, :b}]}
+    end
+
+    test "keeps distinct literals" do
+      assert Binding.expand(@env, {:union, [{:integer, 1}, {:integer, 2}]}) ==
+               {:union, [{:integer, 1}, {:integer, 2}]}
+    end
+
+    test "intersection of a generic and its literal is the literal" do
+      assert Binding.expand(@env, {:intersection, [:integer, {:integer, 5}]}) == {:integer, 5}
+      assert Binding.expand(@env, {:intersection, [:atom, {:atom, :ok}]}) == {:atom, :ok}
+    end
+
+    test "intersection of disjoint scalars is :none" do
+      assert Binding.expand(@env, {:intersection, [{:atom, :a}, {:integer, 5}]}) == :none
+    end
+
+    test "merges same-key maps field-wise" do
+      m1 = {:map, [a: {:integer, 1}], nil}
+      m2 = {:map, [a: {:integer, 2}], nil}
+
+      assert Binding.expand(@env, {:union, [m1, m2]}) ==
+               {:map, [a: {:union, [{:integer, 1}, {:integer, 2}]}], nil}
+    end
+
+    test "keeps maps with different key sets as a union" do
+      m1 = {:map, [a: {:integer, 1}], nil}
+      m2 = {:map, [b: {:integer, 2}], nil}
+
+      assert Binding.expand(@env, {:union, [m1, m2]}) == {:union, [m1, m2]}
+    end
+
+    test "merges same-module structs field-wise" do
+      # expansion fills all URI fields; only the differing `host` becomes a union
+      s1 = {:struct, [__struct__: {:atom, URI}, host: {:binary, "a"}], {:atom, URI}, nil}
+      s2 = {:struct, [__struct__: {:atom, URI}, host: {:binary, "b"}], {:atom, URI}, nil}
+
+      assert {:struct, fields, {:atom, URI}, nil} = Binding.expand(@env, {:union, [s1, s2]})
+      assert Keyword.fetch!(fields, :host) == {:union, [{:binary, "a"}, {:binary, "b"}]}
+      assert Keyword.fetch!(fields, :port) == nil
+    end
+
+    test "keeps different-module structs as a union" do
+      s1 = {:struct, [__struct__: {:atom, URI}, host: {:binary, "a"}], {:atom, URI}, nil}
+      s2 = {:struct, [__struct__: {:atom, Date}, year: {:integer, 2024}], {:atom, Date}, nil}
+
+      assert {:union, [{:struct, _, {:atom, URI}, nil}, {:struct, _, {:atom, Date}, nil}]} =
+               Binding.expand(@env, {:union, [s1, s2]})
+    end
+
+    test "merges list members, unioning element types" do
+      assert Binding.expand(@env, {:union, [{:list, {:integer, 1}}, {:list, {:integer, 2}}]}) ==
+               {:list, {:union, [{:integer, 1}, {:integer, 2}]}}
+    end
+
+    test "merges an empty list with a non-empty list" do
+      assert Binding.expand(@env, {:union, [{:list, :empty}, {:list, {:integer, 1}}]}) ==
+               {:list, {:integer, 1}}
+    end
+
+    test "nonempty_list resolves and supports head/tail projections" do
+      env = union_env({:nonempty_list, {:integer, 5}})
+      assert Binding.expand(env, {:variable, :x, 1}) == {:nonempty_list, {:integer, 5}}
+      assert Binding.expand(env, {:list_head, {:variable, :x, 1}}) == {:integer, 5}
+      assert Binding.expand(env, {:list_tail, {:variable, :x, 1}}) == {:list, {:integer, 5}}
+    end
+
+    test "number() subsumes integer()/float() in a union" do
+      assert Binding.expand(@env, {:union, [:number, {:integer, 5}]}) == :number
+      assert Binding.expand(@env, {:union, [:number, {:float, 1.0}]}) == :number
+      # without number() present, integer()|float() stays precise (no widening)
+      assert Binding.expand(@env, {:union, [{:integer, nil}, {:float, nil}]}) ==
+               {:union, [{:integer, nil}, {:float, nil}]}
+    end
+
+    test "intersection narrows number() to integer()/float()" do
+      assert Binding.expand(@env, {:intersection, [:number, {:integer, 5}]}) == {:integer, 5}
+      assert Binding.expand(@env, {:intersection, [:number, :integer]}) == {:integer, nil}
+    end
+
+    test "generic tuple()/fun() subsume their concrete instances" do
+      assert Binding.expand(@env, {:union, [:tuple, {:tuple, 2, [{:atom, :ok}, nil]}]}) == :tuple
+
+      assert Binding.expand(@env, {:intersection, [:tuple, {:tuple, 1, [{:atom, :ok}]}]}) ==
+               {:tuple, 1, [{:atom, :ok}]}
+
+      assert Binding.expand(@env, {:union, [:fun, {:fun, 1}]}) == :fun
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Shape vocabulary CONTRACT tests.
+  # These pin the documented algebra behaviours so future changes to the engine
+  # break loudly rather than silently.  Do NOT change expected values without
+  # a matching update to the ## Shape vocabulary section in Binding's moduledoc.
+  # ---------------------------------------------------------------------------
+  describe "shape vocabulary contract" do
+    # --- nil (unknown / top) ---
+
+    # nil member in a union poisons the whole union to nil (absorbing element).
+    test "nil member in union poisons union to nil" do
+      assert nil ==
+               Binding.expand(@env, {:union, [{:atom, :ok}, nil, {:integer, 1}]})
+    end
+
+    # nil as an intersection operand is the TOP (identity): T ∩ nil = T.
+    test "nil as intersection identity: T ∩ nil = T" do
+      result = Binding.expand(@env, {:intersection, [{:atom, :ok}, nil]})
+      # nil is the identity in intersection; the result should be the other operand,
+      # i.e. {:atom, :ok}, not :none and not nil.
+      assert result == {:atom, :ok}
+    end
+
+    # --- :none (bottom) ---
+
+    # :none members are dropped from unions — they vanish, leaving the rest.
+    test ":none member is dropped from union" do
+      assert {:atom, :ok} ==
+               Binding.expand(@env, {:union, [{:atom, :ok}, :none]})
+    end
+
+    # An all-:none union collapses to :none.
+    test "all-:none union collapses to :none" do
+      assert :none ==
+               Binding.expand(@env, {:union, [:none, :none]})
+    end
+
+    # :none is the annihilator in intersection: :none ∩ T = :none.
+    test ":none annihilates intersection" do
+      assert :none ==
+               Binding.expand(@env, {:intersection, [:none, {:atom, :ok}]})
+    end
+
+    # --- expand of terminal shapes ---
+
+    test "expand :atom returns :atom" do
+      assert :atom == Binding.expand(@env, :atom)
+    end
+
+    test "expand :none returns :none" do
+      assert :none == Binding.expand(@env, :none)
+    end
+
+    test "expand {:atom, :ok} returns {:atom, :ok}" do
+      assert {:atom, :ok} == Binding.expand(@env, {:atom, :ok})
+    end
+
+    test "expand :empty_list returns {:list, :empty}" do
+      # :empty_list is the alias produced by to_shape; expand normalises it.
+      assert {:list, :empty} == Binding.expand(@env, :empty_list)
+    end
+
+    test "expand {:list, :empty} is idempotent" do
+      assert {:list, :empty} == Binding.expand(@env, {:list, :empty})
+    end
+
+    # --- covers? top cases ---
+
+    # The generic :list atom subsumes any {:list, _} shape.
+    test "covers?: :list subsumes {:list, _}" do
+      # Use difference/2 indirectly: `[:a] | :list` should reduce to :list
+      # because {:atom, :a} is subsumed by... wait, let's directly test via
+      # normalize_union which calls drop_subsumed which uses covers?.
+      # {:list, {:atom, :ok}} should be dropped when :list is also present.
+      result = Binding.expand(@env, {:union, [:list, {:list, {:atom, :ok}}]})
+      assert result == :list
+    end
+
+    # nil (as covers? left-side) means "any element matches" — used only
+    # inside tuple element coverage; indirectly tested through difference.
+    test "covers?: nil left-side covers anything (wildcard)" do
+      # A {:tuple, 1, [nil]} pattern covers {:tuple, 1, [{:atom, :ok}]}
+      # which means the latter is dropped from the union when the former is present.
+      result = Binding.expand(@env, {:union, [{:tuple, 1, [nil]}, {:tuple, 1, [{:atom, :ok}]}]})
+      # {:tuple, 1, [nil]} subsumes {:tuple, 1, [{:atom, :ok}]}, so only the
+      # more general member remains.
+      assert result == {:tuple, 1, [nil]}
+    end
+
+    # --- map tail three-marker model: :closed / nil (partial) / :open ---
+
+    # Rendering compromise: both `:closed` (literal-complete) and `nil` (partial)
+    # render WITHOUT the open marker; only `:open` carries `...`.
+    test "closed map tail :closed renders with no open marker" do
+      alias ElixirSense.Core.TypePresentation
+      {:ok, rendered} = TypePresentation.render({:map, [a: {:integer, 1}], :closed})
+      refute String.contains?(rendered, "...")
+    end
+
+    test "partial map tail nil renders with no open marker (display compromise)" do
+      alias ElixirSense.Core.TypePresentation
+      {:ok, rendered} = TypePresentation.render({:map, [a: {:integer, 1}], nil})
+      refute String.contains?(rendered, "...")
+    end
+
+    test "open map tail :open renders with open marker" do
+      alias ElixirSense.Core.TypePresentation
+      shape = {:map, [a: {:integer, 1}], :open}
+      {:ok, rendered} = TypePresentation.render(shape)
+      # open map — must contain the "..." open marker
+      assert String.contains?(rendered, "...")
+    end
+
+    test "empty open map renders as map()" do
+      alias ElixirSense.Core.TypePresentation
+      {:ok, rendered} = TypePresentation.render({:map, [], :open})
+      assert rendered == "map()"
+    end
+
+    # map_key access: a missing key on a `:closed` map is PROVABLY absent
+    # (`:not_set`); on a `nil`-partial or `:open` map it is merely unknown (`nil`).
+    test "map_key on :closed map: missing key is :not_set" do
+      closed = {:map, [a: {:integer, 1}], :closed}
+      assert :not_set == Binding.expand(@env, {:map_key, closed, {:atom, :b}})
+      assert {:integer, 1} == Binding.expand(@env, {:map_key, closed, {:atom, :a}})
+    end
+
+    test "map_key on nil-partial map: missing key is nil (unknown), never :not_set" do
+      partial = {:map, [a: {:integer, 1}], nil}
+      assert nil == Binding.expand(@env, {:map_key, partial, {:atom, :b}})
+    end
+
+    test "map_key on :open map: missing key is nil (unknown)" do
+      open = {:map, [a: {:integer, 1}], :open}
+      assert nil == Binding.expand(@env, {:map_key, open, {:atom, :b}})
+    end
+
+    # merge_tails: closed only if BOTH closed; partial otherwise; open is sticky.
+    test "Map.merge of two :closed maps stays :closed" do
+      a = {:map, [a: {:integer, 1}], :closed}
+      b = {:map, [b: {:integer, 2}], :closed}
+      assert {:map, _, :closed} = Binding.expand(@env, {:call, {:atom, Map}, :merge, [a, b]})
+    end
+
+    test "Map.merge of :closed and nil-partial maps is partial (nil)" do
+      a = {:map, [a: {:integer, 1}], :closed}
+      b = {:map, [b: {:integer, 2}], nil}
+      assert {:map, _, nil} = Binding.expand(@env, {:call, {:atom, Map}, :merge, [a, b]})
+    end
+
+    # Map.put on a :closed base keeps the result :closed (key set still known).
+    test "Map.put on a :closed base stays :closed" do
+      base = {:map, [a: {:integer, 1}], :closed}
+
+      assert {:map, _, :closed} =
+               Binding.expand(
+                 @env,
+                 {:call, {:atom, Map}, :put, [base, {:atom, :b}, {:integer, 2}]}
+               )
+    end
+
+    # --- :not_set filtering in fields_for_receiver ---
+
+    test ":not_set field values are excluded from fields_for_receiver" do
+      alias ElixirSense.Core.TypePresentation
+      env_binding = %Binding{functions: __ENV__.functions, macros: __ENV__.macros}
+
+      # Build a map shape with one normal field and one :not_set field.
+      # :not_set means the key is provably absent — should not appear in completion.
+      shape = {:map, [present: {:atom, :ok}, absent: :not_set], nil}
+      fields = TypePresentation.fields_for_receiver(env_binding, shape)
+
+      assert Map.has_key?(fields, :present)
+      refute Map.has_key?(fields, :absent)
+    end
+
+    # --- {:optional, _} wrapper preserved through expand ---
+
+    test "{:optional, inner} is preserved through expand" do
+      assert {:optional, {:atom, :ok}} ==
+               Binding.expand(@env, {:optional, {:atom, :ok}})
+    end
+
+    test "{:optional, inner} with unresolvable inner collapses to nil" do
+      assert nil ==
+               Binding.expand(@env, {:optional, {:variable, :missing_var_xyz, 999}})
+    end
+
+    # optional field IS informative (must not be dropped by uninformative_field?)
+    test "{:optional, inner} renders as if_set(...) not term()" do
+      alias ElixirSense.Core.TypePresentation
+      {:ok, rendered} = TypePresentation.render({:optional, {:atom, :ok}})
+      assert rendered == "if_set(:ok)"
+    end
+  end
+
+  describe "expand preserves optional (if_set) map-field wrappers" do
+    test "a top-level {:optional, inner} expands the inner (variable) and re-wraps" do
+      env = %Binding{
+        functions: __ENV__.functions,
+        macros: __ENV__.macros,
+        vars: [%VarInfo{version: 1, name: :v, type: {:integer, 5}}]
+      }
+
+      assert Binding.expand(env, {:optional, {:variable, :v, 1}}) ==
+               {:optional, {:integer, 5}}
+    end
+
+    test "a top-level {:optional, inner} expands the inner and re-wraps" do
+      assert Binding.expand(@env, {:optional, {:atom, :ok}}) == {:optional, {:atom, :ok}}
+    end
+
+    test "{:optional, inner} whose inner resolves to nil drops the wrapper" do
+      # An unresolvable variable expands to nil — no wrapper to keep.
+      assert Binding.expand(@env, {:optional, {:variable, :missing, 9}}) == nil
+    end
+
+    test "intersection with an optional member is conservative (no crash, no false :none)" do
+      # {:optional, _} is unknown to combine_intersection's structured clauses;
+      # it must fall through to nil (unknown) rather than crash or claim :none.
+      assert Binding.expand(@env, {:intersection, [{:optional, {:integer, 1}}, {:tuple, 0, []}]}) !=
+               :none
+
+      # An optional wrapping a covered scalar intersects to the narrower side,
+      # not to :none.
+      assert Binding.expand(@env, {:intersection, [{:optional, {:integer, 5}}, :number]}) !=
+               :none
+    end
+  end
+
+  describe "descr-backed covers?/disjointness/union dedup (native on, exact shapes)" do
+    @describetag :requires_native_types
+    # Native typing delegates subsumption/intersection/dedup to Descr when both operands are exact shapes
+    setup do
+      prev = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, true)
+      on_exit(fn -> Application.put_env(:elixir_sense, :use_elixir_types, prev) end)
+      assert ElixirTypes.enabled?()
+      :ok
+    end
+
+    # --- item 1: covers? delegation, observed via union dedup ---
+
+    test "tuple whose element union subsumes another tuple's element dedups the union" do
+      # `{1-tuple of (:a | :b)} | {1-tuple of :a}`: the first subsumes the second
+      # because at the element level `(:a | :b)` covers `:a`. The custom `covers?`
+      # has no clause for `covers?({:union,...}, {:atom,_})`, so this collapse only
+      # happens on the descr-backed path. Not an over-dedup: the subsumption is
+      # genuine.
+      assert {:tuple, 1, [{:union, [atom: :a, atom: :b]}]} ==
+               Binding.expand(
+                 @env,
+                 {:union,
+                  [
+                    {:tuple, 1, [{:union, [atom: :a, atom: :b]}]},
+                    {:tuple, 1, [{:atom, :a}]}
+                  ]}
+               )
+    end
+
+    test "difference removes a member subsumed via the descr subtype relation" do
+      # `(:a | :b) - :a` => `:b`. (Also works on the custom path for atoms; the
+      # descr path is what makes the element-level subsumption above possible.)
+      assert {:atom, :b} ==
+               Binding.expand(
+                 @env,
+                 {:difference, {:union, [atom: :a, atom: :b]}, {:atom, :a}}
+               )
+    end
+
+    # --- empirical property documentation (the basis for delegation) ---
+
+    test "descr-backed covers? matches the static subtype relation (property)" do
+      # Documents the dynamic-cancellation property the delegation relies on:
+      # `subtype?(dynamic(a), dynamic(b)) == subtype?(a, b)` and likewise for
+      # `disjoint?` — because both `dynamic(static)` operands are gradual, so the
+      # dynamic wrappers cancel. This is what makes the exact-pair delegation
+      # faithful through the `coerce_var_type_public/1` (dynamic-wrapping) path.
+      d = &Descr.dynamic/1
+      a = Descr.integer()
+      b = Descr.union(Descr.integer(), Descr.float())
+
+      assert Descr.subtype?(d.(a), d.(b)) == Descr.subtype?(a, b)
+      assert Descr.disjoint?(d.(a), d.(b)) == Descr.disjoint?(a, b)
+    end
+  end
+
+  describe "descr-backed covers?/disjointness (native off, custom path preserved)" do
+    setup do
+      prev = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, false)
+      on_exit(fn -> Application.put_env(:elixir_sense, :use_elixir_types, prev) end)
+      :ok
+    end
+
+    test "element-level union subsumption is NOT applied on the custom path" do
+      # The custom `covers?` lacks a `covers?({:union,...}, {:atom,_})` clause, so
+      # the two tuples stay as distinct union members (fallthrough unchanged).
+      assert {:union,
+              [
+                {:tuple, 1, [{:union, [atom: :a, atom: :b]}]},
+                {:tuple, 1, [{:atom, :a}]}
+              ]} ==
+               Binding.expand(
+                 @env,
+                 {:union,
+                  [
+                    {:tuple, 1, [{:union, [atom: :a, atom: :b]}]},
+                    {:tuple, 1, [{:atom, :a}]}
+                  ]}
+               )
     end
   end
 end

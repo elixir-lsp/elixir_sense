@@ -23,7 +23,17 @@ defmodule ElixirSense.Core.State.ModFunInfo do
             | :defdelegate
             | :defguard
             | :defguardp
-            | :defmodule
+            | :defmodule,
+          # ElixirTypes fields
+          elixir_types_clauses: list(map()),
+          elixir_types_sig: nil | {:infer | :strong, term(), list()},
+          # Provenance of elixir_types_sig. :inferred means the sig was produced
+          # by local clause inference (Module.Types); :exck means it came from an
+          # ExCk chunk (compiled native sig). nil means no sig was stored. Stored
+          # as a parallel field rather than a 4th tuple element because every
+          # reader pattern-matches on a 3-tuple.
+          elixir_types_sig_source: nil | :inferred | :exck,
+          elixir_types_status: :ok | :partial | :skipped
         }
 
   defstruct params: [],
@@ -34,7 +44,12 @@ defmodule ElixirSense.Core.State.ModFunInfo do
             generated: [],
             overridable: false,
             doc: "",
-            meta: %{}
+            meta: %{},
+            # ElixirTypes fields
+            elixir_types_clauses: [],
+            elixir_types_sig: nil,
+            elixir_types_sig_source: nil,
+            elixir_types_status: :skipped
 
   def get_arities(%ModFunInfo{params: params_variants}) do
     params_variants

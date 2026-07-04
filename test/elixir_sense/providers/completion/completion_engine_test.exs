@@ -140,7 +140,13 @@ defmodule ElixirSense.Providers.Completion.CompletionEngineTest do
              %{name: "Stream", subtype: :struct, type: :module},
              %{name: "String", subtype: nil, type: :module},
              %{name: "StringIO", subtype: nil, type: :module}
-           ] = expand(~c"Str") |> Enum.filter(&(&1.name |> String.starts_with?("Str")))
+           ] =
+             expand(~c"Str")
+             # stream_data is a test-only dep; its modules also match "Str"
+             |> Enum.filter(
+               &(String.starts_with?(&1.name, "Str") and
+                   not String.starts_with?(&1.name, "StreamData"))
+             )
 
     assert [
              %{name: "Macro"},
@@ -918,7 +924,8 @@ defmodule ElixirSense.Providers.Completion.CompletionEngineTest do
                  type: :field,
                  origin: nil,
                  call?: true,
-                 type_spec: nil,
+                 # inferred from the literal String module value (shape fallback)
+                 type_spec: "String",
                  value_is_map: false,
                  summary: "",
                  metadata: %{}
@@ -946,7 +953,9 @@ defmodule ElixirSense.Providers.Completion.CompletionEngineTest do
                  type: :field,
                  origin: nil,
                  call?: true,
-                 type_spec: nil,
+                 # inferred from the nested map literal (shape fallback)
+                 type_spec:
+                   "%{deeply: %{foo: term(), bar_1: term(), bar_2: term(), mod: String, num: term()}}",
                  value_is_map: true,
                  summary: "",
                  metadata: %{}
@@ -961,7 +970,9 @@ defmodule ElixirSense.Providers.Completion.CompletionEngineTest do
                  type: :field,
                  origin: nil,
                  call?: true,
-                 type_spec: nil,
+                 # inferred from the nested map literal (shape fallback)
+                 type_spec:
+                   "%{foo: term(), bar_1: term(), bar_2: term(), mod: String, num: term()}",
                  value_is_map: true,
                  summary: "",
                  metadata: %{}
@@ -1888,7 +1899,8 @@ defmodule ElixirSense.Providers.Completion.CompletionEngineTest do
                  type: :field,
                  origin: "ElixirSense.Providers.Completion.CompletionEngineTest.MyStruct",
                  call?: true,
-                 type_spec: nil,
+                 # inferred from the assigned map literal (shape fallback)
+                 type_spec: "%{asdf: term()}",
                  value_is_map: true,
                  summary: "",
                  metadata: %{}
@@ -1988,7 +2000,8 @@ defmodule ElixirSense.Providers.Completion.CompletionEngineTest do
                  type: :field,
                  origin: "ElixirSense.Providers.Completion.CompletionEngineTest.MyStruct",
                  call?: true,
-                 type_spec: nil,
+                 # inferred from the struct shape (shape fallback)
+                 type_spec: "%ElixirSense.Providers.Completion.CompletionEngineTest.MyStruct{}",
                  value_is_map: true,
                  summary: "",
                  metadata: %{}

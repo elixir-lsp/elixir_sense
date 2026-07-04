@@ -1,6 +1,16 @@
 defmodule ElixirSense.Core.TypeInferenceTest do
-  use ExUnit.Case, async: true
-  alias ElixirSense.Core.TypeInference
+  use ExUnit.Case, async: false
+  alias ElixirSense.Core.{ElixirTypes, TypeInference}
+
+  setup do
+    original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+
+    on_exit(fn ->
+      Application.put_env(:elixir_sense, :use_elixir_types, original_value)
+    end)
+
+    :ok
+  end
 
   describe "find_typed_vars" do
     defp find_typed_vars_in(code, match_context \\ nil, context \\ nil) do
@@ -323,6 +333,22 @@ defmodule ElixirSense.Core.TypeInferenceTest do
                }
              ]
     end
+
+    test "finds variables in binary pattern" do
+      assert find_typed_vars_in("<<a::binary, b::integer>>", nil, :match) == [
+               {{:a, 1}, {:binary, nil}},
+               {{:b, 1}, {:integer, nil}}
+             ]
+
+      assert find_typed_vars_in("<<x::utf8, rest::binary>>", nil, :match) == [
+               {{:x, 1}, {:integer, nil}},
+               {{:rest, 1}, {:binary, nil}}
+             ]
+
+      assert find_typed_vars_in("<<f::float>>", nil, :match) == [
+               {{:f, 1}, {:float, nil}}
+             ]
+    end
   end
 
   describe "type_of" do
@@ -342,6 +368,28 @@ defmodule ElixirSense.Core.TypeInferenceTest do
         end)
 
       TypeInference.type_of(ast, context)
+    end
+
+    defp with_elixir_types(enabled, fun) do
+      original_value = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, enabled)
+
+      try do
+        fun.()
+      after
+        Application.put_env(:elixir_sense, :use_elixir_types, original_value)
+      end
+    end
+
+    defp assert_old_and_native(code, old_expected, native_expected, context \\ nil) do
+      assert with_elixir_types(false, fn -> type_of(code, context) end) == old_expected
+
+      # `native_expected` describes the expected-type native backend (1.19+).
+      # On 1.18 expression typing stays on the custom engine, so only the
+      # disabled-mode (`old_expected`) assertion above applies.
+      if ElixirTypes.available?(:expr) do
+        assert with_elixir_types(true, fn -> type_of(code, context) end) == native_expected
+      end
     end
 
     test "atom" do
@@ -372,25 +420,47 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "list" do
       assert type_of("[]") == {:list, :empty}
       assert type_of("[a]") == {:list, {:variable, :a, 1}}
-      assert type_of("[a | 1]") == {:list, {:variable, :a, 1}}
+      # `[a | 1]` has a concrete non-list tail (`1`), so it is a non-empty
+      # IMPROPER list: `{:nonempty_list, elem, tail}` (was conservatively
+      # degraded to `{:list, elem}` before the improper-list shape existed).
+      assert type_of("[a | 1]") == {:nonempty_list, {:variable, :a, 1}, {:integer, 1}}
       assert type_of("[a]", :match) == {:list, nil}
       assert type_of("[a | 1]", :match) == {:list, nil}
       assert type_of("[^a]", :match) == {:list, {:variable, :a, 1}}
       assert type_of("[[1]]") == {:list, {:list, {:integer, 1}}}
-      # TODO union a | b?
-      assert type_of("[a, b]") == {:list, {:variable, :a, 1}}
+      # The element type is the union of every element's type.
+      assert type_of("[a, b]") ==
+               {:list, {:union, [{:variable, :a, 1}, {:variable, :b, 1}]}}
+
+      # A pure cons `[a | b]` keeps only the head's type (the tail is a var).
       assert type_of("[a | b]") == {:list, {:variable, :a, 1}}
-      assert type_of("[a, b | c]") == {:list, {:variable, :a, 1}}
+
+      # `[a | [b]]`: the tail is a list, so its element type folds in.
+      assert type_of("[a | [b]]") ==
+               {:list, {:union, [{:variable, :a, 1}, {:variable, :b, 1}]}}
+
+      # A trailing cons `[a, b | c]` contributes its head `b`; tail `c` is unknown.
+      assert type_of("[a, b | c]") ==
+               {:list, {:union, [{:variable, :a, 1}, {:variable, :b, 1}]}}
     end
 
     test "list operators" do
-      assert type_of(":erlang.++([a], [b])") ==
-               {:call, {:atom, :erlang}, :++,
-                [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
+      # Native mode no longer eagerly claims a proper list for `++`: the
+      # `:erlang.++` signature's improper-tail result (`non_empty_list(term(),
+      # term())`) has no shape equivalent, so native typing falls back to a
+      # call thunk (with natively-typed args — `[a]` is a non-empty list) and
+      # Binding expansion applies the precise rule later.
+      assert_old_and_native(
+        ":erlang.++([a], [b])",
+        {:call, {:atom, :erlang}, :++, [list: {:variable, :a, 1}, list: {:variable, :b, 1}]},
+        {:call, {:atom, :erlang}, :++, [nonempty_list: nil, nonempty_list: nil]}
+      )
 
-      assert type_of(":erlang.--([a], [b])") ==
-               {:call, {:atom, :erlang}, :--,
-                [list: {:variable, :a, 1}, list: {:variable, :b, 1}]}
+      assert_old_and_native(
+        ":erlang.--([a], [b])",
+        {:call, {:atom, :erlang}, :--, [list: {:variable, :a, 1}, list: {:variable, :b, 1}]},
+        {:list, nil}
+      )
     end
 
     test "tuple" do
@@ -400,13 +470,22 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "map" do
-      assert type_of("%{}") == {:map, [], nil}
-      assert type_of("%{asd: a}") == {:map, [{:asd, {:variable, :a, 1}}], nil}
-      # NOTE non atom keys are not supported
-      assert type_of("%{\"asd\" => a}") == {:map, [], nil}
+      # Map literals in EXPRESSION context are `:closed` (literal-complete): the
+      # constructed map has exactly the listed keys.
+      assert type_of("%{}") == {:map, [], :closed}
+      assert type_of("%{asd: a}") == {:map, [{:asd, {:variable, :a, 1}}], :closed}
+      # Non-atom keys are preserved as domain keys (`{:domain, key_type}`).
+      assert type_of("%{\"asd\" => a}") ==
+               {:map, [{{:domain, {:binary, "asd"}}, {:variable, :a, 1}}], :closed}
 
       assert type_of("%{b | asd: a}") ==
                {:map, [{:asd, {:variable, :a, 1}}], {:variable, :b, 1}}
+
+      # In :match context a map literal is a PATTERN — `nil` (partial), matching
+      # any map that has the listed keys.
+      assert type_of("%{}", :match) == {:map, [], nil}
+      # In :match context a bound variable has no standalone type (`nil`).
+      assert type_of("%{asd: a}", :match) == {:map, [asd: nil], nil}
 
       assert type_of("%{b | asd: a}", :match) == :none
     end
@@ -464,11 +543,23 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     end
 
     test "local call" do
-      assert type_of("foo(a)") == {:local_call, :foo, {1, 1}, [{:variable, :a, 1}]}
+      # Native typing returns nil for this unsupported local call, so the engine
+      # falls back to the {:local_call, ...} shape Binding relies on.
+      assert_old_and_native(
+        "foo(a)",
+        {:local_call, :foo, {1, 1}, [{:variable, :a, 1}]},
+        {:local_call, :foo, {1, 1}, [{:variable, :a, 1}]}
+      )
     end
 
     test "remote call" do
-      assert type_of(":foo.bar(a)") == {:call, {:atom, :foo}, :bar, [{:variable, :a, 1}]}
+      # Likewise the {:call, ...} shape is preserved when native typing has no
+      # signature for the remote call.
+      assert_old_and_native(
+        ":foo.bar(a)",
+        {:call, {:atom, :foo}, :bar, [{:variable, :a, 1}]},
+        {:call, {:atom, :foo}, :bar, [{:variable, :a, 1}]}
+      )
     end
 
     test "match" do
@@ -477,26 +568,75 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       assert type_of("b = 5 = a") == {:intersection, [{:integer, 5}, {:variable, :a, 1}]}
       assert type_of("5 = 5") == {:integer, 5}
 
+      # LHS is a pattern (`:match` → partial `nil`); RHS is an expression
+      # (`:closed`).
       assert type_of("%{foo: a} = %{bar: b}") ==
-               {:intersection, [{:map, [foo: nil], nil}, {:map, [bar: {:variable, :b, 1}], nil}]}
+               {:intersection,
+                [{:map, [foo: nil], nil}, {:map, [bar: {:variable, :b, 1}], :closed}]}
 
       assert type_of("%{foo: a} = %{bar: b}", :match) ==
                {:intersection, [{:map, [foo: nil], nil}, {:map, [bar: nil], nil}]}
     end
 
-    test "other" do
-      assert type_of("\"asd\"") == nil
-      assert type_of("1.23") == nil
+    test "string literal" do
+      assert_old_and_native("\"asd\"", {:binary, "asd"}, {:binary, "asd"})
+    end
+
+    test "float literal" do
+      assert_old_and_native("1.23", {:float, 1.23}, {:float, 1.23})
+    end
+
+    test "binary expression" do
+      assert_old_and_native("<<1, 2, 3>>", {:binary, nil}, {:binary, nil})
+      assert_old_and_native("<<a::utf8>>", {:binary, nil}, {:binary, nil})
+    end
+
+    test "__DIR__ returns binary" do
+      assert type_of("__DIR__", nil) == {:binary, nil}
+    end
+
+    test "__STACKTRACE__ returns list" do
+      assert type_of("__STACKTRACE__", nil) == {:list, nil}
+    end
+
+    test "__CALLER__ returns Macro.Env struct" do
+      assert type_of("__CALLER__", nil) == {:struct, [], {:atom, Macro.Env}, nil}
+    end
+
+    test "for comprehension without into" do
+      assert_old_and_native("for x <- [1, 2], do: x", {:list, nil}, {:list, nil})
+    end
+
+    test "for comprehension with into map" do
+      assert_old_and_native(
+        "for x <- [1, 2], into: %{}, do: {x, x}",
+        {:map, [], nil},
+        {:map, [], nil}
+      )
+    end
+
+    test "for comprehension with into string" do
+      assert_old_and_native(
+        ~s(for x <- ["a", "b"], into: "", do: x),
+        {:binary, nil},
+        {:binary, nil}
+      )
     end
 
     test "__STACKTRACE__ returns {:list, nil}" do
       assert type_of("__STACKTRACE__") == {:list, nil}
     end
 
-    test "anonymous function returns nil" do
-      assert type_of("fn -> a end") == nil
-      assert type_of("fn x -> x + 1 end") == nil
-      assert type_of("fn x, y -> x * y end") == nil
+    test "anonymous function" do
+      # Both modes now extract fn arity/arg info
+      assert_old_and_native("fn -> a end", {:fun, 0}, {:fun, 0})
+      assert_old_and_native("fn x -> x + 1 end", {:fun, [nil], nil}, {:fun, [nil], nil})
+
+      assert_old_and_native(
+        "fn x, y -> x * y end",
+        {:fun, [nil, nil], nil},
+        {:fun, [nil, nil], nil}
+      )
     end
   end
 
@@ -520,6 +660,67 @@ defmodule ElixirSense.Core.TypeInferenceTest do
     test "__CALLER__ returns {:struct, [], {:atom, Macro.Env}, nil}" do
       assert type_of("__CALLER__") == {:struct, [], {:atom, Macro.Env}, nil}
     end
+
+    test "if/unless result is the union of both branches (native-off)" do
+      assert type_of("if a, do: :yes, else: :no") ==
+               {:union, [{:atom, :yes}, {:atom, :no}]}
+
+      assert type_of("unless a, do: :no, else: :yes") ==
+               {:union, [{:atom, :no}, {:atom, :yes}]}
+
+      # An `if` without `else` can return nil.
+      assert type_of("if a, do: :yes") == {:union, [{:atom, :yes}, {:atom, nil}]}
+    end
+
+    test "anonymous functions render by arity (native-off fallback)" do
+      assert type_of("fn x -> x + 1 end") == {:fun, [nil], nil}
+      assert type_of("fn -> :ok end") == {:fun, 0}
+    end
+
+    test "with without else unions the do body and each <- failure value" do
+      # Precise patterns subtract from failure; `{:ok, _}` is precise
+      assert type_of("with {:ok, v} <- a, do: :done") ==
+               {:union,
+                [
+                  {:atom, :done},
+                  {:difference, {:variable, :a, 1}, {:tuple, 2, [{:atom, :ok}, nil]}}
+                ]}
+    end
+
+    test "a clause body that is just a head-bound var widens to nil (no leak)" do
+      # `v` is out of scope at the case result site, so it must not leak.
+      assert type_of("case a do\n  {:ok, v} -> v\n  _ -> :err\nend") == nil
+    end
+
+    test "a structured clause body keeps its shape" do
+      assert type_of("case a do\n  1 -> {:wrapped, :a}\n  2 -> {:wrapped, :b}\nend") ==
+               {:union,
+                [
+                  {:tuple, 2, [{:atom, :wrapped}, {:atom, :a}]},
+                  {:tuple, 2, [{:atom, :wrapped}, {:atom, :b}]}
+                ]}
+    end
+
+    test "bitstring vs binary: sub-byte segments are bitstrings" do
+      assert type_of("<<1::1>>") == :bitstring
+      assert type_of("<<x::bitstring>>") == :bitstring
+      assert type_of("<<x::integer-size(4)>>") == :bitstring
+      assert type_of("<<1, 2, 3>>") == {:binary, nil}
+      assert type_of("<<x::binary-size(4)>>") == {:binary, nil}
+      assert type_of("<<x::utf8>>") == {:binary, nil}
+    end
+
+    test "bitstring vs binary: unit multiplies size for effective bit width" do
+      # size(1)-unit(8) is 8 bits — byte-aligned binary, not a bitstring
+      assert type_of("<<1::size(1)-unit(8)>>") == {:binary, nil}
+      assert type_of("<<x::integer-size(2)-unit(8)>>") == {:binary, nil}
+      # 2*4 shorthand (size 2, unit 4) is 8 bits — binary
+      assert type_of("<<1::2*4>>") == {:binary, nil}
+      # size(3)-unit(2) is 6 bits — sub-byte
+      assert type_of("<<1::size(3)-unit(2)>>") == :bitstring
+      # unit without a literal size stays conservative (binary)
+      assert type_of("<<x::size(n)-unit(8)>>") == {:binary, nil}
+    end
   end
 
   describe "special forms" do
@@ -538,10 +739,210 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       "require Module"
     ]
 
+    # Native (1.19+) types `case`/`cond` precisely; for `try`/`receive`/`with`
+    # over undefined calls native returns nil, so the conservative branch-result
+    # union (same as native-off) applies.
+    native_expectations = %{
+      "case a do\n  :ok -> 1\n  :error -> 2\nend" => {:integer, nil},
+      "cond do\n  a -> 1\n  b -> 2\nend" => {:integer, nil},
+      "try do\n  risky_operation()\nrescue\n  e -> handle(e)\nend" =>
+        {:union,
+         [
+           {:local_call, :risky_operation, {2, 1}, []},
+           {:local_call, :handle, {4, 1}, [{:variable, :e, 1}]}
+         ]},
+      "receive do\n  {:msg, msg} -> process(msg)\nend" =>
+        {:local_call, :process, {2, 1}, [{:variable, :msg, 1}]},
+      "for x <- list, do: x * 2" => {:list, nil},
+      # no `else`: result is the `do` body unioned with each `<-` failure value
+      # (RHS minus the matched pattern when precise; `{:ok, _}` here is precise).
+      "with {:ok, a} <- fetch_a(), {:ok, b} <- fetch_b(a), do: a + b" =>
+        {:union,
+         [
+           {:local_call, :+, {1, 1}, [{:variable, :a, 1}, {:variable, :b, 1}]},
+           {:difference, {:local_call, :fetch_a, {1, 1}, []}, {:tuple, 2, [{:atom, :ok}, nil]}},
+           {:difference, {:local_call, :fetch_b, {1, 1}, [{:variable, :a, 1}]},
+            {:tuple, 2, [{:atom, :ok}, nil]}}
+         ]},
+      "quote do: a + b" => nil,
+      "unquote(expr)" => nil,
+      "unquote_splicing(expr)" => nil,
+      "import Module" => nil,
+      "alias Module.SubModule" => nil,
+      "require Module" => nil
+    }
+
+    # Native-off (legacy / 1.18): clause constructs now return a conservative
+    # union of their branch result types instead of nil.
+    old_expectations = %{
+      "case a do\n  :ok -> 1\n  :error -> 2\nend" => {:union, [{:integer, 1}, {:integer, 2}]},
+      "cond do\n  a -> 1\n  b -> 2\nend" => {:union, [{:integer, 1}, {:integer, 2}]},
+      "try do\n  risky_operation()\nrescue\n  e -> handle(e)\nend" =>
+        {:union,
+         [
+           {:local_call, :risky_operation, {2, 1}, []},
+           {:local_call, :handle, {4, 1}, [{:variable, :e, 1}]}
+         ]},
+      "receive do\n  {:msg, msg} -> process(msg)\nend" =>
+        {:local_call, :process, {2, 1}, [{:variable, :msg, 1}]},
+      # no `else`: result is the `do` body unioned with each `<-` failure value
+      # (RHS minus the matched pattern when precise; `{:ok, _}` here is precise).
+      "with {:ok, a} <- fetch_a(), {:ok, b} <- fetch_b(a), do: a + b" =>
+        {:union,
+         [
+           {:local_call, :+, {1, 1}, [{:variable, :a, 1}, {:variable, :b, 1}]},
+           {:difference, {:local_call, :fetch_a, {1, 1}, []}, {:tuple, 2, [{:atom, :ok}, nil]}},
+           {:difference, {:local_call, :fetch_b, {1, 1}, [{:variable, :a, 1}]},
+            {:tuple, 2, [{:atom, :ok}, nil]}}
+         ]},
+      "for x <- list, do: x * 2" => {:list, nil}
+    }
+
     for form <- special_forms do
-      test "special form: #{inspect(form)} returns nil" do
-        assert type_of(unquote(form)) == nil
+      test "special form: #{inspect(form)} matches legacy and native mode" do
+        old_expected = Map.get(unquote(Macro.escape(old_expectations)), unquote(form))
+
+        assert_old_and_native(
+          unquote(form),
+          old_expected,
+          Map.fetch!(unquote(Macro.escape(native_expectations)), unquote(form))
+        )
       end
+    end
+  end
+
+  describe "type_of/4 with compiler context" do
+    alias ElixirSense.Core.State.VarInfo
+
+    defp type_of_with_context(code, vars_info, env \\ %{}) do
+      ast =
+        Code.string_to_quoted!(code)
+        |> Macro.prewalk(fn
+          {:__aliases__, _, list} ->
+            Module.concat(list)
+
+          {atom, _meta, var_context} = node when is_atom(atom) and is_atom(var_context) ->
+            Macro.update_meta(node, &Keyword.put(&1, :version, 1))
+
+          node ->
+            node
+        end)
+
+      state = %{vars_info: [vars_info]}
+
+      env =
+        Map.merge(%{module: TestModule, function: {:test, 0}, file: "nofile", context: nil}, env)
+
+      TypeInference.type_of(ast, env[:context], state, env)
+    end
+
+    test "type_of/4 falls back to type_of/2 when native typing disabled" do
+      original = Application.get_env(:elixir_sense, :use_elixir_types, false)
+      Application.put_env(:elixir_sense, :use_elixir_types, false)
+
+      try do
+        result =
+          type_of_with_context("x", %{
+            {:x, 1} => %VarInfo{name: :x, version: 1, type: {:integer, 1}}
+          })
+
+        assert result == {:variable, :x, 1}
+      after
+        Application.put_env(:elixir_sense, :use_elixir_types, original)
+      end
+    end
+
+    test "type_of/4 with variable context produces native result when enabled" do
+      # Native expression typing requires the expected-type backend (1.19+); on
+      # 1.18 type_of/4 stays on the custom engine.
+      if ElixirTypes.available?(:expr) do
+        original = Application.get_env(:elixir_sense, :use_elixir_types, false)
+        Application.put_env(:elixir_sense, :use_elixir_types, true)
+
+        try do
+          # With an integer variable in scope, native typing should type "x + 1" as integer
+          vars = %{
+            {:x, 1} => %VarInfo{
+              name: :x,
+              version: 1,
+              type: {:integer, nil},
+              elixir_types_descr: Module.Types.Descr.integer()
+            }
+          }
+
+          result = type_of_with_context(":erlang.+(x, 1)", vars)
+          assert result in [{:integer, nil}, :number]
+        after
+          Application.put_env(:elixir_sense, :use_elixir_types, original)
+        end
+      end
+    end
+
+    test "type_of/4 handles empty vars_info gracefully" do
+      result = type_of_with_context(":ok", %{})
+      assert result == {:atom, :ok}
+    end
+  end
+
+  # Precision gate for cross-clause subtraction (tasks #1/#2/#26): a clause head
+  # may contribute to the subtracted set only when it is an under-approximation
+  # of the matched value set. Mirrors the compiler's `pattern_precise? and
+  # guard_precise?` (`Module.Types.Pattern`).
+  describe "precise_pattern_type" do
+    defp precise(code) do
+      code |> Code.string_to_quoted!() |> TypeInference.precise_pattern_type()
+    end
+
+    test "atom literals are precise" do
+      assert precise(":ok") == {:ok, {:atom, :ok}}
+      assert precise("nil") == {:ok, {:atom, nil}}
+    end
+
+    test "bare var / underscore are precise but contribute nil (subtraction no-op)" do
+      assert precise("x") == {:ok, nil}
+      assert precise("_") == {:ok, nil}
+    end
+
+    test "non-atom literals are imprecise (type_of widens to the whole domain)" do
+      assert precise("1") == :imprecise
+      assert precise("1.0") == :imprecise
+      assert precise(~s("foo")) == :imprecise
+    end
+
+    test "tagged tuples of exact-or-wildcard elements are precise" do
+      assert precise("{:ok, x}") == {:ok, {:tuple, 2, [{:atom, :ok}, nil]}}
+      assert precise("{:ok, _}") == {:ok, {:tuple, 2, [{:atom, :ok}, nil]}}
+      assert precise("{:a, :b, c}") == {:ok, {:tuple, 3, [{:atom, :a}, {:atom, :b}, nil]}}
+    end
+
+    test "tuples with a non-atom literal element are imprecise" do
+      assert precise("{:ok, 1}") == :imprecise
+      assert precise("{1, x}") == :imprecise
+    end
+
+    test "empty list is precise; cons contributes at most a non-empty-list shape" do
+      assert precise("[]") == {:ok, {:list, :empty}}
+      assert precise("[h | t]") == {:ok, {:nonempty_list, nil}}
+    end
+
+    test "fixed-length list patterns are imprecise" do
+      assert precise("[x]") == :imprecise
+      assert precise("[a, b]") == :imprecise
+      assert precise("[a, b | t]") == :imprecise
+    end
+
+    test "binary patterns with segments are imprecise" do
+      assert precise("<<c, rest::binary>>") == :imprecise
+      assert precise("<<1, 2, 3>>") == :imprecise
+    end
+
+    test "maps are imprecise (open in patterns)" do
+      assert precise("%{a: 1}") == :imprecise
+    end
+
+    test "any clause with a when guard is imprecise" do
+      assert precise("{:ok, x} when x > 10") == :imprecise
+      assert precise("x when is_integer(x)") == :imprecise
     end
   end
 end

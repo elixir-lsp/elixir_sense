@@ -3073,7 +3073,8 @@ defmodule ElixirSense.Providers.Completion.SuggestionTest do
                type: :field,
                call?: true,
                subtype: :struct_field,
-               type_spec: nil,
+               # inferred from the defstruct default (shape fallback)
+               type_spec: "nil",
                value_is_map: false
              },
              %{
@@ -3082,7 +3083,8 @@ defmodule ElixirSense.Providers.Completion.SuggestionTest do
                type: :field,
                call?: true,
                subtype: :struct_field,
-               type_spec: nil,
+               # inferred from the defstruct default (shape fallback)
+               type_spec: "\"\"",
                value_is_map: false
              }
            ] = list
@@ -3109,7 +3111,8 @@ defmodule ElixirSense.Providers.Completion.SuggestionTest do
                type: :field,
                call?: true,
                subtype: :map_key,
-               type_spec: nil,
+               # inferred from the map literal (shape fallback)
+               type_spec: "1",
                value_is_map: false
              },
              %{
@@ -3118,7 +3121,8 @@ defmodule ElixirSense.Providers.Completion.SuggestionTest do
                type: :field,
                call?: true,
                subtype: :map_key,
-               type_spec: nil,
+               # inferred from the map literal (shape fallback)
+               type_spec: "%{abc: 123}",
                value_is_map: true
              }
            ] = list
@@ -3145,7 +3149,8 @@ defmodule ElixirSense.Providers.Completion.SuggestionTest do
                type: :field,
                call?: true,
                subtype: :map_key,
-               type_spec: nil,
+               # inferred from the map literal (shape fallback)
+               type_spec: "1",
                value_is_map: false
              },
              %{
@@ -3154,7 +3159,8 @@ defmodule ElixirSense.Providers.Completion.SuggestionTest do
                type: :field,
                call?: true,
                subtype: :map_key,
-               type_spec: nil,
+               # inferred from the map literal (shape fallback)
+               type_spec: "%{abc: 123}",
                value_is_map: true
              }
            ] = list
@@ -3645,12 +3651,17 @@ defmodule ElixirSense.Providers.Completion.SuggestionTest do
       Suggestion.suggestions(buffer, 2, 12)
       |> Enum.filter(fn s -> s.type == :module end)
 
-    # NOTE: StreamData (the stream_data dep) is loaded in the elixir-ls test env but not elixir_sense's.
+    # NOTE: stream_data is now a test-only dep here as well; its modules also match "Str".
     assert [
              %{name: "Stream"},
              %{name: "String"},
              %{name: "StringIO"}
-           ] = list |> Enum.filter(&(&1.name |> String.starts_with?("Str")))
+           ] =
+             list
+             |> Enum.filter(
+               &(String.starts_with?(&1.name, "Str") and
+                   not String.starts_with?(&1.name, "StreamData"))
+             )
   end
 
   test "suggest modules to alias with __MODULE__" do

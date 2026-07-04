@@ -1,6 +1,9 @@
 defmodule ElixirSense.Core.Compiler.State do
   @moduledoc false
+  require Logger
+
   alias ElixirSense.Core.BuiltinFunctions
+  alias ElixirSense.Core.ElixirTypes
   alias ElixirSense.Core.State.Env
 
   alias ElixirSense.Core.State.{
@@ -41,7 +44,21 @@ defmodule ElixirSense.Core.Compiler.State do
   @type structs_t :: %{optional(module) => ElixirSense.Core.State.StructInfo.t()}
   @type records_t :: %{optional({module, atom}) => ElixirSense.Core.State.RecordInfo.t()}
   @type protocol_t :: {module, nonempty_list(module)}
-  @type var_type :: nil | {:atom, atom} | {:map, keyword} | {:struct, keyword, module}
+  @typedoc """
+  The internal "shape" stored in `VarInfo.type` / `AttributeInfo.type`.
+
+  This is ElixirSense's pragmatic type vocabulary — *not* Elixir typespecs. The
+  full set of forms is produced by `ElixirSense.Core.TypeInference` and consumed
+  by `ElixirSense.Core.Binding` (e.g. `nil` = unknown, `:none` = bottom, the
+  scalar atoms `:atom`/`:integer`/..., and tuples such as `{:atom, value}`,
+  `{:tuple, n, [...]}`, `{:map, fields, updated}`, `{:struct, fields, type,
+  updated}`, `{:union, [...]}`, `{:intersection, [...]}`). A stored shape may be
+  unresolved — it can contain `{:variable, ...}`, `{:call, ...}`, projection
+  thunks (`{:map_key, ...}`, `{:tuple_nth, ...}`, ...) or `{:difference, ...}` —
+  until concretized by `ElixirSense.Core.Binding.expand/2`. Every shape is
+  therefore `nil`, a bare atom, or a tuple.
+  """
+  @type var_type :: nil | atom | tuple
 
   @type t :: %__MODULE__{
           attributes: list(list(ElixirSense.Core.State.AttributeInfo.t())),
@@ -436,7 +453,11 @@ defmodule ElixirSense.Core.Compiler.State do
       doc: doc,
       meta: meta,
       generated: [Keyword.get(options, :generated, false) | current_info.generated],
-      overridable: overridable
+      overridable: overridable,
+      elixir_types_clauses: current_info.elixir_types_clauses || [],
+      elixir_types_sig: current_info.elixir_types_sig,
+      elixir_types_sig_source: current_info.elixir_types_sig_source,
+      elixir_types_status: current_info.elixir_types_status || :skipped
     }
 
     info =
@@ -867,15 +888,65 @@ defmodule ElixirSense.Core.Compiler.State do
   defp combine_specs(nil, new), do: new
 
   defp combine_specs(%SpecInfo{} = existing, %SpecInfo{} = new) do
+    merged_sig = merge_elixir_types_sigs(existing.elixir_types_sig, new.elixir_types_sig)
+
+    # Provenance: :spec if either side has a spec-derived sig, else nil.
+    merged_source =
+      case {existing.elixir_types_sig_source, new.elixir_types_sig_source} do
+        {:spec, _} -> :spec
+        {_, :spec} -> :spec
+        _ -> nil
+      end
+
     %SpecInfo{
       existing
       | positions: [hd(new.positions) | existing.positions],
         end_positions: [hd(new.end_positions) | existing.end_positions],
         generated: [hd(new.generated) | existing.generated],
         args: [hd(new.args) | existing.args],
-        specs: [hd(new.specs) | existing.specs]
+        specs: [hd(new.specs) | existing.specs],
+        elixir_types_sig: merged_sig,
+        elixir_types_sig_source: merged_source
     }
   end
+
+  defp merge_elixir_types_sigs(nil, new), do: new
+  defp merge_elixir_types_sigs(existing, nil), do: existing
+
+  defp merge_elixir_types_sigs(
+         {kind1, _domain1, clauses1},
+         {kind2, _domain2, clauses2}
+       ) do
+    # Use pattern-match clauses rather than `==` so dialyzer does not emit
+    # :exact_compare; the :strong branch is reachable (ExCk chunks can carry
+    # :strong sigs) and kept intentionally.
+    merged_kind = merge_sig_kind(kind1, kind2)
+    merged_clauses = clauses1 ++ clauses2
+
+    # Recompute domain as union of all clause arg types
+    merged_domain =
+      case merged_clauses do
+        [{args, _return}] ->
+          args
+
+        [{first_args, _} | rest] ->
+          Enum.zip_with([first_args | Enum.map(rest, fn {args, _} -> args end)], fn descrs ->
+            Enum.reduce(descrs, &ElixirTypes.descr_union/2)
+          end)
+
+        _ ->
+          nil
+      end
+
+    {merged_kind, merged_domain, merged_clauses}
+  end
+
+  # Promote to :strong if either operand is :strong; otherwise keep :infer.
+  # Separate clauses (not `==` guards) avoid dialyzer :exact_compare; the
+  # :strong branches are intentionally kept for future callers.
+  defp merge_sig_kind(:strong, _), do: :strong
+  defp merge_sig_kind(_, :strong), do: :strong
+  defp merge_sig_kind(_, _), do: :infer
 
   def add_spec(
         %__MODULE__{} = state,
@@ -907,10 +978,17 @@ defmodule ElixirSense.Core.Compiler.State do
         meta
       end
 
+    built_sig = build_elixir_types_spec_sig(env, type_name, Keyword.get(options, :spec_ast), kind)
+
     type_info = %SpecInfo{
       name: type_name,
       args: [arg_names],
       specs: [spec],
+      elixir_types_sig: built_sig,
+      # Marks the sig as derived from a user @spec/@callback/@macrocallback (not
+      # compiler-verified). All sig tuples share the same 3-element shape, so
+      # readers distinguish spec-derived sigs via this field, not the tuple tag.
+      elixir_types_sig_source: if(built_sig != nil, do: :spec, else: nil),
       kind: kind,
       generated: [Keyword.get(options, :generated, false)],
       positions: [pos],
@@ -931,27 +1009,545 @@ defmodule ElixirSense.Core.Compiler.State do
     %__MODULE__{state | specs: specs}
   end
 
-  def add_var_write(%__MODULE__{} = state, {name, meta, _}) when name != :_ do
-    version = meta[:version]
-    scope_id = hd(state.scope_ids)
+  defp build_elixir_types_spec_sig(_env, _name, _spec_ast, kind)
+       when kind not in [:spec, :callback, :macrocallback],
+       do: nil
 
-    info = %VarInfo{
-      name: name,
-      version: version,
-      positions: [extract_position(meta)],
-      scope_id: scope_id
-    }
+  # `spec_ast` is the already-expanded quoted spec AST captured at the @spec
+  # expansion site (Compiler.Typespec.expand_spec/3). Converting it directly
+  # (rather than re-parsing the stringified spec) preserves the alias/remote-type
+  # expansion the compiler already performed. The unwrapped AST is either
+  # `{:when, _, [{:"::", ...}, guards]}` or `{:"::", _, [...]}`, which is exactly
+  # what extract_spec_parts/1 matches.
+  #
+  # Building a native (Descr-valued) sig requires the Module.Types backend; on
+  # Elixir < 1.18 (no `Module.Types.Descr`) bail out early, since
+  # `spec_return_to_descr/3` would otherwise invoke `Descr.*` and raise.
+  defp build_elixir_types_spec_sig(%{module: module}, name, spec_ast, _kind)
+       when is_atom(module) and is_atom(name) and is_tuple(spec_ast) do
+    if ElixirTypes.available?() do
+      build_elixir_types_spec_sig_native(module, name, spec_ast)
+    else
+      nil
+    end
+  end
 
-    [vars_from_scope | other_vars] = state.vars_info
-    vars_from_scope = Map.put(vars_from_scope, {name, version}, info)
+  defp build_elixir_types_spec_sig(_, _, _, _), do: nil
 
-    %__MODULE__{
-      state
-      | vars_info: [vars_from_scope | other_vars]
+  defp build_elixir_types_spec_sig_native(module, name, spec_ast) do
+    with {:ok, {fun_ast, return_ast, guards}} <- extract_spec_parts(spec_ast),
+         {^name, _, args} <- fun_ast,
+         true <- is_list(args) do
+      arg_descrs = Enum.map(args, &spec_arg_to_descr(&1, module, guards))
+      return_descr = spec_return_to_descr(return_ast, module, guards)
+      # Domain is the single clause's arg types (enables arg-domain filtering).
+      # Label :infer (not :strong): user @spec annotations are claims, not
+      # compiler-verified constraints, so domain filtering must not prune
+      # overloads or treat returns as static facts. Returns are already
+      # dynamic-wrapped by coerce_var_type_public (via spec_return_to_descr).
+      {:infer, arg_descrs, [{arg_descrs, return_descr}]}
+    else
+      _ -> nil
+    end
+  end
+
+  defp extract_spec_parts({:when, _, [{:"::", _, [fun_ast, return_ast]}, guards]}) do
+    {:ok, {fun_ast, return_ast, guards}}
+  end
+
+  defp extract_spec_parts({:"::", _, [fun_ast, return_ast]}) do
+    {:ok, {fun_ast, return_ast, []}}
+  end
+
+  defp extract_spec_parts(_), do: :error
+
+  defp spec_arg_to_descr({:"::", _, [_var_ast, type_ast]}, module, guards) do
+    spec_return_to_descr(type_ast, module, guards)
+  end
+
+  defp spec_arg_to_descr(type_ast, module, guards),
+    do: spec_return_to_descr(type_ast, module, guards)
+
+  defp spec_return_to_descr(type_ast, module, guards) do
+    type_ast
+    |> substitute_spec_vars(guards)
+    |> spec_ast_to_shape(module)
+    |> ElixirTypes.coerce_var_type_public()
+  rescue
+    e ->
+      Logger.debug(
+        "spec_return_to_descr failed for #{inspect(type_ast)}: #{Exception.format(:error, e, __STACKTRACE__)}"
+      )
+
+      ElixirTypes.descr_dynamic()
+  end
+
+  defp substitute_spec_vars(type_ast, guards) when is_list(guards) do
+    guard_map =
+      for {var, type} <- guards,
+          is_atom(var),
+          into: %{},
+          do: {var, type}
+
+    # Substitute `when` guard vars. We must NOT use Macro.prewalk: it re-traverses
+    # substituted output, so a recursive guard (`when opt: [term :: opt]`) would
+    # expand forever and OOM. We walk manually and track the set of vars currently
+    # being expanded (a plain map as a set — MapSet is dialyzer-opaque and trips
+    # call_without_opaque downstream); a var already on the expansion path is left
+    # as-is, breaking recursive guards while still expanding every other var.
+    do_substitute_spec_vars(type_ast, guard_map, %{})
+  end
+
+  defp substitute_spec_vars(type_ast, _guards), do: type_ast
+
+  defp do_substitute_spec_vars({name, _, nil} = ast, guard_map, in_progress)
+       when is_atom(name) do
+    case guard_map do
+      %{^name => replacement} ->
+        if Map.has_key?(in_progress, name) do
+          # recursive guard reference — stop expanding to avoid infinite growth
+          ast
+        else
+          do_substitute_spec_vars(replacement, guard_map, Map.put(in_progress, name, true))
+        end
+
+      _ ->
+        ast
+    end
+  end
+
+  defp do_substitute_spec_vars({left, meta, right}, guard_map, in_progress) do
+    {
+      do_substitute_spec_vars(left, guard_map, in_progress),
+      meta,
+      do_substitute_spec_vars(right, guard_map, in_progress)
     }
   end
 
+  defp do_substitute_spec_vars({left, right}, guard_map, in_progress) do
+    {
+      do_substitute_spec_vars(left, guard_map, in_progress),
+      do_substitute_spec_vars(right, guard_map, in_progress)
+    }
+  end
+
+  defp do_substitute_spec_vars(list, guard_map, in_progress) when is_list(list) do
+    Enum.map(list, &do_substitute_spec_vars(&1, guard_map, in_progress))
+  end
+
+  defp do_substitute_spec_vars(other, _guard_map, _in_progress), do: other
+
+  defp spec_ast_to_shape({:|, _, variants}, module) do
+    {:union, Enum.map(variants, &spec_ast_to_shape(&1, module))}
+  end
+
+  defp spec_ast_to_shape({:%{}, _, fields}, module) do
+    {:map,
+     for(
+       {field, type} <- fields,
+       field = spec_map_key(field),
+       is_atom(field),
+       do: {field, spec_ast_to_shape(type, module)}
+     ), nil}
+  end
+
+  defp spec_ast_to_shape({:{}, _, fields}, module) do
+    {:tuple, length(fields), Enum.map(fields, &spec_ast_to_shape(&1, module))}
+  end
+
+  # 2-element tuples are bare {a, b} in Elixir AST (no :{} wrapper); the {:|, _}
+  # case is handled above, so any other 2-element tuple here is a tuple type
+  # (real AST nodes are always 3-element tuples).
+  defp spec_ast_to_shape({a, b}, module) do
+    {:tuple, 2, [spec_ast_to_shape(a, module), spec_ast_to_shape(b, module)]}
+  end
+
+  defp spec_ast_to_shape([], _module), do: {:list, :empty}
+  defp spec_ast_to_shape([type | _], module), do: {:list, spec_ast_to_shape(type, module)}
+
+  defp spec_ast_to_shape({:%, _, [struct_mod, {:%{}, _, fields}]}, module) do
+    resolved_module = resolve_spec_module(struct_mod, module)
+
+    shape_fields =
+      for {field, type} <- fields,
+          is_atom(field),
+          do: {field, spec_ast_to_shape(type, module)}
+
+    case resolved_module do
+      mod when is_atom(mod) -> {:struct, shape_fields, {:atom, mod}, nil}
+      _ -> {:map, shape_fields, nil}
+    end
+  end
+
+  defp spec_ast_to_shape({name, _, args} = ast, module) when is_atom(name) and is_list(args) do
+    case {name, args} do
+      {:any, []} ->
+        nil
+
+      {:none, []} ->
+        :none
+
+      {:integer, []} ->
+        {:integer, nil}
+
+      {:float, []} ->
+        {:float, nil}
+
+      {:binary, []} ->
+        {:binary, nil}
+
+      {:bitstring, []} ->
+        :bitstring
+
+      {:atom, []} ->
+        :atom
+
+      {:boolean, []} ->
+        {:union, [atom: false, atom: true]}
+
+      {:number, []} ->
+        :number
+
+      {:timeout, []} ->
+        {:union, [atom: :infinity, integer: nil]}
+
+      {:non_neg_integer, []} ->
+        {:integer, nil}
+
+      {:pos_integer, []} ->
+        {:integer, nil}
+
+      {:neg_integer, []} ->
+        {:integer, nil}
+
+      {:arity, []} ->
+        {:integer, nil}
+
+      {:byte, []} ->
+        {:integer, nil}
+
+      {:char, []} ->
+        {:integer, nil}
+
+      {:charlist, []} ->
+        {:list, {:integer, nil}}
+
+      {:nonempty_charlist, []} ->
+        {:list, {:integer, nil}}
+
+      {:iolist, []} ->
+        {:list, nil}
+
+      {:iodata, []} ->
+        {:union, [binary: nil, list: nil]}
+
+      {:node, []} ->
+        :atom
+
+      {:identifier, []} ->
+        {:union, [:pid, :port, :reference]}
+
+      {:mfa, []} ->
+        {:tuple, 3, [:atom, :atom, {:integer, nil}]}
+
+      {:term, []} ->
+        nil
+
+      {:dynamic, []} ->
+        nil
+
+      {:map, []} ->
+        {:map, [], nil}
+
+      {:keyword, []} ->
+        {:list, {:tuple, 2, [:atom, nil]}}
+
+      {:keyword, [type]} ->
+        {:list, {:tuple, 2, [:atom, spec_ast_to_shape(type, module)]}}
+
+      {:list, []} ->
+        {:list, nil}
+
+      {:nonempty_list, []} ->
+        {:list, nil}
+
+      {:list, [type]} ->
+        {:list, spec_ast_to_shape(type, module)}
+
+      {:nonempty_list, [type]} ->
+        {:list, spec_ast_to_shape(type, module)}
+
+      {:maybe_improper_list, [type, _tail]} ->
+        {:list, spec_ast_to_shape(type, module)}
+
+      {:nonempty_improper_list, [type, _tail]} ->
+        {:list, spec_ast_to_shape(type, module)}
+
+      {:nonempty_maybe_improper_list, [type, _tail]} ->
+        {:list, spec_ast_to_shape(type, module)}
+
+      {:tuple, []} ->
+        :tuple
+
+      {:module, []} ->
+        :atom
+
+      {:pid, []} ->
+        :pid
+
+      {:port, []} ->
+        :port
+
+      {:reference, []} ->
+        :reference
+
+      {:string, []} ->
+        {:binary, nil}
+
+      {:nonempty_binary, []} ->
+        {:binary, nil}
+
+      {:nonempty_bitstring, []} ->
+        :bitstring
+
+      {:as_boolean, [type]} ->
+        spec_ast_to_shape(type, module)
+
+      {:struct, []} ->
+        {:map, [__struct__: :atom], nil}
+
+      {:fun, []} ->
+        :fun
+
+      {:fun, [{:->, _, [arg_types, return_type]}]} when is_list(arg_types) ->
+        {:fun, Enum.map(arg_types, &spec_ast_to_shape(&1, module)),
+         spec_ast_to_shape(return_type, module)}
+
+      {:fun, [{:->, _, [[{:..., _, _}], return_type]}]} ->
+        {:fun, [], spec_ast_to_shape(return_type, module)}
+
+      _ ->
+        case ast do
+          {:__aliases__, _, _} -> {:atom, resolve_spec_module(ast, module)}
+          _ -> nil
+        end
+    end
+  end
+
+  defp spec_ast_to_shape({:.., _, [_left, _right]}, _module), do: {:integer, nil}
+
+  defp spec_ast_to_shape({{:., _, [remote, type]}, _, args}, module) do
+    resolved_remote = resolve_spec_module(remote, module)
+
+    if is_atom(resolved_remote) and is_atom(type) and is_list(args) do
+      # Well-known remote-type table. Remote types (`String.t()`, `Range.t()`,
+      # ...) cannot be converted structurally, so we hand-map a small set of
+      # high-value stdlib remote types to shapes for arg-domain filtering and
+      # return-type binding.
+      #
+      # INTENTIONALLY INCOMPLETE: anything not listed falls through to `_ -> nil`
+      # (treated as `dynamic()`), which is always sound and only gives up
+      # precision. Opaque protocol/behaviour types and generic "any value"
+      # aliases are deliberately omitted (they would collapse to the fallback);
+      # prefer deleting an entry that maps to `nil` over adding a redundant clause.
+      case {resolved_remote, type, args} do
+        {String, :t, []} ->
+          {:binary, nil}
+
+        {String, :codepoint, []} ->
+          {:binary, nil}
+
+        {String, :grapheme, []} ->
+          {:binary, nil}
+
+        {Enum, :index, []} ->
+          {:integer, nil}
+
+        {Range, :t, []} ->
+          {:struct, [__struct__: {:atom, Range}], {:atom, Range}, nil}
+
+        {Range, :t, [_start, _stop]} ->
+          {:struct, [__struct__: {:atom, Range}], {:atom, Range}, nil}
+
+        {Regex, :t, []} ->
+          {:struct, [__struct__: {:atom, Regex}], {:atom, Regex}, nil}
+
+        {MapSet, :t, [_]} ->
+          {:struct, [__struct__: {:atom, MapSet}], {:atom, MapSet}, nil}
+
+        {MapSet, :t, []} ->
+          {:struct, [__struct__: {:atom, MapSet}], {:atom, MapSet}, nil}
+
+        {DateTime, :t, []} ->
+          {:struct, [__struct__: {:atom, DateTime}], {:atom, DateTime}, nil}
+
+        {NaiveDateTime, :t, []} ->
+          {:struct, [__struct__: {:atom, NaiveDateTime}], {:atom, NaiveDateTime}, nil}
+
+        {Date, :t, []} ->
+          {:struct, [__struct__: {:atom, Date}], {:atom, Date}, nil}
+
+        {Time, :t, []} ->
+          {:struct, [__struct__: {:atom, Time}], {:atom, Time}, nil}
+
+        {URI, :t, []} ->
+          {:struct, [__struct__: {:atom, URI}], {:atom, URI}, nil}
+
+        {Keyword, :t, []} ->
+          {:list, {:tuple, 2, [:atom, nil]}}
+
+        {Keyword, :t, [type]} ->
+          {:list, {:tuple, 2, [:atom, spec_ast_to_shape(type, module)]}}
+
+        {Keyword, :key, []} ->
+          :atom
+
+        {IO, :chardata, []} ->
+          {:union, [{:binary, nil}, {:list, nil}]}
+
+        {IO, :nodata, []} ->
+          {:atom, :ok}
+
+        {Exception, :t, []} ->
+          {:map, [__struct__: :atom, __exception__: {:atom, true}], nil}
+
+        {Exception, :kind, []} ->
+          # Real typespec (lib/elixir/lib/exception.ex):
+          #   kind :: :error | :exit | :throw | {:EXIT, pid}
+          {:union,
+           [
+             {:atom, :error},
+             {:atom, :exit},
+             {:atom, :throw},
+             {:tuple, 2, [{:atom, :EXIT}, :pid]}
+           ]}
+
+        {GenServer, :name, []} ->
+          {:union,
+           [:atom, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
+
+        {GenServer, :from, []} ->
+          {:tuple, 2, [:pid, :reference]}
+
+        {GenServer, :server, []} ->
+          {:union,
+           [:atom, :pid, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
+
+        {GenServer, :on_start, []} ->
+          {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
+
+        {Supervisor, :child_spec, []} ->
+          {:map, [id: nil, start: {:tuple, 2, [:atom, nil]}], nil}
+
+        {Supervisor, :on_start, []} ->
+          {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
+
+        {Path, :t, []} ->
+          {:binary, nil}
+
+        {File, :posix, []} ->
+          :atom
+
+        {Agent, :agent, []} ->
+          {:union,
+           [:atom, {:tuple, 2, [{:atom, :global}, nil]}, {:tuple, 2, [{:atom, :via}, nil]}]}
+
+        {Agent, :on_start, []} ->
+          {:union, [{:tuple, 2, [{:atom, :ok}, :pid]}, {:tuple, 2, [{:atom, :error}, nil]}]}
+
+        {Task, :t, []} ->
+          {:struct, [__struct__: {:atom, Task}], {:atom, Task}, nil}
+
+        {Task, :ref, []} ->
+          :reference
+
+        {Macro.Env, :t, []} ->
+          {:struct, [__struct__: {:atom, Macro.Env}], {:atom, Macro.Env}, nil}
+
+        {IO, :device, []} ->
+          {:union, [:atom, :pid]}
+
+        {Module, :definition, []} ->
+          {:tuple, 2, [:atom, {:integer, nil}]}
+
+        {Node, :t, []} ->
+          :atom
+
+        {System, :time_unit, []} ->
+          {:union,
+           [
+             {:atom, :second},
+             {:atom, :millisecond},
+             {:atom, :microsecond},
+             {:atom, :nanosecond},
+             {:integer, nil}
+           ]}
+
+        _ ->
+          nil
+      end
+    else
+      nil
+    end
+  end
+
+  defp spec_ast_to_shape(atom, _module) when is_atom(atom), do: {:atom, atom}
+  defp spec_ast_to_shape(int, _module) when is_integer(int), do: {:integer, int}
+  defp spec_ast_to_shape(float, _module) when is_float(float), do: {:float, float}
+  defp spec_ast_to_shape(binary, _module) when is_binary(binary), do: {:binary, binary}
+
+  # Unresolved type variables (e.g. `t` in `@spec foo(t) :: t when t: integer()`) — treat as term
+  defp spec_ast_to_shape({name, _meta, nil}, _module) when is_atom(name), do: nil
+
+  defp spec_ast_to_shape(ast, _module) do
+    Logger.debug("Unhandled spec type AST: #{inspect(ast)}")
+    nil
+  end
+
+  defp spec_map_key({:required, _, [key]}), do: key
+  defp spec_map_key({:optional, _, [key]}), do: key
+  defp spec_map_key(key), do: key
+
+  defp resolve_spec_module({:__aliases__, _, list}, _current_module), do: Module.concat(list)
+  defp resolve_spec_module(atom, _current_module) when is_atom(atom), do: atom
+  defp resolve_spec_module({:__MODULE__, _, _}, current_module), do: current_module
+  defp resolve_spec_module(_, _), do: nil
+
+  def add_var_write(%__MODULE__{} = state, {name, meta, context}) when name != :_ do
+    if generated_var?(meta, context) do
+      # Compiler-generated bindings (e.g. the `x` in the `case` that `if`/`unless`/
+      # `&&`/`||` expands to) are not source variables; skipping them keeps inlay
+      # hints from rendering a type on the `if` keyword.
+      state
+    else
+      version = meta[:version]
+      scope_id = hd(state.scope_ids)
+
+      info = %VarInfo{
+        name: name,
+        version: version,
+        positions: [extract_position(meta)],
+        scope_id: scope_id
+      }
+
+      [vars_from_scope | other_vars] = state.vars_info
+      vars_from_scope = Map.put(vars_from_scope, {name, version}, info)
+
+      %__MODULE__{
+        state
+        | vars_info: [vars_from_scope | other_vars]
+      }
+    end
+  end
+
   def add_var_write(%__MODULE__{} = state, _), do: state
+
+  # A binding is compiler-generated when its AST carries `generated: true` (set by
+  # macro expansion) or a non-nil hygiene context (a real source variable's
+  # context is `nil`).
+  defp generated_var?(meta, context) do
+    Keyword.get(meta, :generated, false) == true or (is_atom(context) and not is_nil(context))
+  end
 
   def add_var_read(%__MODULE__{} = state, {name, meta, _}) when name != :_ do
     version = meta[:version]
@@ -1193,7 +1789,8 @@ defmodule ElixirSense.Core.Compiler.State do
         # take type from outer scope as type narrowing in inner scope is not guaranteed to
         # affect outer scope
         type = outer_scope_vars[key].type
-        {key, %{current_scope_vars[key] | type: type}}
+        elixir_types_descr = outer_scope_vars[key].elixir_types_descr
+        {key, %{current_scope_vars[key] | type: type, elixir_types_descr: elixir_types_descr}}
       end
 
     vars_info = [current_scope_vars, outer_scope_vars | other_scopes_vars]
@@ -1400,12 +1997,37 @@ defmodule ElixirSense.Core.Compiler.State do
     [h | t] = state.vars_info
 
     h =
-      for {key, type} <- inferred_types, reduce: h do
+      for {key, type} <- inferred_types, Map.has_key?(h, key), reduce: h do
         acc ->
           Map.update!(acc, key, fn %VarInfo{type: old} = v ->
             %{v | type: ElixirSense.Core.TypeInference.intersect(old, type)}
           end)
       end
+
+    %{state | vars_info: [h | t]}
+  end
+
+  @doc """
+  Merge Module.Types variable descriptors into current scope VarInfo structs.
+
+  `inferred_descrs` should be a map of `{var_name, version} => Module.Types.Descr.t()`
+
+  Called after pattern match refinement to persist raw Module.Types descriptors
+  alongside the shape-level types stored by `merge_inferred_types`.
+  """
+  def merge_inferred_elixir_types(state, inferred_descrs) do
+    [h | t] = state.vars_info
+
+    h =
+      Enum.reduce(inferred_descrs, h, fn {key, descr}, acc ->
+        case Map.fetch(acc, key) do
+          {:ok, %VarInfo{} = v} ->
+            Map.put(acc, key, %{v | elixir_types_descr: descr})
+
+          _ ->
+            acc
+        end
+      end)
 
     %{state | vars_info: [h | t]}
   end
@@ -1456,6 +2078,68 @@ defmodule ElixirSense.Core.Compiler.State do
         end
 
       {position, end_position}
+    end
+  end
+
+  @doc """
+  Accumulate the raw clause AST for later signature inference.
+  """
+  def add_clause_ast(%__MODULE__{} = state, %{module: module}, {fun, arity}, clause)
+      when is_atom(module) and is_atom(fun) and is_integer(arity) do
+    key = {module, fun, arity}
+
+    update_mod_fun(state, key, fn %ModFunInfo{} = info ->
+      clauses = info.elixir_types_clauses || []
+      %ModFunInfo{info | elixir_types_clauses: [clause | clauses]}
+    end)
+  end
+
+  def add_clause_ast(state, _env, _fun_arity, _clause), do: state
+
+  @doc """
+  Persist the inferred Module.Types signature (or clear it after failure).
+
+  `source` records the provenance of the signature:
+  - `:inferred` — produced by local clause inference (Module.Types)
+  - `:exck`     — loaded from an ExCk compiled-type chunk
+  - `nil`       — sig is nil (status :skipped), no provenance applies
+
+  Stored as a parallel field (`elixir_types_sig_source`) rather than a 4th
+  element in the sig tuple because every reader pattern-matches on a 3-tuple.
+
+  Once the signature has been computed the accumulated clause ASTs are no longer
+  needed, so we prune `elixir_types_clauses` here to avoid retaining every
+  function body for the lifetime of the metadata.
+  """
+  def put_elixir_types_sig(
+        %__MODULE__{} = state,
+        {module, fun, arity},
+        sig,
+        status,
+        source \\ nil
+      )
+      when is_atom(module) and is_atom(fun) and is_integer(arity) do
+    key = {module, fun, arity}
+
+    update_mod_fun(state, key, fn %ModFunInfo{} = info ->
+      %ModFunInfo{
+        info
+        | elixir_types_sig: sig,
+          elixir_types_sig_source: source,
+          elixir_types_status: status,
+          elixir_types_clauses: []
+      }
+    end)
+  end
+
+  defp update_mod_fun(state, key, fun) do
+    case state.mods_funs_to_positions do
+      %{^key => %ModFunInfo{} = info} ->
+        updated_info = fun.(info)
+        put_in(state.mods_funs_to_positions[key], updated_info)
+
+      _ ->
+        state
     end
   end
 end

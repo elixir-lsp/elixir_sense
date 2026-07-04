@@ -1403,6 +1403,116 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
   end
 
+  describe "elixir_types_sig provenance" do
+    # These tests verify that @spec-derived signatures are labelled :infer (not
+    # :strong) and that the parallel elixir_types_sig_source field is set to :spec.
+    # User @spec annotations are NOT compiler-verified — treating them as :strong
+    # would let domain filtering prune overloads with untrusted domains and treat
+    # returns as static facts.
+
+    test "spec-derived sig is labelled :infer and has source :spec" do
+      state =
+        """
+        defmodule A do
+          @spec foo(integer()) :: binary()
+          def foo(x), do: to_string(x)
+        end
+        """
+        |> string_to_state
+
+      spec_info = state.specs[{A, :foo, 1}]
+      assert %ElixirSense.Core.State.SpecInfo{} = spec_info
+
+      case spec_info.elixir_types_sig do
+        nil ->
+          # Native types runtime not available; sig not built — acceptable
+          :ok
+
+        {kind, _domain, _clauses} ->
+          assert kind == :infer,
+                 "Expected spec-derived sig to be :infer, got :#{kind}. " <>
+                   "User @spec annotations are claims, not compiler-verified constraints."
+
+          assert spec_info.elixir_types_sig_source == :spec,
+                 "Expected elixir_types_sig_source to be :spec for a @spec-derived sig, " <>
+                   "got #{inspect(spec_info.elixir_types_sig_source)}"
+      end
+    end
+
+    test "callback-derived sig is labelled :infer and has source :spec" do
+      state =
+        """
+        defmodule B do
+          @callback bar(atom()) :: {:ok, atom()} | {:error, term()}
+        end
+        """
+        |> string_to_state
+
+      spec_info = state.specs[{B, :bar, 1}]
+      assert %ElixirSense.Core.State.SpecInfo{} = spec_info
+
+      case spec_info.elixir_types_sig do
+        nil ->
+          :ok
+
+        {kind, _domain, _clauses} ->
+          assert kind == :infer
+          assert spec_info.elixir_types_sig_source == :spec
+      end
+    end
+
+    test "locally-inferred sig has source :inferred on ModFunInfo" do
+      # When native inference is disabled/unavailable, elixir_types_sig is nil
+      # and elixir_types_sig_source is nil. This test asserts the default shape.
+      state =
+        """
+        defmodule C do
+          def baz(x), do: x
+        end
+        """
+        |> string_to_state
+
+      mod_fun_info = state.mods_funs_to_positions[{C, :baz, 1}]
+      assert %ElixirSense.Core.State.ModFunInfo{} = mod_fun_info
+
+      case mod_fun_info.elixir_types_sig do
+        nil ->
+          # No inference ran (e.g. native types not available): source must be nil
+          assert mod_fun_info.elixir_types_sig_source == nil
+
+        {:infer, _domain, _clauses} ->
+          # If inference did run, source must be :inferred
+          assert mod_fun_info.elixir_types_sig_source == :inferred
+      end
+    end
+
+    test "merged multi-clause spec retains :infer and source :spec" do
+      state =
+        """
+        defmodule D do
+          @spec classify(integer()) :: :int
+          @spec classify(atom()) :: :atom_val
+          def classify(x), do: x
+        end
+        """
+        |> string_to_state
+
+      spec_info = state.specs[{D, :classify, 1}]
+      assert %ElixirSense.Core.State.SpecInfo{} = spec_info
+
+      case spec_info.elixir_types_sig do
+        nil ->
+          :ok
+
+        {kind, _domain, clauses} ->
+          assert kind == :infer
+          assert spec_info.elixir_types_sig_source == :spec
+          # Both clauses should be present after merge
+          assert length(clauses) == 2
+      end
+    end
+  end
+
   describe "typespec vars" do
     test "registers type parameters" do
       state =
@@ -1631,7 +1741,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{
                  name: :inner_attr,
                  positions: [{5, 5}, {7, 13}],
-                 type: {:map, [abc: {:atom, nil}], nil}
+                 type: {:map, [abc: {:atom, nil}], :closed}
                },
                %AttributeInfo{
                  name: :inner_attr_1,
@@ -1706,7 +1816,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{
                  name: :myattribute,
                  positions: [{2, 3}, {3, 14}],
-                 type: {:map, [abc: {:atom, String}], nil}
+                 type: {:map, [abc: {:atom, String}], :closed}
                },
                %AttributeInfo{
                  name: :some_attr,
@@ -1767,6 +1877,268 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                state |> get_line_vars(3)
     end
 
+    test "function-parameter binary-segment vars are typed from their spec" do
+      # A def head has no scrutinee, so most params bind no type — but a
+      # binary-segment spec fixes the type intrinsically.
+      state =
+        """
+        defmodule MyModule do
+          def parse(<<n::integer, rest::binary>>) do
+            IO.inspect({n, rest})
+          end
+        end
+        """
+        |> string_to_state
+
+      vars = get_line_vars(state, 3)
+      assert Enum.find(vars, &(&1.name == :n)).type == {:integer, nil}
+      assert Enum.find(vars, &(&1.name == :rest)).type == {:binary, nil}
+    end
+
+    test "non-intrinsic function parameters stay untyped" do
+      # Without a value to match, tuple/list element params can't be typed.
+      state =
+        """
+        defmodule MyModule do
+          def f({:ok, x}, [h | t]) do
+            IO.inspect({x, h, t})
+          end
+        end
+        """
+        |> string_to_state
+
+      vars = get_line_vars(state, 3)
+      assert Enum.find(vars, &(&1.name == :x)).type == nil
+      assert Enum.find(vars, &(&1.name == :h)).type == nil
+      assert Enum.find(vars, &(&1.name == :t)).type == nil
+    end
+
+    test "defimpl types the first function argument as the implemented-for type" do
+      # A struct `for:` and a built-in `for:`.
+      state =
+        """
+        defimpl Inspect, for: URI do
+          def inspect(term, _opts) do
+            IO.inspect(term)
+          end
+        end
+
+        defimpl Inspect, for: Integer do
+          def inspect(term, _opts) do
+            IO.inspect(term)
+          end
+        end
+        """
+        |> string_to_state
+
+      struct_var = Enum.find(get_line_vars(state, 3), &(&1.name == :term))
+      assert struct_var.type == {:struct, [], {:atom, URI}, nil}
+
+      integer_var = Enum.find(get_line_vars(state, 9), &(&1.name == :term))
+      assert integer_var.type == {:integer, nil}
+    end
+
+    test "defimpl only types protocol callbacks, not helper functions" do
+      # `inspect/2` is the protocol callback (typed); `helper/1` is a plain
+      # function in the impl module — public or private, it is NOT a callback,
+      # so its first argument must stay untyped.
+      state =
+        """
+        defimpl Inspect, for: URI do
+          def inspect(term, _opts) do
+            pub_helper(term) || priv_helper(term)
+          end
+
+          def pub_helper(x), do: IO.inspect(x)
+          defp priv_helper(y), do: IO.inspect(y)
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 6), &(&1.name == :x)).type == nil
+      assert Enum.find(get_line_vars(state, 7), &(&1.name == :y)).type == nil
+    end
+
+    test "defimpl with same-file protocol types the callback via the local index" do
+      state =
+        """
+        defprotocol Sized do
+          def size(t)
+        end
+
+        defimpl Sized, for: URI do
+          def size(t), do: IO.inspect(t)
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 6), &(&1.name == :t)).type ==
+               {:struct, [], {:atom, URI}, nil}
+    end
+
+    test "defimpl for multiple targets types the first arg as a union" do
+      state =
+        """
+        defprotocol Sized do
+          def size(t)
+        end
+
+        defimpl Sized, for: [List, Map] do
+          def size(t), do: IO.inspect(t)
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 6), &(&1.name == :t)).type ==
+               {:union, [{:list, nil}, {:map, [], nil}]}
+    end
+
+    test "for ... reduce: types the accumulator from the seed value" do
+      state =
+        """
+        defmodule M do
+          def f(list) do
+            for x <- list, reduce: %{} do
+              acc -> Map.put(acc, x, 1)
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 4), &(&1.name == :acc)).type ==
+               {:map, [], :closed}
+    end
+
+    test "for ... reduce: result is the seed unioned with clause bodies (not a list)" do
+      state =
+        """
+        defmodule M do
+          def f(list) do
+            x =
+              for i <- list, reduce: %{} do
+                acc -> Map.put(acc, i, 1)
+              end
+
+            IO.inspect(x)
+          end
+        end
+        """
+        |> string_to_state
+
+      # Regression: reduce comprehensions were mistyped as {:list, nil}. The
+      # result is the union of the seed (`%{}` -> closed map) and the clause body
+      # (a `Map.put` call). The exact rendering of the body call differs by
+      # Elixir version: 1.20 keeps `Map.put(acc, i, 1)`, while 1.18 expands the
+      # `Map.put/3` macro to `:maps.put(i, 1, acc)`. Assert the union shape
+      # robustly — the seed element plus a `:put` call — rather than the
+      # version-specific call form.
+      x_type = Enum.find(get_line_vars(state, 8), &(&1.name == :x)).type
+
+      assert {:union, [{:map, [], :closed}, {:call, {:atom, mod}, :put, _args}]} = x_type
+      assert mod in [Map, :maps]
+    end
+
+    test "for filter narrows tested generator vars in the body" do
+      state =
+        """
+        defmodule M do
+          def f(xs) do
+            for x <- xs, is_integer(x) do
+              IO.inspect(x)
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 4), &(&1.name == :x)).type ==
+               {:intersection, [{:for_expression, {:variable, :xs, 0}}, :integer]}
+    end
+
+    test "for ... reduce: leaves a guarded accumulator to guard inference" do
+      state =
+        """
+        defmodule M do
+          def f(list) do
+            for x <- list, reduce: %{} do
+              acc when is_integer(acc) -> acc + x
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      # guard wins; the seed type is not intersected in
+      assert Enum.find(get_line_vars(state, 4), &(&1.name == :acc)).type == :integer
+    end
+
+    test "try ... else types a (non-guarded) clause var against the do result" do
+      state =
+        """
+        defmodule M do
+          def f do
+            try do
+              :ok
+            else
+              v -> IO.inspect(v)
+            end
+          end
+        end
+        """
+        |> string_to_state
+
+      assert Enum.find(get_line_vars(state, 6), &(&1.name == :v)).type == {:atom, :ok}
+    end
+
+    test "boolean operators (! / && / ||) flow through to assigned-var result type" do
+      # `!`/`&&`/`||`/`unless` expand to case/cond, so the result-type union
+      # applies. `!` yields a boolean; `unless` unions both literal branches.
+      state =
+        """
+        defmodule M do
+          def f(a) do
+            n = !a
+            u = unless a, do: :no, else: :yes
+            IO.inspect({n, u})
+          end
+        end
+        """
+        |> string_to_state
+
+      vars = get_line_vars(state, 5)
+      assert Enum.find(vars, &(&1.name == :n)).type == {:union, [{:atom, true}, {:atom, false}]}
+      assert Enum.find(vars, &(&1.name == :u)).type == {:union, [{:atom, :no}, {:atom, :yes}]}
+    end
+
+    test "if/unless do not leak the macro-generated guard variable" do
+      # `if`/`unless`/`&&`/`||` expand to a `case` with a `x when x in [false, nil]`
+      # clause. That synthetic `x` must not appear as a (source) variable, or it
+      # surfaces as a stray `: false | nil` inlay hint on the `if`.
+      state =
+        """
+        defmodule M do
+          def f(cond, base) do
+            base = if cond, do: [base], else: base
+            base
+          end
+        end
+        """
+        |> string_to_state
+
+      names =
+        state.vars_info_per_scope_id
+        |> Map.values()
+        |> Enum.flat_map(fn s -> if is_map(s), do: Map.values(s), else: [] end)
+        |> Enum.map(& &1.name)
+        |> Enum.uniq()
+
+      assert :base in names
+      refute :x in names
+      # no compiler-generated bindings leaked at all
+      assert Enum.all?(names, &(&1 in [:cond, :base]))
+    end
+
     test "module attributes value binding to and from variables" do
       state =
         """
@@ -1783,7 +2155,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{
                  name: :myattribute,
                  positions: [{2, 3}, {3, 9}],
-                 type: {:map, [abc: {:atom, String}], nil}
+                 type: {:map, [abc: {:atom, String}], :closed}
                },
                %AttributeInfo{
                  name: :other,
@@ -1835,7 +2207,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{
                  name: :myattribute,
                  positions: [{2, 3}, {3, 16}],
-                 type: {:tuple, 2, [{:atom, :ok}, {:map, [abc: {:atom, nil}], nil}]}
+                 type: {:tuple, 2, [{:atom, :ok}, {:map, [abc: {:atom, nil}], :closed}]}
                }
              ]
 
@@ -1914,12 +2286,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %AttributeInfo{
                  name: :myattribute,
                  positions: [{3, 3}, {4, 28}, {5, 20}],
-                 type: {:list, {:atom, :ok}}
+                 # element type is the union of every element's type
+                 type: {:list, {:union, [{:atom, :ok}, {:atom, :error}, {:atom, :other}]}}
                },
                %AttributeInfo{
                  name: :other1,
                  positions: [{4, 3}],
-                 type: {:list, {:atom, :some}}
+                 # `[:some, :error | @myattribute]`: heads `:some` and `:error`
+                 type: {:list, {:union, [{:atom, :some}, {:atom, :error}]}}
                },
                %AttributeInfo{name: :other2, positions: [{5, 3}], type: {:list, {:atom, :some}}}
              ]
@@ -2008,10 +2382,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  name: :var1,
                  type: {:map_key, {:attribute, :myattribute}, {:atom, :error}}
                },
-               # NOTE non atom keys currently not supported
                %VarInfo{
                  name: :var2,
-                 type: {:map_key, {:attribute, :other}, nil}
+                 type: {:map_key, {:attribute, :other}, {:binary, "a"}}
                }
              ] = state |> get_line_vars(7)
     end
@@ -2099,7 +2472,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         |> string_to_state
 
       assert [
-               %VarInfo{name: :a, type: {:attribute, :myattribute}},
+               # occurrence typing: `a` is matched against `[c | _]` in the third
+               # generator, so it is additionally narrowed to a list
+               %VarInfo{name: :a, type: {:intersection, [attribute: :myattribute, list: nil]}},
                %VarInfo{name: :b, type: {:call, {:atom, Date}, :utc_now, []}},
                %VarInfo{name: :c, type: {:list_head, {:variable, :a, 0}}}
              ] = state |> get_line_vars(6)
@@ -2245,7 +2620,10 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :var1, type: {:call, {:atom, DateTime}, :now, []}},
                %VarInfo{name: :var2, type: {:call, {:atom, :erlang}, :now, []}},
                %VarInfo{name: :var3, type: {:call, {:atom, MyModule}, :now, [{:atom, :abc}]}},
-               %VarInfo{name: :var4, type: {:call, {:atom, DateTime}, :now, [nil]}}
+               %VarInfo{
+                 name: :var4,
+                 type: {:call, {:atom, DateTime}, :now, [{:binary, "Etc/UTC"}]}
+               }
              ] = state |> get_line_vars(7)
 
       assert [
@@ -2295,20 +2673,25 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
         """
         |> string_to_state
 
-      assert [%VarInfo{type: {:map, [asd: {:integer, 5}], nil}}] = state |> get_line_vars(4)
+      # Map literals in expression context are `:closed` (literal-complete),
+      # including nested literals.
+      assert [%VarInfo{type: {:map, [asd: {:integer, 5}], :closed}}] = state |> get_line_vars(4)
 
       assert [
                %VarInfo{
-                 type: {:map, [asd: {:integer, 5}, nested: {:map, [wer: nil], nil}], nil}
+                 type:
+                   {:map, [asd: {:integer, 5}, nested: {:map, [wer: {:binary, "asd"}], :closed}],
+                    :closed}
                }
              ] = state |> get_line_vars(6)
 
+      # `%{"asd" => "dsds"}` — non-atom key preserved as a domain key.
       assert [
-               %VarInfo{type: {:map, [], nil}}
+               %VarInfo{type: {:map, [{{:domain, {:binary, "asd"}}, {:binary, "dsds"}}], :closed}}
              ] = state |> get_line_vars(8)
 
       assert [
-               %VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], nil}}
+               %VarInfo{type: {:map, [asd: {:integer, 5}, zxc: {:atom, String}], :closed}}
              ] = state |> get_line_vars(10)
 
       assert [
@@ -2720,10 +3103,12 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                }
              ] = state |> get_line_vars(15)
 
+      # `else a -> ...` matches the value returned by the `do` block
+      # (`Some.call()`), so `a` carries that call's (unresolved) result type.
       assert [
                %VarInfo{
                  name: :a,
-                 type: nil
+                 type: {:call, {:atom, Some}, :call, []}
                }
              ] = state |> get_line_vars(18)
     end
@@ -2777,12 +3162,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       vars = state |> get_line_vars(8)
 
+      # Cross-clause occurrence typing: the first clause's pattern `%{b: 2}` is a
+      # map pattern, which is *not* precise (map patterns are open, so matching
+      # `%{b: 2}` does not exclude other maps from reaching the next clause).
+      # It therefore contributes NOTHING to the subtraction — `a` is unsubtracted
+      # in the second clause (sound: the catch-all keeps the wider type).
       assert %VarInfo{
                name: :a2,
                positions: [{7, 18}],
                type: {
                  :intersection,
-                 [{:map, [b: {:variable, :b, 1}], nil}, {:variable, :a, 0}]
+                 [
+                   {:map, [b: {:variable, :b, 1}], nil},
+                   {:variable, :a, 0}
+                 ]
                }
              } = Enum.find(vars, &(&1.name == :a2))
     end
@@ -3774,12 +4167,14 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                %VarInfo{
                  name: :b,
-                 type: {:intersection, [:number, {:tuple_nth, {:variable, :x, 0}, 1}]}
+                 type: {:intersection, [:integer, {:tuple_nth, {:variable, :x, 0}, 1}]}
                },
-               %VarInfo{name: :x, type: nil}
+               # occurrence typing: in this branch the scrutinee `x` matched the
+               # tuple pattern `{a, b}`, so `x` is narrowed to a 2-element tuple
+               %VarInfo{name: :x, type: {:tuple, 2, [nil, nil]}}
              ] = get_line_vars(state, 6)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 8)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 8)
 
       assert [%VarInfo{name: :x, type: nil}] =
                get_line_vars(state, 10)
@@ -3828,7 +4223,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert [%VarInfo{name: :c, type: nil}, %VarInfo{name: :x, type: nil}] =
                get_line_vars(state, 8)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 10)
 
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
     end
@@ -3862,17 +4257,156 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                },
                %VarInfo{
                  name: :b,
-                 type: {:intersection, [:number, {:tuple_nth, {:variable, :x, 0}, 1}]}
+                 type: {:intersection, [:integer, {:tuple_nth, {:variable, :x, 0}, 1}]}
                },
-               %VarInfo{name: :x, type: nil}
+               # occurrence typing: `x` matched the `{a, b}` pattern on the left
+               # of `<-`, so it is narrowed to a 2-element tuple in the body
+               %VarInfo{name: :x, type: {:tuple, 2, [nil, nil]}}
              ] = get_line_vars(state, 5)
 
-      assert [%VarInfo{name: :e, type: :atom}, %VarInfo{name: :x, type: nil}] =
-               get_line_vars(state, 8)
+      # `else` types its clauses against the failure space (the `<-` RHS). The
+      # generator pattern `{a, b}` carries a `when` guard, so it is *not* precise
+      # (a guard narrows the matched set) and contributes NOTHING to the
+      # subtraction — the full RHS `x` reaches `else`. `e` is `:atom` (from the
+      # guard) intersected with the 2nd element of `x`.
+      assert [
+               %VarInfo{
+                 name: :e,
+                 type:
+                   {:intersection,
+                    [
+                      :atom,
+                      {:tuple_nth, {:variable, :x, 0}, 1}
+                    ]}
+               },
+               %VarInfo{name: :x, type: nil}
+             ] = get_line_vars(state, 8)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 10)
 
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
+    end
+
+    # Cross-clause subtraction precision gate (tasks #1/#2/#26). A clause is only
+    # subtracted from later clauses when its pattern is an under-approximation of
+    # the matched values (mirrors the compiler's `pattern_precise?`/`guard_precise?`).
+    test "cons pattern subtracts at most a non-empty-list shape from the catch-all" do
+      # `[h | t]` over-approximates as `{:list, _}` (which includes `[]`) in
+      # `type_of`, but contributes only `{:nonempty_list, nil}` to the
+      # subtraction — so `[]` still reaches `other`.
+      buffer = """
+      defmodule MyModule do
+        def func(xs) do
+          case xs do
+            [h | t] ->
+              IO.puts ""
+            other ->
+              IO.puts(other)
+          end
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+      other = state |> get_line_vars(7) |> Enum.find(&(&1.name == :other))
+
+      assert %VarInfo{
+               type: {:difference, {:variable, :xs, 0}, {:nonempty_list, nil}}
+             } = other
+    end
+
+    test "a guarded clause contributes NOTHING to the catch-all subtraction" do
+      # `{:ok, x} when x > 10` narrows the matched set, so the catch-all must
+      # still include all `{:ok, _}` — no `{:difference, ...}` wrapper.
+      buffer = """
+      defmodule MyModule do
+        def func(v) do
+          case v do
+            {:ok, x} when x > 10 ->
+              IO.puts ""
+            other ->
+              IO.puts(other)
+          end
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+      other = state |> get_line_vars(7) |> Enum.find(&(&1.name == :other))
+
+      assert %VarInfo{type: {:variable, :v, 0}} = other
+    end
+
+    test "a precise tagged-tuple clause is subtracted from the catch-all" do
+      # `{:ok, x}` (no guard) is precise, so `other` is the scrutinee with
+      # `{:ok, _}` subtracted — the precise case must not regress.
+      buffer = """
+      defmodule MyModule do
+        def func(v) do
+          case v do
+            {:ok, x} ->
+              IO.puts ""
+            other ->
+              IO.puts(other)
+          end
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+      other = state |> get_line_vars(7) |> Enum.find(&(&1.name == :other))
+
+      assert %VarInfo{
+               type: {:difference, {:variable, :v, 0}, {:tuple, 2, [{:atom, :ok}, nil]}}
+             } = other
+    end
+
+    test "with-else failure space: a guarded generator is not subtracted" do
+      # The `<-` generator carries a `when` guard, so the whole RHS reaches the
+      # `else` failure space (no subtraction) — the `else` var widens out to the
+      # full RHS rather than the difference.
+      buffer = """
+      defmodule MyModule do
+        def func(v) do
+          with {:ok, x} when x > 0 <- v do
+            IO.puts ""
+          else
+            other ->
+              IO.puts(other)
+          end
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+      other = state |> get_line_vars(7) |> Enum.find(&(&1.name == :other))
+
+      # Guarded generator ⇒ full RHS `v` reaches else (no difference).
+      assert %VarInfo{type: {:variable, :v, 0}} = other
+    end
+
+    test "with-else failure space: a precise generator IS subtracted" do
+      # `{:ok, x}` (no guard) is precise, so the failure space is `v` minus
+      # `{:ok, _}` — the precise with-else case must not regress.
+      buffer = """
+      defmodule MyModule do
+        def func(v) do
+          with {:ok, x} <- v do
+            IO.puts ""
+          else
+            other ->
+              IO.puts(other)
+          end
+        end
+      end
+      """
+
+      state = string_to_state(buffer)
+      other = state |> get_line_vars(7) |> Enum.find(&(&1.name == :other))
+
+      assert %VarInfo{
+               type: {:difference, {:variable, :v, 0}, {:tuple, 2, [{:atom, :ok}, nil]}}
+             } = other
     end
 
     test "guards in receive clauses" do
@@ -3897,11 +4431,11 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:atom, nil}},
-               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :b, type: :integer},
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 6)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 8)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 8)
 
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 10)
     end
@@ -3934,9 +4468,9 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  name: :b,
                  type:
                    {:intersection,
-                    [:number, {:tuple_nth, {:for_expression, {:variable, :x, 0}}, 1}]}
+                    [:integer, {:tuple_nth, {:for_expression, {:variable, :x, 0}}, 1}]}
                },
-               %VarInfo{name: :x, type: :number},
+               %VarInfo{name: :x, type: :integer},
                %VarInfo{name: :y, type: {:for_expression, {:variable, :a, 1}}}
              ] = get_line_vars(state, 5)
 
@@ -3967,7 +4501,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:for_expression, {:variable, :x, 0}}},
-               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :b, type: :integer},
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 6)
 
@@ -3979,7 +4513,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:for_expression, {:variable, :x, 0}}},
-               %VarInfo{name: :x, type: :number}
+               %VarInfo{name: :x, type: :integer}
              ] = get_line_vars(state, 10)
 
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
@@ -4012,7 +4546,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:atom, nil}},
-               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :b, type: :integer},
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 8)
 
@@ -4021,7 +4555,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 11)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 13)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 13)
 
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 15)
     end
@@ -4050,7 +4584,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [
                %VarInfo{name: :a, type: {:atom, nil}},
-               %VarInfo{name: :b, type: :number},
+               %VarInfo{name: :b, type: :integer},
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 6)
 
@@ -4059,18 +4593,18 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                %VarInfo{name: :x, type: nil}
              ] = get_line_vars(state, 8)
 
-      assert [%VarInfo{name: :x, type: :number}] = get_line_vars(state, 10)
+      assert [%VarInfo{name: :x, type: :integer}] = get_line_vars(state, 10)
       assert [%VarInfo{name: :x, type: nil}] = get_line_vars(state, 12)
     end
 
     test "number guards" do
       assert %VarInfo{name: :x, type: :number} = var_with_guards("is_number(x)")
-      assert %VarInfo{name: :x, type: :number} = var_with_guards("is_float(x)")
-      assert %VarInfo{name: :x, type: :number} = var_with_guards("is_integer(x)")
+      assert %VarInfo{name: :x, type: :float} = var_with_guards("is_float(x)")
+      assert %VarInfo{name: :x, type: :integer} = var_with_guards("is_integer(x)")
       assert %VarInfo{name: :x, type: :number} = var_with_guards("round(x)")
       assert %VarInfo{name: :x, type: :number} = var_with_guards("trunc(x)")
-      assert %VarInfo{name: :x, type: :number} = var_with_guards("div(x, 1)")
-      assert %VarInfo{name: :x, type: :number} = var_with_guards("rem(x, 1)")
+      assert %VarInfo{name: :x, type: :integer} = var_with_guards("div(x, 1)")
+      assert %VarInfo{name: :x, type: :integer} = var_with_guards("rem(x, 1)")
       assert %VarInfo{name: :x, type: :number} = var_with_guards("abs(x)")
       assert %VarInfo{name: :x, type: :number} = var_with_guards("ceil(x)")
       assert %VarInfo{name: :x, type: :number} = var_with_guards("floor(x)")
@@ -4090,7 +4624,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
     end
 
     test "multiple guards" do
-      assert %VarInfo{name: :x, type: {:union, [:bitstring, :number]}} =
+      assert %VarInfo{name: :x, type: {:union, [:bitstring, :integer]}} =
                var_with_guards("is_bitstring(x) when is_integer(x)")
     end
 
@@ -4099,8 +4633,13 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %VarInfo{name: :x, type: {:list, {:integer, 1}}} = var_with_guards("hd(x) == 1")
       assert %VarInfo{name: :x, type: {:list, {:integer, 1}}} = var_with_guards("1 == hd(x)")
       assert %VarInfo{name: :x, type: :list} = var_with_guards("tl(x) == [1]")
-      assert %VarInfo{name: :x, type: :list} = var_with_guards("length(x) == 1")
-      assert %VarInfo{name: :x, type: :list} = var_with_guards("1 == length(x)")
+      # length == n (n >= 1) implies a non-empty list
+      assert %VarInfo{name: :x, type: {:nonempty_list, nil}} =
+               var_with_guards("length(x) == 1")
+
+      assert %VarInfo{name: :x, type: {:nonempty_list, nil}} =
+               var_with_guards("1 == length(x)")
+
       assert %VarInfo{name: :x, type: {:list, :boolean}} = var_with_guards("hd(x)")
     end
 
@@ -4138,7 +4677,7 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %VarInfo{name: :x, type: {:map, [a: nil], nil}} =
                var_with_guards("is_map_key(x, :a)")
 
-      assert %VarInfo{name: :x, type: {:map, [{"a", nil}], nil}} =
+      assert %VarInfo{name: :x, type: {:map, [{{:domain, {:binary, "a"}}, nil}], nil}} =
                var_with_guards(~s/is_map_key(x, "a")/)
     end
 
@@ -4210,13 +4749,16 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  }
                } = var_with_guards("is_exception(x)")
 
+        # sort_intersection/1 in guard.ex promotes the concrete struct-with-module
+        # to the front of the intersection so TypePresentation picks %ArgumentError{}
+        # instead of the weaker %{__exception__: term()} when rendering.
         assert %VarInfo{
                  name: :x,
                  type: {
                    :intersection,
                    [
-                     {:map, [{:__exception__, nil}], nil},
                      {:struct, [], {:atom, ArgumentError}, nil},
+                     {:map, [{:__exception__, nil}], nil},
                      {:map, [], nil},
                      {:struct, [], nil, nil}
                    ]
@@ -4237,14 +4779,17 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
                  }
                } = var_with_guards("is_exception(x)")
 
+        # sort_intersection/1 in guard.ex promotes the concrete struct-with-module
+        # to the front of the intersection so TypePresentation picks %ArgumentError{}
+        # instead of the weaker %{__exception__: ...} when rendering.
         assert %VarInfo{
                  name: :x,
                  type: {
                    :intersection,
                    [
+                     {:struct, [], {:atom, ArgumentError}, nil},
                      {:map, [{:__exception__, {:atom, true}}], nil},
                      {:map, [{:__exception__, nil}], nil},
-                     {:struct, [], {:atom, ArgumentError}, nil},
                      {:map, [], nil},
                      {:struct, [], nil, nil}
                    ]
@@ -9446,6 +9991,41 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
 
       assert [%CallInfo{position: {3, 3}}, %CallInfo{position: {3, 25}}] =
                state.calls[3] |> Enum.filter(&(&1.func == :@))
+    end
+
+    test "self-referential @spec when guard does not blow up metadata building" do
+      # Regression: a recursive `when` guard such as `when opt: [term :: opt]`
+      # used to be substituted with Macro.prewalk, which re-traversed the
+      # substituted output and expanded `opt` forever, building an ever-growing
+      # AST until the process OOMed (locator hang / CI runner kill). The fix
+      # tracks guard vars currently being expanded and stops on recursion.
+      # Asserting completion (not timing) pins the root cause: this returns
+      # promptly instead of hanging.
+      state =
+        """
+        defmodule Proto do
+          @spec fun(opt) :: any when opt: [term :: opt]
+          def fun(a), do: a
+        end
+        """
+        |> string_to_state
+
+      assert %{{Proto, :fun, 1} => %State.SpecInfo{}} = state.specs
+    end
+
+    test "mutually recursive @spec when guards do not blow up metadata building" do
+      # Transitive cycle: a -> b -> a. The expansion-path tracking must break
+      # this too, not just direct self-reference.
+      state =
+        """
+        defmodule Proto do
+          @spec fun(a) :: any when a: [b], b: [a]
+          def fun(x), do: x
+        end
+        """
+        |> string_to_state
+
+      assert %{{Proto, :fun, 1} => %State.SpecInfo{}} = state.specs
     end
   end
 

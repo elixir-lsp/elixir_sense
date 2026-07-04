@@ -116,6 +116,18 @@ defmodule ElixirSenseExample.FunctionsWithReturnSpec do
 
   @spec f_term :: term
   def f_term, do: :ok
+
+  @spec f_pid() :: pid
+  def f_pid, do: self()
+
+  @spec f_port() :: port
+  def f_port, do: :erlang.open_port({:spawn, "cat"}, [])
+
+  @spec f_reference() :: reference
+  def f_reference, do: make_ref()
+
+  @spec f_var_module(module) :: module
+  def f_var_module(mod), do: mod
 end
 
 defmodule ElixirSenseExample.FunctionsWithReturnSpec.Remote do

@@ -1,9 +1,12 @@
 defmodule ElixirSense.Core.Compiler.Clauses do
   @moduledoc false
+  require Logger
   alias ElixirSense.Core.Compiler
   alias ElixirSense.Core.Compiler.Utils
   alias ElixirSense.Core.Compiler.State
   alias ElixirSense.Core.TypeInference
+  alias ElixirSense.Core.TypeInference.Occurrence
+  alias ElixirSense.Core.ElixirTypes
 
   # See ElixirSense.Core.Compiler.@stamp_version — gates version stamping
   # on `with` to host Elixir 1.20+ (commit 603602e67 — reverse arrows).
@@ -259,37 +262,115 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
     opts = sanitize_opts(opts, @valid_case_opts)
 
-    match_context = TypeInference.type_of(e_expr, e.context)
+    match_context = TypeInference.type_of(e_expr, e.context, s, e)
 
     {case_clauses, sa} =
       Enum.map_reduce(opts, s, fn x, sa ->
-        expand_case(x, match_context, sa, e)
+        expand_case(x, e_expr, match_context, sa, e)
       end)
 
     {case_clauses, sa, e}
   end
 
-  defp expand_case({:do, _} = do_clause, match_context, s, e) do
-    expand_clauses(
-      fn c, s, e ->
-        case head(c, s, e) do
-          {[h | _] = c, s, e} ->
-            clause_vars_with_inferred_types =
-              TypeInference.find_typed_vars(h, match_context, :match)
-
-            s = State.merge_inferred_types(s, clause_vars_with_inferred_types)
-
-            {c, s, e}
-
-          other ->
-            other
-        end
-      end,
-      do_clause,
-      s,
-      e
-    )
+  # Threads the patterns matched by earlier clauses so each clause is typed
+  # against the scrutinee MINUS what already matched (cross-clause / occurrence
+  # typing). For the first clause `prior` is empty.
+  defp expand_case({:do, clauses}, scrutinee_ast, match_context, s, e)
+       when is_list(clauses) and clauses != [] do
+    {values, se} = expand_subject_clauses(clauses, scrutinee_ast, match_context, s, e)
+    {{:do, values}, se}
   end
+
+  defp expand_case({:do, _} = do_clause, _scrutinee_ast, _match_context, s, e) do
+    # empty / cursor-recovery do-block: nothing to type
+    expand_clauses(&head/3, do_clause, s, e)
+  end
+
+  # Expand alternative clauses (case `do`, with `else`) matching the same subject,
+  # threading earlier clauses' patterns so each is typed against the subject MINUS
+  # what already matched. `scrutinee_ast` is the subject variable, or `nil` (e.g.
+  # with/else, whose subject is the synthetic failure space).
+  defp expand_subject_clauses(clauses, scrutinee_ast, match_context, s, e) do
+    {values, {se, _prior}} =
+      Enum.map_reduce(clauses, {s, []}, fn clause, {sa, prior} ->
+        refined_context = match_context_minus_prior(match_context, prior)
+
+        head_fun = fn c, cs, ce ->
+          expand_case_head(c, scrutinee_ast, match_context, refined_context, cs, ce)
+        end
+
+        {e_clause, s_acc, _e_acc} = clause(head_fun, clause, State.new_vars_scope(sa), e)
+
+        # A clause contributes to the subtracted set only when its pattern (with
+        # no guard) is precise — an under-approximation of the matched values.
+        # Imprecise clauses are skipped (the catch-all keeps the wider type),
+        # mirroring the compiler's `pattern_precise? and guard_precise?` gate.
+        next_prior =
+          case clause_pattern_type(clause) do
+            :imprecise -> prior
+            {:ok, type} -> [type | prior]
+          end
+
+        {e_clause, {State.remove_vars_scope(s_acc, sa), next_prior}}
+      end)
+
+    {values, se}
+  end
+
+  defp expand_case_head(c, scrutinee_ast, match_context, refined_context, s, e) do
+    case head(c, s, e) do
+      {[h | _] = c, s, e} ->
+        # Pattern variables are typed against the scrutinee with earlier clauses
+        # subtracted (refined_context), so e.g. the `value` in
+        # `nil -> ...; value -> ...` narrows to the non-nil part of the union.
+        clause_vars_with_inferred_types =
+          TypeInference.find_typed_vars(h, refined_context, :match)
+
+        # Native refinement still runs against the original (unsubtracted)
+        # context, augmenting the shapes above with Module.Types descriptors.
+        {enhanced_vars, var_descrs} =
+          enhance_case_pattern_vars(clause_vars_with_inferred_types, h, match_context, s)
+
+        s = State.merge_inferred_types(s, enhanced_vars)
+        s = State.merge_inferred_elixir_types(s, var_descrs)
+
+        # Positive narrowing of a variable scrutinee to the matched pattern.
+        s = State.merge_inferred_types(s, Occurrence.scrutinee_refinements(scrutinee_ast, h))
+
+        {c, s, e}
+
+      other ->
+        other
+    end
+  end
+
+  # The scrutinee type with earlier clauses' patterns subtracted. Returns the
+  # original context for the first clause (prior empty); otherwise a lazy
+  # `{:difference, ...}` that Binding resolves once the scrutinee concretizes.
+  defp match_context_minus_prior(match_context, []), do: match_context
+
+  defp match_context_minus_prior(match_context, prior) do
+    {:difference, match_context, prior_union(prior)}
+  end
+
+  defp prior_union([single]), do: single
+  defp prior_union(prior), do: {:union, Enum.reverse(prior)}
+
+  # Strip a `when` guard, keeping just the pattern.
+  defp strip_guard({:when, _meta, [pattern | _guards]}), do: pattern
+  defp strip_guard(other), do: other
+
+  # Under-approximated type a clause's head pattern may contribute to the
+  # subtracted set for later clauses. Returns `{:ok, type}` when the pattern (and
+  # the absence of a guard) is precise enough to subtract soundly, or `:imprecise`
+  # when the clause must be skipped. A non-trivial `when` guard makes the clause
+  # imprecise (the guard narrows the matched set, so the full pattern would
+  # over-subtract) — `precise_pattern_type/1` rejects guarded heads directly.
+  defp clause_pattern_type({:->, _meta, [[head | _], _body]}) do
+    TypeInference.precise_pattern_type(head)
+  end
+
+  defp clause_pattern_type(_clause), do: :imprecise
 
   # cond
 
@@ -322,7 +403,20 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   end
 
   defp expand_cond({:do, _} = do_clause, s, e) do
-    expand_clauses(&Compiler.expand_args/3, do_clause, s, e)
+    expand_clauses(&expand_cond_head/3, do_clause, s, e)
+  end
+
+  # A cond clause head is a single-element arg list `[condition]`. In the branch
+  # where the condition holds, refine the tested variables (positive occurrence
+  # narrowing) so the clause body sees the narrowed types.
+  defp expand_cond_head([_condition] = args, s, e) do
+    {e_args, s, e} = Compiler.expand_args(args, s, e)
+    s = State.merge_inferred_types(s, Occurrence.condition_refinements(hd(e_args)))
+    {e_args, s, e}
+  end
+
+  defp expand_cond_head(args, s, e) do
+    Compiler.expand_args(args, s, e)
   end
 
   # receive
@@ -386,9 +480,9 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
     opts0 = sanitize_opts(opts0, @valid_with_opts)
     s0 = State.new_vars_scope(s)
-    {e_exprs, {s1, e1}} = Enum.map_reduce(exprs, {s0, e}, &expand_with/2)
+    {e_exprs, {s1, e1, failure_types}} = Enum.map_reduce(exprs, {s0, e, []}, &expand_with/2)
     {e_do, opts1, s2} = expand_with_do(meta, opts0, s, s1, e1)
-    {e_opts, _opts2, s3} = expand_with_else(opts1, s2, e)
+    {e_opts, _opts2, s3} = expand_with_else(opts1, s2, e, with_else_context(failure_types))
 
     # Stamp a {:version, N} on `with` (1.20+ only — commit 603602e67).
     {meta, s3} =
@@ -402,23 +496,57 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     {{:with, meta, e_exprs ++ [[{:do, e_do} | e_opts]]}, s3, e}
   end
 
-  defp expand_with({:<-, meta, [left, right]}, {s, e}) do
+  defp expand_with({:<-, meta, [left, right]}, {s, e, failures}) do
     {e_right, sr, er} = Compiler.expand(right, s, e)
     sm = State.reset_read(sr, s)
     {[e_left], sl, el} = head([left], sm, er)
 
-    match_context_r = TypeInference.type_of(e_right, e.context)
+    match_context_r = TypeInference.type_of(e_right, e.context, sr, e)
     vars_l_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context_r, :match)
 
-    sl = State.merge_inferred_types(sl, vars_l_with_inferred_types)
+    {enhanced_vars, var_descrs} =
+      enhance_with_pattern_vars(vars_l_with_inferred_types, e_left, match_context_r, sl)
 
-    {{:<-, meta, [e_left, e_right]}, {sl, el}}
+    sl = State.merge_inferred_types(sl, enhanced_vars)
+    sl = State.merge_inferred_elixir_types(sl, var_descrs)
+
+    # Occurrence typing (positive narrowing): in the success continuation,
+    # narrow the right-hand side variable to the type the left pattern matched.
+    sl = State.merge_inferred_types(sl, Occurrence.scrutinee_refinements(e_right, e_left))
+
+    # The value reaching `else` from this generator is the RHS minus what the left
+    # pattern matched. We may only subtract when the pattern (and absence of guard)
+    # is precise; otherwise the full RHS reaches `else` (sound, wider). Mirrors
+    # `expr.ex:883` (`else_type = if precise?, do: difference, else: type`) —
+    # guarded clauses are never precise, and a bare-var/`_` pattern always matches,
+    # contributing nothing to the failure space.
+    failures =
+      case TypeInference.precise_pattern_type(e_left) do
+        {:ok, nil} ->
+          # bare var / `_`: matches everything, no failure space
+          failures
+
+        {:ok, type} ->
+          [{:difference, match_context_r, type} | failures]
+
+        :imprecise ->
+          # guarded or over-approximated pattern: the whole RHS may fail to match
+          [match_context_r | failures]
+      end
+
+    {{:<-, meta, [e_left, e_right]}, {sl, el, failures}}
   end
 
-  defp expand_with(expr, {s, e}) do
+  defp expand_with(expr, {s, e, failures}) do
     {e_expr, se, ee} = Compiler.expand(expr, s, e)
-    {e_expr, {se, ee}}
+    {e_expr, {se, ee, failures}}
   end
+
+  # The failure space `else` matches: the union of each generator's RHS value
+  # with its pattern subtracted. nil when there are no `<-` generators.
+  defp with_else_context([]), do: nil
+  defp with_else_context([single]), do: single
+  defp with_else_context(failures), do: {:union, Enum.reverse(failures)}
 
   defp expand_with_do(_meta, opts, s, acc, e) do
     {expr, rest_opts} = Keyword.pop(opts, :do)
@@ -431,16 +559,20 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     {e_expr, rest_opts, State.remove_vars_scope(s_acc, s)}
   end
 
-  defp expand_with_else(opts, s, e) do
+  defp expand_with_else(opts, s, e, else_context) do
     case Keyword.pop(opts, :else) do
       {nil, _} ->
         {[], opts, s}
 
-      {expr, rest_opts} ->
-        pair = {:else, expr}
+      {[_ | _] = clauses, rest_opts} when not is_nil(else_context) ->
+        # `else` clauses match the failure space (the `<-` RHS values that did
+        # not match), so type them like a `case` over that subject — including
+        # cross-clause subtraction. There is no subject variable to narrow.
+        {values, se} = expand_subject_clauses(clauses, nil, else_context, s, e)
+        {[{:else, values}], rest_opts, se}
 
-        # no point in doing type inference here, we have no idea what data we are matching against
-        {e_pair, se} = expand_clauses(&head/3, pair, s, e)
+      {expr, rest_opts} ->
+        {e_pair, se} = expand_clauses(&head/3, {:else, expr}, s, e)
         {[e_pair], rest_opts, se}
     end
   end
@@ -467,35 +599,72 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
     opts = sanitize_opts(opts, @valid_try_opts)
 
-    {try_clauses, sa} =
-      Enum.map_reduce(opts, s, fn x, sa ->
-        expand_try(x, sa, e)
+    # `sanitize_opts` orders by @valid_try_opts, so `:do` is expanded before
+    # `:else`; we thread the `do` body's result type so the `else` clauses can be
+    # typed against the value the `do` block returns (upstream types `else`
+    # against the `try do` result).
+    {try_clauses, {sa, _do_type}} =
+      Enum.map_reduce(opts, {s, nil}, fn x, {sa, do_type} ->
+        {clause, sa, do_type} = expand_try(x, sa, e, do_type)
+        {clause, {sa, do_type}}
       end)
 
     {try_clauses, sa, e}
   end
 
-  defp expand_try({:do, expr}, s, e) do
+  defp expand_try({:do, expr}, s, e, _do_type) do
     {e_expr, se, _ee} = Compiler.expand(expr, State.new_vars_scope(s), e)
-    {{:do, e_expr}, State.remove_vars_scope(se, s)}
+    do_type = TypeInference.type_of(e_expr, e.context, se, e)
+    {{:do, e_expr}, State.remove_vars_scope(se, s), do_type}
   end
 
-  defp expand_try({:after, expr}, s, e) do
+  defp expand_try({:after, expr}, s, e, do_type) do
     {e_expr, se, _ee} = Compiler.expand(expr, State.new_vars_scope(s), e)
-    {{:after, e_expr}, State.remove_vars_scope(se, s)}
+    {{:after, e_expr}, State.remove_vars_scope(se, s), do_type}
   end
 
-  defp expand_try({:else, _} = else_clause, s, e) do
-    # TODO we could try to infer type from last try block expression
-    expand_clauses(&head/3, else_clause, s, e)
+  # `else` matches the value returned by the `do` block, so type each (non-
+  # guarded) clause pattern against `do_type`. Guarded clauses are left to guard
+  # inference — intersecting a guard with an often-unresolvable `do` result type
+  # only degrades the result.
+  defp expand_try({:else, clauses} = else_clause, s, e, do_type)
+       when is_list(clauses) and clauses != [] do
+    head_fun = fn c, cs, ce ->
+      {e_head, cs, ce} = head(c, cs, ce)
+
+      cs =
+        case e_head do
+          [{:when, _, _} | _] ->
+            cs
+
+          [pattern | _] ->
+            vars = TypeInference.find_typed_vars(pattern, do_type, :match)
+            State.merge_inferred_types(cs, vars)
+
+          _ ->
+            cs
+        end
+
+      {e_head, cs, ce}
+    end
+
+    {clause, se} = expand_clauses(head_fun, else_clause, s, e)
+    {clause, se, do_type}
   end
 
-  defp expand_try({:catch, _} = catch_clause, s, e) do
-    expand_clauses_with_stacktrace(&expand_catch/4, catch_clause, s, e)
+  defp expand_try({:else, _} = else_clause, s, e, do_type) do
+    {clause, se} = expand_clauses(&head/3, else_clause, s, e)
+    {clause, se, do_type}
   end
 
-  defp expand_try({:rescue, _} = rescue_clause, s, e) do
-    expand_clauses_with_stacktrace(&expand_rescue/4, rescue_clause, s, e)
+  defp expand_try({:catch, _} = catch_clause, s, e, do_type) do
+    {clause, se} = expand_clauses_with_stacktrace(&expand_catch/4, catch_clause, s, e)
+    {clause, se, do_type}
+  end
+
+  defp expand_try({:rescue, _} = rescue_clause, s, e, do_type) do
+    {clause, se} = expand_clauses_with_stacktrace(&expand_rescue/4, rescue_clause, s, e)
+    {clause, se, do_type}
   end
 
   defp expand_clauses_with_stacktrace(fun, clauses, s, e) do
@@ -520,8 +689,23 @@ defmodule ElixirSense.Core.Compiler.Clauses do
   defp expand_catch(_meta, [arg], s, e), do: head([:throw, arg], s, e)
 
   defp expand_catch(_meta, [_, _] = args, s, e) do
-    # TODO is it worth to infer type of the first arg? :error | :exit | :throw | {:EXIT, pid()}
-    head(args, s, e)
+    {[e_kind, e_value], sl, el} = head(args, s, e)
+
+    kind_context = {:union, [{:atom, :error}, {:atom, :exit}, {:atom, :throw}]}
+    kind_vars = TypeInference.find_typed_vars(e_kind, kind_context, :match)
+
+    # Value could be anything - for :error it's often an exception
+    value_vars = TypeInference.find_typed_vars(e_value, nil, :match)
+
+    {enhanced_kind_vars, kind_descrs} =
+      enhance_catch_pattern_vars(kind_vars, e_kind, kind_context, sl)
+
+    {enhanced_value_vars, value_descrs} = enhance_catch_pattern_vars(value_vars, e_value, nil, sl)
+
+    sl = State.merge_inferred_types(sl, enhanced_kind_vars ++ enhanced_value_vars)
+    sl = State.merge_inferred_elixir_types(sl, Map.merge(kind_descrs, value_descrs))
+
+    {[e_kind, e_value], sl, el}
   end
 
   defp expand_catch(meta, [a1, a2 | d], s, e) do
@@ -551,7 +735,12 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     match_context = {:struct, [], {:atom, Exception}, nil}
 
     vars_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context, :match)
-    sl = State.merge_inferred_types(sl, vars_with_inferred_types)
+
+    {enhanced_vars, var_descrs} =
+      enhance_rescue_pattern_vars(vars_with_inferred_types, e_left, match_context, sl)
+
+    sl = State.merge_inferred_types(sl, enhanced_vars)
+    sl = State.merge_inferred_elixir_types(sl, var_descrs)
 
     {e_left, sl, el}
   end
@@ -573,7 +762,12 @@ defmodule ElixirSense.Core.Compiler.Clauses do
     match_context = {:struct, [], {:atom, Exception}, nil}
 
     vars_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context, :match)
-    sl = State.merge_inferred_types(sl, vars_with_inferred_types)
+
+    {enhanced_vars, var_descrs} =
+      enhance_rescue_pattern_vars(vars_with_inferred_types, e_left, match_context, sl)
+
+    sl = State.merge_inferred_types(sl, enhanced_vars)
+    sl = State.merge_inferred_elixir_types(sl, var_descrs)
 
     {e_left, sl, el}
   end
@@ -601,7 +795,12 @@ defmodule ElixirSense.Core.Compiler.Clauses do
           end
 
         vars_with_inferred_types = TypeInference.find_typed_vars(e_left, match_context, :match)
-        sr = State.merge_inferred_types(sr, vars_with_inferred_types)
+
+        {enhanced_vars, var_descrs} =
+          enhance_rescue_pattern_vars(vars_with_inferred_types, e_left, match_context, sr)
+
+        sr = State.merge_inferred_types(sr, enhanced_vars)
+        sr = State.merge_inferred_elixir_types(sr, var_descrs)
 
         {{:in, meta, [e_left, normalized]}, sr, er}
 
@@ -681,5 +880,172 @@ defmodule ElixirSense.Core.Compiler.Clauses do
 
   defp sanitize_opts(opts, allowed) do
     Enum.flat_map(allowed, fn opt -> sanitize_opt(opts, opt) end)
+  end
+
+  defp enhance_case_pattern_vars(clause_vars, pattern_ast, match_context, state) do
+    enhance_pattern_vars(clause_vars, pattern_ast, match_context, :__case_subject__, state)
+  end
+
+  # Convert TypeInference match context to Module.Types descriptor.
+  # Delegates to coerce_var_type which handles all ElixirSense shape types.
+  defp match_context_to_descr(nil), do: nil
+  defp match_context_to_descr(:none), do: nil
+
+  defp match_context_to_descr(match_context) do
+    if ElixirTypes.enabled?() do
+      try do
+        descr = ElixirTypes.coerce_var_type_public(match_context)
+
+        # coerce_var_type returns dynamic() for unrecognized shapes — treat as
+        # nil so we don't pass uninformative constraints to native matching.
+        if ElixirTypes.descr_dynamic?(descr) do
+          nil
+        else
+          descr
+        end
+      rescue
+        e ->
+          Logger.debug(
+            "match_context_to_descr failed: #{Exception.format(:error, e, __STACKTRACE__)}"
+          )
+
+          nil
+      end
+    else
+      nil
+    end
+  end
+
+  defp merge_clause_vars_with_elixir_types(clause_vars, refined_vars) do
+    clause_map = Map.new(clause_vars)
+
+    enhanced_map =
+      Enum.reduce(refined_vars, clause_map, fn {key, elixir_type}, acc ->
+        case Map.fetch(acc, key) do
+          {:ok, existing_type} ->
+            merged_type = TypeInference.intersect(existing_type, elixir_type)
+            Map.put(acc, key, merged_type)
+
+          :error ->
+            Map.put(acc, key, elixir_type)
+        end
+      end)
+
+    # Maintain original ordering but include all variables
+    original_keys = Enum.map(clause_vars, &elem(&1, 0))
+    ordered = Enum.map(original_keys, fn key -> {key, Map.get(enhanced_map, key)} end)
+
+    additional =
+      enhanced_map
+      |> Enum.reject(fn {key, _} -> key in original_keys end)
+
+    ordered ++ additional
+  end
+
+  # Helper functions for environment extraction (adapted from compiler.ex)
+  defp env_for_meta_clauses(state, ast) do
+    meta = extract_meta_from_ast(ast)
+    line = Keyword.get(meta, :line, 0)
+
+    if is_integer(line) and line > 0 do
+      Map.get(state.lines_to_env, line) || closest_env_clauses(state)
+    else
+      closest_env_clauses(state)
+    end
+  end
+
+  defp extract_meta_from_ast({_, meta, _}) when is_list(meta), do: meta
+  defp extract_meta_from_ast(_), do: []
+
+  defp file_for_meta(ast) do
+    meta = extract_meta_from_ast(ast)
+    Keyword.get(meta, :file)
+  end
+
+  defp closest_env_clauses(%ElixirSense.Core.Compiler.State{closest_env: {{_, _}, _dist, env}})
+       when not is_nil(env), do: env
+
+  defp closest_env_clauses(_), do: nil
+
+  defp module_file_clauses(nil), do: nil
+
+  defp module_file_clauses(module) when is_atom(module) do
+    case :code.which(module) do
+      path when is_list(path) -> List.to_string(path)
+      _ -> nil
+    end
+  end
+
+  defp enhance_with_pattern_vars(clause_vars, pattern_ast, match_context, state) do
+    enhance_pattern_vars(clause_vars, pattern_ast, match_context, :__with_expression__, state)
+  end
+
+  defp enhance_rescue_pattern_vars(clause_vars, pattern_ast, match_context, state) do
+    enhance_pattern_vars(clause_vars, pattern_ast, match_context, :__rescue_exception__, state)
+  end
+
+  defp enhance_catch_pattern_vars(clause_vars, pattern_ast, match_context, state) do
+    enhance_pattern_vars(clause_vars, pattern_ast, match_context, :__catch_value__, state)
+  end
+
+  # A bare-variable (or `_`) pattern (3-tuple, atom name + atom context) needs no
+  # native structural refinement — the L1 cross-clause path types it precisely,
+  # and feeding it to native of_match risks leaking the synthetic match-subject
+  # marker into the variable's shape.
+  defp bare_var_pattern?({name, _meta, ctx}) when is_atom(name) and is_atom(ctx), do: true
+  defp bare_var_pattern?(_other), do: false
+
+  defp enhance_pattern_vars(clause_vars, pattern_ast, match_context, match_label, state) do
+    # Native `of_match` types the pattern only — strip any `when` guard, since
+    # of_pattern has no `{:when, …}` clause and would raise. The guard's facts
+    # are applied separately by the L1 guard layer.
+    native_pattern = strip_guard(pattern_ast)
+
+    if ElixirTypes.enabled?() and clause_vars != [] and
+         not bare_var_pattern?(native_pattern) do
+      try do
+        env = env_for_meta_clauses(state, pattern_ast)
+        module = env && env.module
+        function = env && env.function
+        file = file_for_meta(pattern_ast) || module_file_clauses(module)
+
+        expected_descr = match_context_to_descr(match_context)
+        target_keys = Enum.map(clause_vars, &elem(&1, 0))
+
+        case ElixirTypes.of_match(
+               native_pattern,
+               expected_descr,
+               {:variable_match, match_label},
+               module,
+               function,
+               file,
+               :dynamic,
+               target_keys: target_keys
+             ) do
+          {:ok, refined_vars, var_descrs} when map_size(refined_vars) > 0 ->
+            merged = merge_clause_vars_with_elixir_types(clause_vars, refined_vars)
+            {merged, var_descrs}
+
+          _ ->
+            {clause_vars, %{}}
+        end
+      rescue
+        e ->
+          Logger.debug(
+            "enhance_pattern_vars failed: #{Exception.format(:error, e, __STACKTRACE__)}"
+          )
+
+          {clause_vars, %{}}
+      catch
+        kind, payload ->
+          Logger.debug(
+            "enhance_pattern_vars failed: #{Exception.format(kind, payload, __STACKTRACE__)}"
+          )
+
+          {clause_vars, %{}}
+      end
+    else
+      {clause_vars, %{}}
+    end
   end
 end

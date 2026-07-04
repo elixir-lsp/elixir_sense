@@ -8,6 +8,7 @@ defmodule ElixirSense.Core.Compiler do
   alias ElixirSense.Core.TypeInference.Guard
   alias ElixirSense.Core.Normalized.Macro.Env, as: NormalizedMacroEnv
   alias ElixirSense.Core.State.ModFunInfo
+  alias ElixirSense.Core.ElixirTypes
 
   @trace_key :elixir_sense_trace
   @trace_paused_key :elixir_sense_trace_paused
@@ -152,7 +153,11 @@ defmodule ElixirSense.Core.Compiler do
 
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, :match)
 
+    {vars_with_inferred_types, var_descrs} =
+      merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, se)
+
     se = State.merge_inferred_types(se, vars_with_inferred_types)
+    se = State.merge_inferred_elixir_types(se, var_descrs)
 
     {e_expr, se, ee}
   end
@@ -166,7 +171,11 @@ defmodule ElixirSense.Core.Compiler do
 
     vars_with_inferred_types = TypeInference.find_typed_vars(e_expr, nil, el.context)
 
+    {vars_with_inferred_types, var_descrs} =
+      merge_elixir_types_pattern_vars(vars_with_inferred_types, e_expr, sl)
+
     sl = State.merge_inferred_types(sl, vars_with_inferred_types)
+    sl = State.merge_inferred_elixir_types(sl, var_descrs)
 
     {e_expr, sl, el}
   end
@@ -1441,7 +1450,7 @@ defmodule ElixirSense.Core.Compiler do
 
     state =
       state
-      |> State.add_spec(env, name, type_args, spec, kind, range)
+      |> State.add_spec(env, name, type_args, spec, kind, range, spec_ast: expr)
       |> State.with_typespec({name, length(type_args)})
       |> State.add_current_env_to_line(attr_meta, env)
       |> State.with_typespec(nil)
@@ -1493,7 +1502,7 @@ defmodule ElixirSense.Core.Compiler do
     inferred_type =
       case e_args do
         nil -> nil
-        [arg] -> TypeInference.type_of(arg, env.context)
+        [arg] -> TypeInference.type_of(arg, env.context, state, env)
       end
 
     state =
@@ -1844,6 +1853,11 @@ defmodule ElixirSense.Core.Compiler do
 
     {_result, state, e_env} = expand(block, state, %{env | module: full})
 
+    # Module body fully expanded: every clause of every local function is now
+    # accumulated. Run ElixirTypes local inference once per function, then prune
+    # the stored clause ASTs.
+    state = infer_module_local_signatures(state, %{env | module: full})
+
     # here we handle module callbacks. Only before_compile macro callbacks are expanded as they
     # affect module body. Func before_compile callbacks are not executed. on_definition after_compile and after_verify
     # are not executed as we do not preform a real compilation
@@ -2065,6 +2079,31 @@ defmodule ElixirSense.Core.Compiler do
         | context: :match
       })
 
+    # Function-parameter patterns have no scrutinee, so most bind no type
+    # (`def f({:ok, x})` can't know `x` without a value). A binary-segment
+    # spec, however, fixes the variable type intrinsically
+    # (`def f(<<n::integer, rest::binary>>)` → `n :: integer`, `rest :: binary`).
+    # Passing `nil` as the match context keeps every non-intrinsic pattern at
+    # `nil`, so only the segment-typed vars are captured — nothing spurious.
+    param_typed_vars = TypeInference.find_typed_vars(e_args_no_defaults, nil, :match)
+    state = State.merge_inferred_types(state, param_typed_vars)
+
+    # Inside a `defimpl`, the first argument of a *protocol callback* is the type
+    # being implemented for (`defimpl String.Chars, for: URI` → in
+    # `def to_string(t)`, `t :: %URI{}`). This matches Elixir 1.19/1.20 and is
+    # version-independent here. Only functions whose name/arity belong to the
+    # protocol are callbacks — plain helper `def`s in the impl are left alone.
+    state =
+      with :def <- def_kind,
+           for_type when not is_nil(for_type) <-
+             protocol_impl_arg_type(state, env_for_expand, name, arity),
+           [first_arg | _] <- e_args_no_defaults do
+        impl_vars = TypeInference.find_typed_vars(first_arg, for_type, :match)
+        State.merge_inferred_types(state, impl_vars)
+      else
+        _ -> state
+      end
+
     # elixir calls validate_cycles here
 
     args =
@@ -2141,8 +2180,29 @@ defmodule ElixirSense.Core.Compiler do
           end
       end
 
-    {_e_body, state, _env_for_expand} =
+    {e_body, state, _env_for_expand} =
       expand(expr, state, env_for_expand)
+
+    # Capture clause AST for ElixirTypes inference
+    state =
+      if ElixirTypes.enabled?() and def_kind in [:def, :defp] and
+           not has_unquotes and name != :__unknown__ do
+        clause_ast = %{
+          meta: meta,
+          args: e_args_no_defaults,
+          guards: e_guard,
+          body: e_body
+        }
+
+        # Only accumulate the clause AST here. Inference is deferred until the
+        # whole module body has been expanded (see infer_module_local_signatures/2
+        # called from defmodule expansion) so that we run inference exactly once
+        # per function instead of re-running it after every clause (was O(n^2) in
+        # the number of clauses — old backlog #39).
+        State.add_clause_ast(state, env, {name, arity}, clause_ast)
+      else
+        state
+      end
 
     # restore vars from outer scope
     state =
@@ -2315,6 +2375,74 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_defaults([], s, _e, acc_no_defaults, acc),
     do: {Enum.reverse(acc_no_defaults), Enum.reverse(acc), s}
+
+  # The shape of a `defimpl`'s first argument: the type(s) being implemented for.
+  # Returns `nil` unless we are expanding a *protocol callback* (a function whose
+  # name/arity belongs to the protocol) inside an implementation module. Multiple
+  # `for:` targets resolve to a union — their generated modules share source
+  # lines, so we can't tell which dispatch a position belongs to.
+  defp protocol_impl_arg_type(%{protocol: {protocol, for_list}} = state, env, name, arity)
+       when is_list(for_list) and is_atom(protocol) do
+    in_impl? = Enum.any?(for_list, fn for -> env.module == Module.concat(protocol, for) end)
+
+    if in_impl? and protocol_callback?(state, protocol, name, arity) do
+      for_list_union(for_list)
+    end
+  end
+
+  defp protocol_impl_arg_type(_state, _env, _name, _arity), do: nil
+
+  # A function is a protocol callback if its name/arity belongs to the protocol's
+  # callback set. Reflection covers built-in and already-compiled protocols; the
+  # collected `@callback` metadata covers a protocol defined in the same file
+  # (`defprotocol` registers each function as a `:callback` spec — this is more
+  # precise than the function index, which also holds generated `impl_for/1`
+  # etc.).
+  defp protocol_callback?(state, protocol, name, arity) do
+    reflected_protocol_function?(protocol, name, arity) or
+      metadata_callback?(state, protocol, name, arity)
+  end
+
+  defp reflected_protocol_function?(protocol, name, arity) do
+    Code.ensure_loaded?(protocol) and
+      function_exported?(protocol, :__protocol__, 1) and
+      {name, arity} in protocol.__protocol__(:functions)
+  rescue
+    _ -> false
+  end
+
+  defp metadata_callback?(state, protocol, name, arity) do
+    case state.specs[{protocol, name, arity}] do
+      %{kind: kind} -> kind in [:callback, :macrocallback]
+      _ -> false
+    end
+  end
+
+  defp for_list_union(for_list) do
+    case for_list |> Enum.map(&impl_for_shape/1) |> Enum.reject(&is_nil/1) |> Enum.uniq() do
+      [] -> nil
+      [single] -> single
+      many -> {:union, many}
+    end
+  end
+
+  # The built-in protocol targets map to their base types; any other module is a
+  # struct (`for: URI` ⇒ `%URI{}`). `Any` and unresolved aliases carry no info.
+  defp impl_for_shape(Atom), do: :atom
+  defp impl_for_shape(Integer), do: {:integer, nil}
+  defp impl_for_shape(Float), do: {:float, nil}
+  defp impl_for_shape(List), do: {:list, nil}
+  defp impl_for_shape(Map), do: {:map, [], nil}
+  defp impl_for_shape(Tuple), do: :tuple
+  defp impl_for_shape(BitString), do: :bitstring
+  defp impl_for_shape(Function), do: :fun
+  defp impl_for_shape(PID), do: :pid
+  defp impl_for_shape(Port), do: :port
+  defp impl_for_shape(Reference), do: :reference
+  defp impl_for_shape(Any), do: nil
+  defp impl_for_shape(:"Elixir.__Unknown__"), do: nil
+  defp impl_for_shape(module) when is_atom(module), do: {:struct, [], {:atom, module}, nil}
+  defp impl_for_shape(_), do: nil
 
   # defmodule helpers
   # defmodule automatically defines aliases, we need to mirror this feature here.
@@ -2679,7 +2807,12 @@ defmodule ElixirSense.Core.Compiler do
 
   defp expand_for_do_block(expr, s, e, false), do: expand(expr, s, e)
 
-  defp expand_for_do_block([{:->, _, _} | _] = clauses, s, e, {:reduce, _}) do
+  defp expand_for_do_block([{:->, _, _} | _] = clauses, s, e, {:reduce, reduce_acc}) do
+    # The accumulator pattern matches the `reduce:` seed on the first iteration;
+    # that initial value is the one type we can be certain of, so type the
+    # accumulator var against it (`reduce: %{}` → `acc :: map()`).
+    acc_type = TypeInference.type_of(reduce_acc, e.context, s, e)
+
     transformer = fn
       {:->, clause_meta, [args, right]}, sa ->
         # elixir checks here that clause has exactly 1 arg by matching against {_, _, [[_], _]}
@@ -2704,9 +2837,34 @@ defmodule ElixirSense.Core.Compiler do
         clause = {:->, clause_meta, [args, right]}
         s_reset = State.new_vars_scope(sa)
 
-        # no point in doing type inference here, we are only certain of the initial value of the accumulator
+        # Type the accumulator pattern against the seed value's type, *inside*
+        # head expansion (so the type is captured before the clause scope is
+        # recorded). Use the single accumulator pattern, not the one-element arg
+        # list (`find_typed_vars` would read a list as a list pattern).
+        head_fun = fn c, cs, ce ->
+          {e_head, cs, ce} = __MODULE__.Clauses.head(c, cs, ce)
+
+          cs =
+            case e_head do
+              # Skip guarded heads: a guard (`acc when is_integer(acc)`) is the
+              # intentional, more precise constraint, and intersecting the seed
+              # type with it only adds noise.
+              [{:when, _, _} | _] ->
+                cs
+
+              [acc_pattern | _] ->
+                acc_vars = TypeInference.find_typed_vars(acc_pattern, acc_type, :match)
+                State.merge_inferred_types(cs, acc_vars)
+
+              _ ->
+                cs
+            end
+
+          {e_head, cs, ce}
+        end
+
         {e_clause, s_acc, _e_acc} =
-          __MODULE__.Clauses.clause(&__MODULE__.Clauses.head/3, clause, s_reset, e)
+          __MODULE__.Clauses.clause(head_fun, clause, s_reset, e)
 
         {e_clause, State.remove_vars_scope(s_acc, sa)}
     end
@@ -2733,7 +2891,7 @@ defmodule ElixirSense.Core.Compiler do
     sm = State.reset_read(sr, s)
     {[e_left], sl, el} = __MODULE__.Clauses.head([left], sm, er)
 
-    match_context_r = TypeInference.type_of(e_right, e.context)
+    match_context_r = TypeInference.type_of(e_right, e.context, sr, e)
 
     vars_l_with_inferred_types =
       TypeInference.find_typed_vars(e_left, {:for_expression, match_context_r}, :match)
@@ -2760,7 +2918,11 @@ defmodule ElixirSense.Core.Compiler do
             er
           )
 
-        # no point in doing type inference here, we're only going to find integers and binaries
+        # Binary-generator element vars get their type from the segment specs
+        # (`for <<b <- bin>>` → `b :: integer`, `for <<r::utf8 <- bin>>` → the
+        # codepoint type). The scrutinee is irrelevant, so pass a nil context.
+        vars_with_inferred_types = TypeInference.find_typed_vars(e_left, nil, :match)
+        sl = State.merge_inferred_types(sl, vars_with_inferred_types)
 
         {{:<<>>, meta, [{:<-, op_meta, [e_left, e_right]}]}, sl, el}
 
@@ -2770,8 +2932,17 @@ defmodule ElixirSense.Core.Compiler do
   end
 
   defp expand_for_generator(x, s, e) do
-    {x, s, e} = expand(x, s, e)
-    {x, s, e}
+    # A non-generator clause is a filter; if it is a guard-like test
+    # (`for x <- xs, is_integer(x)`), narrow the tested vars for the rest of the
+    # comprehension (generators/filters thread state into the body scope).
+    {e_x, s, e} = expand(x, s, e)
+
+    refinements =
+      e_x
+      |> Guard.type_information_from_guards()
+      |> Enum.reject(fn {_key, type} -> is_nil(type) end)
+
+    {e_x, State.merge_inferred_types(s, refinements), e}
   end
 
   defp sanitize_for_options([{:into, _} = pair | opts], _into, uniq, reduce, return, meta, e, acc) do
@@ -3042,4 +3213,163 @@ defmodule ElixirSense.Core.Compiler do
       end
     end
   end
+
+  # Helper to merge ElixirTypes pattern variable refinements
+  defp merge_elixir_types_pattern_vars(
+         existing_vars,
+         {:=, meta, [pattern_ast, _]} = match_ast,
+         state
+       ) do
+    cond do
+      existing_vars == [] ->
+        {existing_vars, %{}}
+
+      not ElixirTypes.enabled?() ->
+        {existing_vars, %{}}
+
+      true ->
+        env = env_for_meta(state, meta)
+        module = env && env.module
+        function = env && env.function
+        file = Keyword.get(meta, :file) || module_file(module)
+
+        target_keys = Enum.map(existing_vars, &elem(&1, 0))
+
+        # Seed every in-scope variable into the native context. We type each `=`
+        # match in isolation, but the value expression may reference earlier body
+        # vars (`mod = polymod(values)`); without them, native `refine_body_var`
+        # raises when it can't find their version. Seed with the native
+        # descriptor we already inferred and stored for each var (falling back to
+        # the structural shape, then `:dynamic`) so types propagate across
+        # statements instead of collapsing to `dynamic()`.
+        variables = elixir_types_scope_variables(state)
+
+        case ElixirTypes.of_match(
+               pattern_ast,
+               nil,
+               match_ast,
+               module,
+               function,
+               file,
+               :dynamic,
+               target_keys: target_keys,
+               variables: variables
+             ) do
+          {:ok, refined, var_descrs} when map_size(refined) > 0 ->
+            {merge_pattern_types(existing_vars, refined), var_descrs}
+
+          _ ->
+            {existing_vars, %{}}
+        end
+    end
+  end
+
+  defp merge_elixir_types_pattern_vars(existing_vars, _expr_ast, _state), do: {existing_vars, %{}}
+
+  # All in-scope variables keyed `{name, version}`, mapped to the native
+  # descriptor we already stored for each (`elixir_types_descr`), falling back to
+  # the structural shape and finally `:dynamic`. Used to seed the native
+  # `of_match` context so value-expression vars resolve with their real types
+  # (not just `dynamic()`), and so `refine_body_var` never hits an unseeded
+  # version. `coerce_var_type` accepts a `Descr`, a shape, or `:dynamic`.
+  defp elixir_types_scope_variables(%{vars_info: [scope | _]}) when is_map(scope) do
+    for {{name, version}, %ElixirSense.Core.State.VarInfo{} = var} <- scope,
+        is_atom(name) and is_integer(version),
+        into: %{} do
+      {{name, version}, var.elixir_types_descr || var.type || :dynamic}
+    end
+  end
+
+  defp elixir_types_scope_variables(_state), do: %{}
+
+  defp merge_pattern_types(existing_vars, refined_map) do
+    existing_map = Map.new(existing_vars)
+
+    merged_map =
+      Enum.reduce(refined_map, existing_map, fn {key, new_type}, acc ->
+        case Map.fetch(acc, key) do
+          {:ok, existing_type} ->
+            Map.put(acc, key, TypeInference.intersect(existing_type, new_type))
+
+          :error ->
+            Map.put(acc, key, new_type)
+        end
+      end)
+
+    ordered_keys = Enum.map(existing_vars, &elem(&1, 0))
+
+    ordered = Enum.map(ordered_keys, fn key -> {key, Map.get(merged_map, key)} end)
+
+    additional =
+      merged_map
+      |> Enum.reject(fn {key, _} -> key in ordered_keys end)
+
+    ordered ++ additional
+  end
+
+  defp env_for_meta(state, meta) do
+    line = Keyword.get(meta, :line, 0)
+
+    if is_integer(line) and line > 0 do
+      Map.get(state.lines_to_env, line) || closest_env(state)
+    else
+      closest_env(state)
+    end
+  end
+
+  defp closest_env(%State{closest_env: {{_, _}, _dist, env}}) when not is_nil(env), do: env
+  defp closest_env(_), do: nil
+
+  defp module_file(nil), do: nil
+
+  defp module_file(module) when is_atom(module) do
+    case :code.which(module) do
+      path when is_list(path) -> List.to_string(path)
+      _ -> nil
+    end
+  end
+
+  # Run ElixirTypes local inference once per function of `module`, after the
+  # whole module body has been expanded and all clauses accumulated.
+  #
+  # Previously inference ran after every individual clause via
+  # `maybe_infer_local_signature/3`, re-processing the whole accumulated clause
+  # list each time — quadratic in the number of clauses (old backlog #39). Here
+  # we walk the module's functions once, infer the signature from the complete
+  # clause list, persist it (with `:inferred` provenance), and prune the stored
+  # clause ASTs so we don't retain every function body for the lifetime of the
+  # metadata.
+  defp infer_module_local_signatures(state, %{module: module, file: file})
+       when is_atom(module) do
+    if ElixirTypes.enabled?() do
+      state.mods_funs_to_positions
+      |> Enum.filter(fn
+        {{^module, fun, arity}, %{elixir_types_clauses: clauses}}
+        when is_atom(fun) and is_integer(arity) and is_list(clauses) and clauses != [] ->
+          true
+
+        _ ->
+          false
+      end)
+      |> Enum.reduce(state, fn {{^module, fun, arity} = key, info}, state ->
+        # `elixir_types_clauses` is stored newest-first (add_clause_ast prepends).
+        # We intentionally pass it as-is to preserve the exact clause ordering the
+        # old per-clause inference observed on its final invocation, which feeds
+        # build_domain / the clause-types union.
+        clauses = info.elixir_types_clauses
+
+        case ElixirTypes.infer_local_signature(module, {fun, arity}, clauses, file) do
+          {:infer, _domain, _clause_types} = sig ->
+            State.put_elixir_types_sig(state, key, sig, :ok, :inferred)
+
+          :error ->
+            State.put_elixir_types_sig(state, key, nil, :skipped, nil)
+        end
+      end)
+    else
+      state
+    end
+  end
+
+  defp infer_module_local_signatures(state, _env), do: state
 end
