@@ -735,7 +735,7 @@ defmodule ElixirSense.Core.Source do
   def concat_module_parts([], _, _), do: :error
 
   def bitstring_options(prefix) do
-    case Code.Fragment.container_cursor_to_quoted(prefix, columns: true) do
+    case bitstring_quoted(prefix) do
       {:ok, quoted} ->
         path = Macro.path(quoted, &match?({:__cursor__, _, []}, &1))
 
@@ -761,6 +761,17 @@ defmodule ElixirSense.Core.Source do
 
       {:error, _} ->
         nil
+    end
+  end
+
+  # A modifier prefix can be an Elixir reserved word (for example, `in`). In
+  # that case Code.Fragment fails before it has a chance to insert its cursor.
+  # Retrying with an identifier suffix makes the fragment parseable without
+  # changing the original text returned to the completion engine.
+  defp bitstring_quoted(prefix) do
+    case Code.Fragment.container_cursor_to_quoted(prefix, columns: true) do
+      {:error, _} -> Code.Fragment.container_cursor_to_quoted(prefix <> "_", columns: true)
+      result -> result
     end
   end
 
