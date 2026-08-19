@@ -2,6 +2,7 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest.MyBehaviour do
   defmacro __using__(_opts) do
     quote do
       def my_function(), do: :ok
+      def my_predicate?(), do: false
     end
   end
 
@@ -58,6 +59,23 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location.column == 11
     end
 
+    test "finds definition of a function ending with ? via another in-source module that uses the behaviour" do
+      code = """
+      defmodule MyModule do
+        def test do
+          ElixirSense.Providers.Definition.LocatorUsingMacroTest.ModUsingBehaviour.my_predicate?()
+        end
+      end
+      """
+
+      location = Locator.definition(code, 3, 78)
+
+      assert location != nil
+      assert location.type == :function
+      assert location.line == 5
+      assert location.column == 11
+    end
+
     test "finds definition of function defined in __using__ macro from external file" do
       code = """
       defmodule MyModule do
@@ -75,6 +93,26 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location.type == :function
       assert location.file =~ "using_macro_example.ex"
       assert location.line == 4
+      assert location.column == 11
+    end
+
+    test "finds definition of function ending with ! defined in __using__ macro from external file" do
+      code = """
+      defmodule MyModule do
+        use ElixirSenseExample.UsingMacroExample
+
+        def test do
+          using_macro_function!()
+        end
+      end
+      """
+
+      location = Locator.definition(code, 5, 5)
+
+      assert location != nil
+      assert location.type == :function
+      assert location.file =~ "using_macro_example.ex"
+      assert location.line == 5
       assert location.column == 11
     end
 
@@ -144,7 +182,7 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location != nil
       assert location.file =~ "using_macro_example.ex"
       # `defdelegate delegated_function(), ...` inside __using__
-      assert location.line == 52
+      assert location.line == 53
       assert location.column == 19
     end
 
@@ -166,7 +204,7 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location.file =~ "using_macro_example.ex"
       # `def nested_using_function` lives in UsingMacroInner.__using__, two hops
       # away (MyModule -> UsingMacroOuter -> UsingMacroInner)
-      assert location.line == 72
+      assert location.line == 73
       assert location.column == 11
     end
 
@@ -184,7 +222,7 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location != nil
       assert location.type == :function
       assert location.file =~ "using_macro_example.ex"
-      assert location.line == 72
+      assert location.line == 73
       assert location.column == 11
     end
 
@@ -205,7 +243,7 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location != nil
       assert location.type == :function
       assert location.file =~ "using_macro_example.ex"
-      assert location.line == 95
+      assert location.line == 96
       assert location.column == 11
     end
 
@@ -223,7 +261,7 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location != nil
       assert location.type == :function
       assert location.file =~ "using_macro_example.ex"
-      assert location.line == 95
+      assert location.line == 96
       assert location.column == 11
     end
 
@@ -242,7 +280,7 @@ defmodule ElixirSense.Providers.Definition.LocatorUsingMacroTest do
       assert location != nil
       assert location.file =~ "using_macro_example.ex"
       # `defguard is_even(value) when ...` inside __using__
-      assert location.line == 56
+      assert location.line == 57
       assert location.column == 16
     end
   end
