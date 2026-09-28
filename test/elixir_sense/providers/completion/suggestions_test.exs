@@ -4710,6 +4710,10 @@ defmodule ElixirSense.Providers.Completion.SuggestionTest do
   end
 
   test "bitstring options" do
+    assert [%{name: "integer", type: :bitstring_option}] =
+             ElixirSense.suggestions("<<x::in", 1, 8)
+             |> Enum.filter(&(&1.type == :bitstring_option))
+
     buffer = """
     defmodule ElixirSenseExample.OtherModule do
       alias ElixirSenseExample.SameModule

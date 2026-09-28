@@ -998,7 +998,7 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
   end
 
   defp container_context(code, env, metadata, cursor_position) do
-    case Code.Fragment.container_cursor_to_quoted(code) do
+    case container_cursor_to_quoted(code) do
       {:ok, quoted} ->
         case Macro.path(quoted, &match?({:__cursor__, _, []}, &1)) do
           [cursor, {:%{}, _, pairs}, {:%, _, [struct_module_ast, _map]} | _] ->
@@ -1053,6 +1053,17 @@ defmodule ElixirSense.Providers.Completion.CompletionEngine do
 
       {:error, _} ->
         nil
+    end
+  end
+
+  # A modifier prefix can be an Elixir reserved word (for example, `in`). In
+  # that case Code.Fragment fails before it has a chance to insert its cursor.
+  # Retrying with an identifier suffix makes the fragment parseable without
+  # affecting the original completion hint.
+  defp container_cursor_to_quoted(code) do
+    case Code.Fragment.container_cursor_to_quoted(code) do
+      {:error, _} -> Code.Fragment.container_cursor_to_quoted(code ++ ~c"_")
+      result -> result
     end
   end
 

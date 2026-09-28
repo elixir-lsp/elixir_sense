@@ -1229,6 +1229,10 @@ defmodule ElixirSense.Core.SourceTest do
       assert "int" == bitstring_options(text)
     end
 
+    test "single line reserved word prefix" do
+      assert "in" == bitstring_options("<<ident::in")
+    end
+
     test "single line multiple" do
       text = "<<ident::integer, some::"
       assert "" == bitstring_options(text)
