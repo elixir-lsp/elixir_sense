@@ -38,7 +38,7 @@ defmodule ElixirSense.MixProject do
 
   defp deps do
     [
-      {:toxic2, github: "lukaszsamson/toxic2", ref: "c47c911dac5aafa860206d222a781c3d71afc843"},
+      {:toxic2, github: "lukaszsamson/toxic2", ref: "79e583a3d0f9f37925fc78f77937ac5fe36729f1"},
       {:credo, "~> 1.7", only: [:dev], runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.18", only: [:dev], runtime: false},
