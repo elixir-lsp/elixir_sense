@@ -139,6 +139,18 @@ defmodule ElixirSense.Core.SurroundContext do
     {:variable, :"#{inside_charlist}", :any}
   end
 
+  # `Code.Fragment.surround_context/2` reports bare identifiers as `:local_or_var`
+  # (e.g. `%nav.foo{}` yields `{:struct, {:dot, {:local_or_var, ~c"nav"}, ~c"foo"}}`)
+  defp inside_dot_to_binding({:local_or_var, ~c"__MODULE__"}, current_module) do
+    if current_module != nil do
+      {:atom, current_module}
+    end
+  end
+
+  defp inside_dot_to_binding({:local_or_var, inside_charlist}, _current_module) do
+    {:variable, :"#{inside_charlist}", :any}
+  end
+
   defp inside_dot_to_binding(:expr, _current_module) do
     nil
   end
