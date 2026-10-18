@@ -446,7 +446,8 @@ defmodule ElixirSense.Providers.Definition.Locator do
         # Matches public definition forms: def, defmacro, defdelegate, defguard.
         # The mandatory whitespace after the keyword excludes private variants
         # (defp/defmacrop/defguardp) and defmodule.
-        regex = ~r/\bdef(?:macro|delegate|guard)?\s+(#{Regex.escape(Atom.to_string(fun))})\b/
+        regex =
+          ~r/\bdef(?:macro|delegate|guard)?\s+(#{Regex.escape(Atom.to_string(fun))})(?![\w!?])/
 
         content
         |> Source.split_lines()
