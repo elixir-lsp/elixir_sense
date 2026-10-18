@@ -57,6 +57,29 @@ defmodule ElixirSense.Core.Normalized.TypespecTest do
     assert [] == Typespec.get_callbacks(ElixirSenseExample.NotExistingModule)
   end
 
+  describe "malformed beam files" do
+    @tag :tmp_dir
+    test "return [] instead of raising when the beam is corrupt", %{tmp_dir: tmp_dir} do
+      module = :ElixirSenseCorruptBeamProbe
+      {_, beam, _} = :code.get_object_code(ElixirSenseExample.ModuleWithTypes)
+
+      # Flip a byte inside the atom table chunk: `:beam_lib` raises a MatchError
+      # here instead of returning an error tuple, which used to escape
+      # `Code.Typespec.fetch_*`.
+      <<head::binary-size(25), byte, rest::binary>> = beam
+      corrupt = <<head::binary, Bitwise.bxor(byte, 0xFF), rest::binary>>
+
+      File.write!(Path.join(tmp_dir, "#{module}.beam"), corrupt)
+      tmp_dir_charlist = String.to_charlist(tmp_dir)
+      :code.add_patha(tmp_dir_charlist)
+      on_exit(fn -> :code.del_path(tmp_dir_charlist) end)
+
+      assert [] == Typespec.get_specs(module)
+      assert [] == Typespec.get_types(module)
+      assert [] == Typespec.get_callbacks(module)
+    end
+  end
+
   test "type_to_quoted" do
     type = {:t, {:remote_type, 249, [{:atom, 0, Enumerable}, {:atom, 0, :t}, []]}, []}
 
