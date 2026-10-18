@@ -113,4 +113,29 @@ defmodule ElixirSense.Core.Normalized.CodeTest do
     assert is_list(Code.get_docs(:gen_server, :callback_docs))
     assert is_tuple(Code.get_docs(:lists, :moduledoc))
   end
+
+  describe "malformed beam files" do
+    @tag :tmp_dir
+    test "return nil instead of raising when the beam is corrupt", %{tmp_dir: tmp_dir} do
+      module = :ElixirSenseCorruptBeamDocsProbe
+      {_, beam, _} = :code.get_object_code(ElixirSenseExample.ModuleWithTypes)
+
+      # Flip a byte inside the atom table chunk: `:beam_lib.read_info/1` raises a
+      # MatchError here instead of returning an error tuple, which used to escape
+      # `Code.fetch_docs/1`.
+      <<head::binary-size(25), byte, rest::binary>> = beam
+      corrupt = <<head::binary, Bitwise.bxor(byte, 0xFF), rest::binary>>
+
+      File.write!(Path.join(tmp_dir, "#{module}.beam"), corrupt)
+      tmp_dir_charlist = String.to_charlist(tmp_dir)
+      :code.add_patha(tmp_dir_charlist)
+      on_exit(fn -> :code.del_path(tmp_dir_charlist) end)
+
+      assert {:error, _} = Code.fetch_docs(module)
+      assert nil == Code.get_docs(module, :docs)
+      assert nil == Code.get_docs(module, :type_docs)
+      assert nil == Code.get_docs(module, :callback_docs)
+      assert nil == Code.get_docs(module, :moduledoc)
+    end
+  end
 end
