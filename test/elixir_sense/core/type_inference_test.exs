@@ -450,10 +450,17 @@ defmodule ElixirSense.Core.TypeInferenceTest do
       # term())`) has no shape equivalent, so native typing falls back to a
       # call thunk (with natively-typed args — `[a]` is a non-empty list) and
       # Binding expansion applies the precise rule later.
+      # Elixir 1.20.3 (elixir-lang/elixir@f894bc4) types `++` from its arguments
+      # instead of the static signature, so a non-empty list on the right yields
+      # a proper non-empty list.
       assert_old_and_native(
         ":erlang.++([a], [b])",
         {:call, {:atom, :erlang}, :++, [list: {:variable, :a, 1}, list: {:variable, :b, 1}]},
-        {:call, {:atom, :erlang}, :++, [nonempty_list: nil, nonempty_list: nil]}
+        if Version.match?(System.version(), ">= 1.20.3") do
+          {:nonempty_list, nil}
+        else
+          {:call, {:atom, :erlang}, :++, [nonempty_list: nil, nonempty_list: nil]}
+        end
       )
 
       assert_old_and_native(
