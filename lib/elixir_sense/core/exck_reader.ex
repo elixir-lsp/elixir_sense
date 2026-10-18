@@ -137,6 +137,10 @@ defmodule ElixirSense.Core.ExCkReader do
       _ ->
         {:error, :not_found}
     end
+  catch
+    # `:beam_lib.chunks/2` raises on malformed beams instead of returning an
+    # error tuple; fall back to the binary path (which also handles that case).
+    _, _ -> {:error, :not_found}
   end
 
   defp fetch_from_binary(module) do

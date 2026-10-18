@@ -192,7 +192,7 @@ defmodule ElixirSense.Core.Normalized.Code do
   def callback_documentation(module) do
     app = ElixirSense.Core.Applications.get_application(module)
 
-    case Code.fetch_docs(module) do
+    case fetch_docs(module) do
       {:docs_v1, _moduledoc_anno, _language, mime_type, _moduledoc, _metadata, docs}
       when mime_type in @supported_mime_types ->
         docs
@@ -247,6 +247,12 @@ defmodule ElixirSense.Core.Normalized.Code do
              metadata: map
   def fetch_docs(module_or_path)
 
-  def fetch_docs(module) when is_atom(module), do: Code.fetch_docs(module)
-  def fetch_docs(path) when is_binary(path), do: Code.fetch_docs(path)
+  def fetch_docs(module_or_path) when is_atom(module_or_path) or is_binary(module_or_path) do
+    Code.fetch_docs(module_or_path)
+  catch
+    # `Code.fetch_docs/1` delegates to `:beam_lib`, which only catches throws.
+    # A malformed or truncated .beam raises (e.g. MatchError) instead of
+    # returning an error tuple, so treat any failure as missing docs.
+    _, _ -> {:error, :chunk_not_found}
+  end
 end

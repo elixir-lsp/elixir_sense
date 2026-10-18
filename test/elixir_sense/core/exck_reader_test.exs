@@ -40,6 +40,31 @@ defmodule ElixirSense.Core.ExCkReaderTest do
     test "handles invalid chunk gracefully" do
       assert {:error, :invalid_chunk} = ExCkReader.read_chunk(:fake, chunk: <<1, 2, 3>>)
     end
+
+    @tag :tmp_dir
+    test "returns error instead of raising when the beam file is corrupt", %{tmp_dir: tmp_dir} do
+      module = :ElixirSenseCorruptBeamExCkProbe
+      {_, beam, _} = :code.get_object_code(ElixirSenseExample.ModuleWithTypes)
+
+      # Flip a byte inside the atom table chunk so `:beam_lib.chunks/2` raises
+      # on the on-disk path instead of returning an error tuple.
+      <<head::binary-size(25), byte, rest::binary>> = beam
+      corrupt = <<head::binary, Bitwise.bxor(byte, 0xFF), rest::binary>>
+
+      File.write!(Path.join(tmp_dir, "#{module}.beam"), corrupt)
+      tmp_dir_charlist = String.to_charlist(tmp_dir)
+      :code.add_patha(tmp_dir_charlist)
+      on_exit(fn -> :code.del_path(tmp_dir_charlist) end)
+
+      # The ExCk chunk itself is intact, so the raw-binary fallback may still
+      # decode it; the contract under test is only that nothing raises.
+      assert match?(
+               {tag, _} when tag in [:ok, :error],
+               ExCkReader.read_chunk(module, cache: false)
+             )
+
+      assert :error == ExCkReader.lookup_signature(module, :foo, 0)
+    end
   end
 
   test "lookup_signature returns cached entries" do
