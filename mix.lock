@@ -13,5 +13,5 @@
   "nimble_parsec": {:hex, :nimble_parsec, "1.4.2", "8efba0122db06df95bfaa78f791344a89352ba04baedd3849593bfce4d0dc1c6", [:mix], [], "hexpm", "4b21398942dda052b403bbe1da991ccd03a053668d147d53fb8c4e0efe09c973"},
   "spec_lint": {:hex, :spec_lint, "0.1.1", "e40649140dc96a32a2d4a7b98e8fbd3035d138b87154a35716f2cca76955cdae", [:mix], [], "hexpm", "67d7cc8d2e2cb29595518ee042b470a71de619ca250440e526c7987e06adeada"},
   "stream_data": {:hex, :stream_data, "1.3.0", "bde37905530aff386dea1ddd86ecbf00e6642dc074ceffc10b7d4e41dfd6aac9", [:mix], [], "hexpm", "3cc552e286e817dca43c98044c706eec9318083a1480c52ae2688b08e2936e3c"},
-  "toxic2": {:git, "https://github.com/lukaszsamson/toxic2.git", "c47c911dac5aafa860206d222a781c3d71afc843", [ref: "c47c911dac5aafa860206d222a781c3d71afc843"]},
+  "toxic2": {:git, "https://github.com/lukaszsamson/toxic2.git", "79e583a3d0f9f37925fc78f77937ac5fe36729f1", [ref: "79e583a3d0f9f37925fc78f77937ac5fe36729f1"]},
 }
