@@ -159,6 +159,7 @@ jobs:
       - run: mix compile --force --warnings-as-errors
       - run: mix format --check-formatted
       - run: mix credo --all --strict
+      - run: mix spec_lint
       # Dialyzer is clean (known warnings tracked in .dialyzer_ignore.exs); keep
       # it a blocking gate so regressions are caught instead of silently hidden.
       - run: mix dialyzer

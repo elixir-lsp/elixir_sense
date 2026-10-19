@@ -43,7 +43,16 @@ defmodule ElixirSense.MixProject do
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:ex_doc, "~> 0.18", only: [:dev], runtime: false},
       {:stream_data, "~> 1.1", only: [:dev, :test]}
-    ]
+    ] ++ spec_lint_deps()
+  end
+
+  # spec_lint requires Elixir ~> 1.18
+  defp spec_lint_deps do
+    if Version.match?(System.version(), ">= 1.18.0") do
+      [{:spec_lint, "~> 0.1", only: [:dev, :test], runtime: false}]
+    else
+      []
+    end
   end
 
   defp docs do
