@@ -7257,6 +7257,20 @@ defmodule ElixirSense.Core.MetadataBuilderTest do
       assert %{{SomeMod, :my_fun, 0} => _} = state.mods_funs_to_positions
     end
 
+    test "does not warn on compile_env trace events" do
+      log =
+        ExUnit.CaptureLog.capture_log([level: :warning], fn ->
+          """
+          defmodule SomeMod do
+            def fun(a), do: dbg(a)
+          end
+          """
+          |> string_to_state
+        end)
+
+      refute log =~ "Unhandled trace event"
+    end
+
     defmodule SomeCompiledMod do
       defmacro go do
         quote do
