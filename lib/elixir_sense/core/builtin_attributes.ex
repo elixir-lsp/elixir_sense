@@ -31,6 +31,9 @@ defmodule ElixirSense.Core.BuiltinAttributes do
     for
     protocol
     nifs
+    tag
+    describetag
+    moduletag
   )a
 
   def all, do: @list
@@ -56,6 +59,15 @@ defmodule ElixirSense.Core.BuiltinAttributes do
 
           :protocol ->
             "The current protocol being implemented (inside `defimpl`)."
+
+          :tag ->
+            "Adds a tag to the next individual test for filtering or use in the test context."
+
+          :describetag ->
+            "Adds a tag to all tests in the current `describe` block."
+
+          :moduletag ->
+            "Adds a tag to all tests in the current test module."
 
           _ ->
             nil

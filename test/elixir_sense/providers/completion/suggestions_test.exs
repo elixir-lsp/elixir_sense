@@ -2084,7 +2084,7 @@ defmodule ElixirSense.Providers.Completion.SuggestionTest do
         |> Enum.filter(fn s -> s.type == :attribute end)
         |> Enum.map(fn %{name: name} -> name end)
 
-      assert list == ["@macrocallback", "@moduledoc", "@myattr"]
+      assert list == ["@macrocallback", "@moduledoc", "@moduletag", "@myattr"]
 
       list =
         Suggestion.suggestions(buffer, 5, 7)
@@ -2118,6 +2118,30 @@ defmodule ElixirSense.Providers.Completion.SuggestionTest do
                    "Ensures the given keys are always set when building the struct defined in the current module."
                }
              ] = list
+    end
+
+    test "suggests ExUnit tag attributes with their respective scopes" do
+      buffer = """
+      defmodule ExampleTest do
+        use ExUnit.Case
+        @
+      end
+      """
+
+      summaries =
+        Suggestion.suggestions(buffer, 3, 4)
+        |> Enum.filter(fn suggestion -> suggestion.type == :attribute end)
+        |> Map.new(fn suggestion -> {suggestion.name, suggestion.summary} end)
+
+      assert %{
+               "@tag" => tag,
+               "@describetag" => describe_tag,
+               "@moduletag" => module_tag
+             } = summaries
+
+      assert tag =~ "individual test"
+      assert describe_tag =~ "current `describe` block"
+      assert module_tag =~ "current test module"
     end
 
     test "non built-in attributes should not include documentation" do
