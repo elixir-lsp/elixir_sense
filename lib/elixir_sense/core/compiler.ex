@@ -106,6 +106,10 @@ defmodule ElixirSense.Core.Compiler do
             |> State.add_call_to_line({as, nil, nil}, meta, :alias_expansion_as)
             |> State.add_call_to_line({alias, nil, nil}, meta, :alias_expansion)
 
+          {:compile_env, _app, _path, _return} ->
+            # emitted by Application.compile_env/4 when a macro such as dbg/2 reads config
+            acc
+
           _ ->
             Logger.warning("Unhandled trace event: #{inspect(event)}")
             acc
